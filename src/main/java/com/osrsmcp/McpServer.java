@@ -40,11 +40,26 @@ public class McpServer
         + "- For gear/BiS questions use get_equipment_stats and get_bis_comparison, and note when the player is not in combat gear (stats will read low).\n"
         + "- For money-making, prefer the player's measured context (get_money_making_context, get_boss_kc) and account for GE buy limits and the 1% GE tax on flips.\n"
         + "- Diary 'requirements met' (get_diary_requirements) means the player QUALIFIES for a task, not that it is done; cross-reference get_diary_states for tier completion.\n"
-        + "- Be specific and quantitative: cite levels, XP remaining, GP values and item names from the tools rather than generic advice.";
+        + "- Be specific and quantitative: cite levels, XP remaining, GP values and item names from the tools rather than generic advice.\n"
+        + "\nWIKI KNOWLEDGE (Bucket gateway): the player's own state comes from the in-game tools above; general game knowledge comes from the wiki. Routing:\n"
+        + "- Combat achievements -> get_combat_achievements (filter by tier/monster).\n"
+        + "- Monster stats / weakness / max hit / slayer level -> wiki_bucket_query('infobox_monster', ...) (fields: combat_level, hitpoints, max_hit, slayer_level, elemental_weakness, *_defence_bonus, attack_style, attack_speed).\n"
+        + "- Item GE buy limit / alch value / weight -> wiki_bucket_query('infobox_item', ...) (item_id, buy_limit, high_alchemy_value, value, weight, tradeable).\n"
+        + "- Equipment bonuses by slot -> wiki_bucket_query('infobox_bonuses', ...) keyed by where('page_name','<item>').\n"
+        + "- BiS gear -> wiki_bucket_query('recommended_equipment', ...); money-making -> 'money_making_guide'; drops -> 'dropsline'; recipes -> 'recipe'.\n"
+        + "- For anything else, discover with wiki_list_buckets then wiki_bucket_schema before querying.\n"
+        + "- Query hygiene: always pass 'select' and a small 'limit'; filter with 'where'; some buckets hold detail in a json/*_json field to parse. Never query the wiki for the player's character data.";
 
     @Inject private PlayerDataService playerDataService;
+    @Inject private WikiBucketService wikiBucketService;
     @Inject private ClientThread clientThread;
     @Inject private OsrsMcpConfig config;
+
+    // Tools that hit the wiki over HTTP and read no game state. Routed OFF the
+    // client thread so a slow fetch never freezes the game (and isn't bound by
+    // the 5s client-thread budget).
+    private static final Set<String> NETWORK_TOOLS = new HashSet<>(Arrays.asList(
+        "wiki_list_buckets", "wiki_bucket_schema", "wiki_bucket_query", "get_combat_achievements"));
 
     private HttpServer server;
     @Inject private Gson gson;
@@ -128,19 +143,27 @@ public class McpServer
     {
         JsonObject params = request.has("params") ? request.getAsJsonObject("params") : new JsonObject();
         String toolName = params.has("name") ? params.get("name").getAsString() : "";
-
-        CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
-        clientThread.invokeLater(() ->
-        {
-            JsonObject arguments = params.has("arguments") ? params.getAsJsonObject("arguments") : new JsonObject();
-                try   { future.complete(dispatchTool(toolName, arguments)); }
-            catch (Exception e) { future.completeExceptionally(e); }
-        });
+        JsonObject arguments = params.has("arguments") ? params.getAsJsonObject("arguments") : new JsonObject();
 
         Map<String, Object> toolResult;
-        try { toolResult = future.get(5, TimeUnit.SECONDS); }
-        catch (TimeoutException e) { sendJsonRpcError(exchange, id, -32603, "Timed out waiting for game thread"); return; }
-        catch (Exception e)        { sendJsonRpcError(exchange, id, -32603, "Internal error: " + e.getMessage()); return; }
+        if (NETWORK_TOOLS.contains(toolName))
+        {
+            // Runs on this HTTP handler thread (pool of 20); no game state needed.
+            try { toolResult = dispatchNetworkTool(toolName, arguments); }
+            catch (Exception e) { sendJsonRpcError(exchange, id, -32603, "Internal error: " + e.getMessage()); return; }
+        }
+        else
+        {
+            CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
+            clientThread.invokeLater(() ->
+            {
+                try   { future.complete(dispatchTool(toolName, arguments)); }
+                catch (Exception e) { future.completeExceptionally(e); }
+            });
+            try { toolResult = future.get(5, TimeUnit.SECONDS); }
+            catch (TimeoutException e) { sendJsonRpcError(exchange, id, -32603, "Timed out waiting for game thread"); return; }
+            catch (Exception e)        { sendJsonRpcError(exchange, id, -32603, "Internal error: " + e.getMessage()); return; }
+        }
 
         JsonObject result  = new JsonObject();
         JsonArray  content = new JsonArray();
@@ -219,6 +242,40 @@ public class McpServer
             case "get_ge_offers":          { Map<String,Object> ge = new LinkedHashMap<>(); ge.put("offers", playerDataService.buildGeOffers()); return ge; }
             default: Map<String,Object> err = new LinkedHashMap<>(); err.put("error", "Unknown tool: " + toolName); return err;
         }
+    }
+
+    private Map<String, Object> dispatchNetworkTool(String toolName, JsonObject args)
+    {
+        switch (toolName)
+        {
+            case "wiki_list_buckets":
+                return wikiBucketService.listBuckets();
+            case "wiki_bucket_schema":
+                return wikiBucketService.bucketSchema(strArg(args, "bucket", null));
+            case "wiki_bucket_query":
+            {
+                List<String> select = new ArrayList<>();
+                if (args.has("select") && args.get("select").isJsonArray())
+                    for (JsonElement e : args.getAsJsonArray("select")) select.add(e.getAsString());
+                Map<String, String> where = new LinkedHashMap<>();
+                if (args.has("where") && args.get("where").isJsonObject())
+                    for (Map.Entry<String, JsonElement> en : args.getAsJsonObject("where").entrySet())
+                        where.put(en.getKey(), en.getValue().getAsString());
+                Integer limit = args.has("limit") && args.get("limit").isJsonPrimitive() ? args.get("limit").getAsInt() : null;
+                return wikiBucketService.bucketQuery(
+                    strArg(args, "bucket", null), select, where, limit,
+                    strArg(args, "order", null), strArg(args, "raw", null));
+            }
+            case "get_combat_achievements":
+                return wikiBucketService.combatAchievements(strArg(args, "tier", null), strArg(args, "monster", null));
+            default:
+                Map<String, Object> err = new LinkedHashMap<>(); err.put("error", "Unknown network tool: " + toolName); return err;
+        }
+    }
+
+    private String strArg(JsonObject args, String key, String def)
+    {
+        return (args != null && args.has(key) && !args.get(key).isJsonNull()) ? args.get(key).getAsString() : def;
     }
 
     private void handleSse(HttpExchange exchange) throws IOException
@@ -348,8 +405,64 @@ public class McpServer
         tools.add(buildTool("get_money_making_context", "Get location, stats, coins and slayer task for money making method recommendations."));
         tools.add(buildTool("get_installed_plugins", "Get all installed RuneLite plugins (both built-in and Plugin Hub) with their enabled state. Use this to suggest relevant Plugin Hub plugins."));
         tools.add(buildTool("get_ge_offers",          "Get all active Grand Exchange offers including item, quantity, price and state."));
+
+        // --- Wiki Bucket gateway (structured game data; runs off the game thread) ---
+        tools.add(buildTool("wiki_list_buckets", "List the OSRS Wiki's structured-data tables (buckets) -- e.g. combat_achievement, infobox_monster, infobox_item, money_making_guide, dropsline, recipe. Start here to discover what game data is queryable, then use wiki_bucket_schema and wiki_bucket_query."));
+        {
+            JsonObject props = new JsonObject();
+            props.add("bucket", strProp("Bucket table name, e.g. 'infobox_monster' (spaces or underscores both work)."));
+            tools.add(buildToolWithSchema("wiki_bucket_schema", "Get the fields and types of one wiki bucket table, so you know what to select/filter. Every row also has an implicit page_name key.", props, new String[]{"bucket"}));
+        }
+        {
+            JsonObject props = new JsonObject();
+            props.add("bucket", strProp("Bucket table to query, e.g. 'infobox_item'."));
+            JsonObject sel = new JsonObject(); sel.addProperty("type", "array"); JsonObject it = new JsonObject(); it.addProperty("type", "string"); sel.add("items", it);
+            sel.addProperty("description", "Fields to return (always specify some; never fetch all).");
+            props.add("select", sel);
+            JsonObject where = new JsonObject(); where.addProperty("type", "object"); where.addProperty("description", "Equality filters, field -> value. Use page_name for the row's page, e.g. {\"page_name\":\"Abyssal whip\"}.");
+            props.add("where", where);
+            props.add("limit", numProp("Max rows (default 50, max 500)."));
+            props.add("order", strProp("Optional field to order by."));
+            props.add("raw", strProp("Advanced: a full Bucket Lua query string (e.g. \"bucket('x').select('a').limit(5).run()\"). If set, the other fields are ignored."));
+            tools.add(buildToolWithSchema("wiki_bucket_query", "Query a wiki bucket for structured game data. Provide bucket + select (+ optional where/limit/order), or a raw Lua query. Read-only. For the PLAYER'S OWN data use the in-game tools instead; this is for general game knowledge.", props, new String[]{}));
+        }
+        {
+            JsonObject props = new JsonObject();
+            props.add("tier", strProp("Optional tier filter: Easy, Medium, Hard, Elite, Master or Grandmaster."));
+            props.add("monster", strProp("Optional boss/monster name filter, e.g. 'Zulrah'."));
+            tools.add(buildToolWithSchema("get_combat_achievements", "Get Combat Achievement tasks from the wiki (all 600+, or filtered by tier and/or monster). Returns name, monster, tier, type and task text. Note: these are task definitions, not your completion state.", props, new String[]{}));
+        }
+
         result.add("tools", tools);
         return result;
+    }
+
+    private JsonObject strProp(String description)
+    {
+        JsonObject p = new JsonObject(); p.addProperty("type", "string"); p.addProperty("description", description); return p;
+    }
+
+    private JsonObject numProp(String description)
+    {
+        JsonObject p = new JsonObject(); p.addProperty("type", "integer"); p.addProperty("description", description); return p;
+    }
+
+    private JsonObject buildToolWithSchema(String name, String description, JsonObject properties, String[] required)
+    {
+        JsonObject tool = new JsonObject();
+        tool.addProperty("name", name);
+        tool.addProperty("description", description);
+        JsonObject schema = new JsonObject();
+        schema.addProperty("type", "object");
+        schema.add("properties", properties);
+        if (required != null && required.length > 0)
+        {
+            JsonArray req = new JsonArray();
+            for (String r : required) req.add(r);
+            schema.add("required", req);
+        }
+        tool.add("inputSchema", schema);
+        return tool;
     }
 
     private JsonObject buildTool(String name, String description)
