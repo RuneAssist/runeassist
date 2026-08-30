@@ -248,9 +248,9 @@ player's live state and goal.
    release it, then fetch off-thread. Do this before adding the gateway.
 3. **Reuse, confirmed available:** inject the existing `OkHttpClient` + `Gson` and
    the `USER_AGENT` (wiki 403s an empty UA — verified). No new HTTP client.
-4. **Decide: local-only or upstream PR** to nickbeddows-ctrl. Affects whether we
-   add config toggles / keep diffs minimal. Not blocking, but decide before big
-   surface changes.
+4. **Decided (Tom): personal build**, not an upstream PR. Build directly for this
+   account; no need to keep diffs minimal or match the author's style/config
+   conventions. Can still cherry-pick to a PR later if desired.
 
 ## Build order & tracking
 
