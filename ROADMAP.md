@@ -27,11 +27,36 @@ snapshot + refresh, and verify representative values against the live wiki.
 
 ## Community data sources (verified fetchable)
 
+### Bucket API — the primary structured-data channel
+
+The wiki exposes a **public SQL-like structured data API** (Weird Gloop's Bucket
+extension), no scraping needed:
+
+```
+GET https://oldschool.runescape.wiki/api.php?action=bucket&format=json&query=<lua>
+  e.g. query=bucket('combat_achievement').select('name','monster','tier','type','task').limit(5000).run()
+```
+
+Returns clean JSON rows. **50 bucket tables exist** (`?action=query&list=allpages&apnamespace=9592`).
+Verified-useful ones for planning:
+
+| Bucket | Fields (partial) | Use | Verified |
+|--------|------------------|-----|----------|
+| `combat_achievement` | name, monster, tier, type, task | **655 CA tasks** — resurrects the Combat Achievements feature from a clean source | ✅ 655 rows pulled |
+| `money_making_guide` | value, recurring, json | GP/hr methods → **Layer 3** (json holds inputs/outputs; needs parsing) | ✅ exists |
+| `recommended_equipment` | json | BiS gear per activity — strong for gear advice | ✅ exists |
+| `quest` | requirements, items_required, enemies_to_defeat, official_length/difficulty, json | quest metadata (requirements field is HTML — prefer Questreq/data for clean reqs) | ✅ fields read |
+| `infobox_monster` | (monster stats) | could replace `get_npc_info` wiki scraping | listed |
+| `infobox_item`, `infobox_bonuses` | (item + equip stats) | could replace `EquipmentStatsService` scraping | listed |
+| `dropsline`, `drop_table_sources` | (drops) | could replace `DropTableService` scraping | listed |
+
+### Other sources (cleaner than the equivalent bucket)
+
 | Source | URL | Gives | Format |
 |--------|-----|-------|--------|
-| **Module:Questreq/data** | `oldschool.runescape.wiki/w/Module:Questreq/data?action=raw` | **All ~205 quests'** prerequisite quests + skill requirements (with `ironman`/`boostable` modifiers) | Lua table, regular shape |
-| **Quests/Experience rewards** | `oldschool.runescape.wiki/w/Quests/Experience_rewards` | Fixed XP rewards per quest per skill, **plus** a "Skill choice" section for lamps (e.g. DT2 100k×3, RFD 20k to any >50) | Wiki tables by skill |
-| **Optimal Quest Guide** (optional) | `oldschool.runescape.wiki/w/Optimal_quest_guide` | Canonical community quest *ordering* — a strong planning prior | Ordered wiki list |
+| **Module:Questreq/data** | `.../Module:Questreq/data?action=raw` | **All ~205 quests'** prereq quests + skill requirements (`ironman`/`boostable` modifiers) — cleaner than the `quest` bucket's HTML `requirements` field | Lua table |
+| **Quests/Experience rewards** | `.../Quests/Experience_rewards` | Fixed XP rewards per quest/skill + a "Skill choice"/lamp section (DT2 100k×3, RFD 20k to any 50+) | Wiki tables |
+| **Optimal Quest Guide** (optional) | `.../Optimal_quest_guide` | Canonical quest *ordering* — a planning prior | Ordered list |
 
 **Not used — WikiSync.** WikiSync *uploads* a character's data to the wiki so
 wiki pages can personalise themselves. We already read the live account locally
@@ -117,6 +142,14 @@ a small curated table, clearly marked approximate + dated.
 { "skill": "agility", "method": "Hallowed Sepulchre", "xp_per_hour": 90000,
   "requirements": { "skills": { "agility": 72 } }, "notes": "floors 1-5 at 92+" }
 ```
+
+## Reinstated — `get_combat_achievements`
+
+Previously dropped for lack of a verifiable source; the `combat_achievement`
+bucket (655 tasks with tier/monster/type/task) is that source. Tool returns tasks
+grouped by tier and boss; combine with the player's live tier progress. Note the
+bucket gives task *definitions*, not per-task completion — pair with in-game
+completion varbits if per-task done-state is needed later.
 
 ## Optional — `get_optimal_quest_route`
 
