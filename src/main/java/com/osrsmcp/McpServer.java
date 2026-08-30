@@ -28,6 +28,20 @@ public class McpServer
     private static final String SERVER_NAME    = "osrs-mcp";
     private static final String SERVER_VERSION = "1.0.0";
 
+    // Domain guidance handed to the AI client on connect. Steers how it should
+    // reason about the data these tools expose, so advice is OSRS-aware by default.
+    private static final String INSTRUCTIONS =
+        "This server exposes live Old School RuneScape (OSRS) data for the connected RuneLite account. "
+        + "When giving advice:\n"
+        + "- Always call get_all first for a cheap overview, then drill in with specific tools.\n"
+        + "- Respect account type: check is_ironman/is_uim/is_hcim in stats. Ironmen cannot buy gear on the GE (bonds only), so never suggest 'just buy X' for them; suggest how to obtain it instead.\n"
+        + "- For 'what should I do next', prefer get_next_goals, then get_diary_requirements for concrete diary tasks the player already qualifies for.\n"
+        + "- Rank suggestions by leverage: unlocks that gate multiple diaries/quests, skills within a level or two of a milestone, and content the player's gear and stats already support.\n"
+        + "- For gear/BiS questions use get_equipment_stats and get_bis_comparison, and note when the player is not in combat gear (stats will read low).\n"
+        + "- For money-making, prefer the player's measured context (get_money_making_context, get_boss_kc) and account for GE buy limits and the 1% GE tax on flips.\n"
+        + "- Diary 'requirements met' (get_diary_requirements) means the player QUALIFIES for a task, not that it is done; cross-reference get_diary_states for tier completion.\n"
+        + "- Be specific and quantitative: cite levels, XP remaining, GP values and item names from the tools rather than generic advice.";
+
     @Inject private PlayerDataService playerDataService;
     @Inject private ClientThread clientThread;
     @Inject private OsrsMcpConfig config;
@@ -103,6 +117,8 @@ public class McpServer
             case "notifications/initialized": exchange.sendResponseHeaders(202, -1); break;
             case "tools/list":              sendJsonRpcResult(exchange, id, buildToolsList()); break;
             case "tools/call":              handleToolCall(exchange, id, request); break;
+            case "prompts/list":            sendJsonRpcResult(exchange, id, buildPromptsList()); break;
+            case "prompts/get":             sendJsonRpcResult(exchange, id, buildPromptGet(request)); break;
             case "ping":                    sendJsonRpcResult(exchange, id, new JsonObject()); break;
             default: sendJsonRpcError(exchange, id, -32601, "Method not found: " + method);
         }
@@ -148,6 +164,8 @@ public class McpServer
             case "get_all":          return playerDataService.buildSnapshot();
             case "get_quest_states":  return playerDataService.buildQuestStates();
             case "get_diary_states":  return playerDataService.buildDiaryStates();
+            case "get_diary_requirements": return playerDataService.buildDiaryRequirements();
+            case "get_next_goals":    return playerDataService.buildNextGoals();
             case "get_slayer_task":   return playerDataService.buildSlayerTask();
             case "get_clue_scroll":   return playerDataService.buildClueScroll();
             case "get_nearby_npcs":       return playerDataService.buildNearbyNpcs();
@@ -226,8 +244,68 @@ public class McpServer
         result.addProperty("protocolVersion", MCP_VERSION);
         JsonObject info = new JsonObject(); info.addProperty("name", SERVER_NAME); info.addProperty("version", SERVER_VERSION);
         result.add("serverInfo", info);
-        JsonObject caps = new JsonObject(); caps.add("tools", new JsonObject());
+        JsonObject caps = new JsonObject(); caps.add("tools", new JsonObject()); caps.add("prompts", new JsonObject());
         result.add("capabilities", caps);
+        result.addProperty("instructions", INSTRUCTIONS);
+        return result;
+    }
+
+    private JsonObject buildPromptsList()
+    {
+        JsonObject result = new JsonObject();
+        JsonArray prompts = new JsonArray();
+
+        JsonObject analyze = new JsonObject();
+        analyze.addProperty("name", "analyze_account");
+        analyze.addProperty("description", "Full account review: stats, quests, diaries, gear and bank, ending with a ranked list of the most useful things to work on next.");
+        prompts.add(analyze);
+
+        JsonObject nextGoal = new JsonObject();
+        nextGoal.addProperty("name", "whats_next");
+        nextGoal.addProperty("description", "Quick answer to 'what should I work on next?' using next goals and diary requirements.");
+        prompts.add(nextGoal);
+
+        result.add("prompts", prompts);
+        return result;
+    }
+
+    private JsonObject buildPromptGet(JsonObject request)
+    {
+        JsonObject params = request.has("params") ? request.getAsJsonObject("params") : new JsonObject();
+        String name = params.has("name") ? params.get("name").getAsString() : "";
+
+        String text;
+        String description;
+        switch (name)
+        {
+            case "whats_next":
+                description = "What to work on next";
+                text = "Call get_next_goals and get_diary_requirements, then tell me the 3-5 most useful things "
+                     + "to work on next on this OSRS account. Be specific: name the exact skills, diary tasks and "
+                     + "quests, with the levels or XP involved, and rank by leverage.";
+                break;
+            case "analyze_account":
+            default:
+                description = "Full account analysis";
+                text = "Analyse my OSRS account. Call get_all first, then get_player_stats, get_quest_states, "
+                     + "get_diary_states, get_diary_requirements, get_equipment_stats, get_bank_summary and "
+                     + "get_next_goals as needed. Then give me: (1) a short account summary, (2) my biggest "
+                     + "weaknesses, and (3) a ranked list of the most useful things to work on next, with concrete "
+                     + "levels, tasks and items. Respect my account type and account for GE limits and tax.";
+                break;
+        }
+
+        JsonObject result = new JsonObject();
+        result.addProperty("description", description);
+        JsonArray messages = new JsonArray();
+        JsonObject msg = new JsonObject();
+        msg.addProperty("role", "user");
+        JsonObject content = new JsonObject();
+        content.addProperty("type", "text");
+        content.addProperty("text", text);
+        msg.add("content", content);
+        messages.add(msg);
+        result.add("messages", messages);
         return result;
     }
 
@@ -242,6 +320,8 @@ public class McpServer
         tools.add(buildTool("get_all",          "Get all available player data in a single call: stats, equipment, inventory and location."));
         tools.add(buildTool("get_quest_states",  "Get the state of all quests (completed, in progress, not started) and total quest points."));
         tools.add(buildTool("get_diary_states",  "Get completion status of all Achievement Diaries across all regions and tiers (easy/medium/hard/elite)."));
+        tools.add(buildTool("get_diary_requirements", "Get task-level Achievement Diary requirements for every region, each live-checked against the account. For each task, shows the skill/quest requirements and whether they are met, including how many levels short you are. Use this to find diary tasks you already qualify for and exactly what is blocking the rest."));
+        tools.add(buildTool("get_next_goals",    "Get a ranked list of the most actionable next goals derived from live data: skills closest to a level-up and to 99, quests already in progress, and diary regions where you already meet the most task requirements (nearest to a full clear, with blocking skills)."));
         tools.add(buildTool("get_slayer_task",   "Get current Slayer task: creature name, remaining count, location, points and streak."));
         tools.add(buildTool("get_clue_scroll",   "Check if the player has an active clue scroll in their inventory and which tier it is."));
         tools.add(buildTool("get_nearby_npcs",     "Get a list of NPCs currently visible to the player, sorted by combat level. Includes name, combat level, and approximate health."));

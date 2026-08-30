@@ -32,6 +32,21 @@ import net.runelite.api.GrandExchangeOfferState;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.plugins.achievementdiary.GenericDiaryRequirement;
+import net.runelite.client.plugins.achievementdiary.Requirement;
+import net.runelite.client.plugins.achievementdiary.SkillRequirement;
+import net.runelite.client.plugins.achievementdiary.diaries.ArdougneDiaryRequirement;
+import net.runelite.client.plugins.achievementdiary.diaries.DesertDiaryRequirement;
+import net.runelite.client.plugins.achievementdiary.diaries.FaladorDiaryRequirement;
+import net.runelite.client.plugins.achievementdiary.diaries.FremennikDiaryRequirement;
+import net.runelite.client.plugins.achievementdiary.diaries.KandarinDiaryRequirement;
+import net.runelite.client.plugins.achievementdiary.diaries.KaramjaDiaryRequirement;
+import net.runelite.client.plugins.achievementdiary.diaries.KourendDiaryRequirement;
+import net.runelite.client.plugins.achievementdiary.diaries.LumbridgeDiaryRequirement;
+import net.runelite.client.plugins.achievementdiary.diaries.MorytaniaDiaryRequirement;
+import net.runelite.client.plugins.achievementdiary.diaries.VarrockDiaryRequirement;
+import net.runelite.client.plugins.achievementdiary.diaries.WesternDiaryRequirement;
+import net.runelite.client.plugins.achievementdiary.diaries.WildernessDiaryRequirement;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -277,6 +292,219 @@ public class PlayerDataService
                 region.put(tiers[j], client.getVarbitValue(diaries[i][j]) == 1);
             result.put(regions[i], region);
         }
+        return result;
+    }
+
+    // --- Achievement Diary task-level requirements --------------------------------
+    // Uses RuneLite's own bundled diary requirement data. Each requirement is
+    // live-checked against the client via satisfiesRequirement(), so "met" reflects
+    // the real account. Note: this reports whether you MEET a task's requirements,
+    // not whether the task is already ticked off -- cross-reference get_diary_states
+    // for tier completion.
+
+    private LinkedHashMap<String, GenericDiaryRequirement> diaryRequirementSources()
+    {
+        LinkedHashMap<String, GenericDiaryRequirement> regions = new LinkedHashMap<>();
+        regions.put("ardougne",          new ArdougneDiaryRequirement());
+        regions.put("desert",            new DesertDiaryRequirement());
+        regions.put("falador",           new FaladorDiaryRequirement());
+        regions.put("fremennik",         new FremennikDiaryRequirement());
+        regions.put("kandarin",          new KandarinDiaryRequirement());
+        regions.put("karamja",           new KaramjaDiaryRequirement());
+        regions.put("kourend",           new KourendDiaryRequirement());
+        regions.put("lumbridge",         new LumbridgeDiaryRequirement());
+        regions.put("morytania",         new MorytaniaDiaryRequirement());
+        regions.put("varrock",           new VarrockDiaryRequirement());
+        regions.put("western_provinces", new WesternDiaryRequirement());
+        regions.put("wilderness",        new WildernessDiaryRequirement());
+        return regions;
+    }
+
+    // DiaryRequirement is package-private in RuneLite, so its instances are reached
+    // via reflection on their public getTask()/getRequirements() methods. Returns a
+    // list of {String task, List<Requirement> requirements}.
+    private List<Object[]> diaryTasks(GenericDiaryRequirement src)
+    {
+        List<Object[]> out = new ArrayList<>();
+        java.lang.reflect.Method mTask = null, mReq = null;
+        Set<?> set = src.getRequirements();
+        for (Object dr : set)
+        {
+            try
+            {
+                if (mTask == null)
+                {
+                    mTask = dr.getClass().getMethod("getTask");         mTask.setAccessible(true);
+                    mReq  = dr.getClass().getMethod("getRequirements"); mReq.setAccessible(true);
+                }
+                String task = (String) mTask.invoke(dr);
+                @SuppressWarnings("unchecked")
+                List<Requirement> reqs = (List<Requirement>) mReq.invoke(dr);
+                out.add(new Object[]{ task, reqs });
+            }
+            catch (Exception ignored) {}
+        }
+        return out;
+    }
+
+    public Map<String, Object> buildDiaryRequirements()
+    {
+        if (!isLoggedIn()) return errorMap("Player is not logged in");
+        Map<String, Object> result = new LinkedHashMap<>();
+
+        for (Map.Entry<String, GenericDiaryRequirement> entry : diaryRequirementSources().entrySet())
+        {
+            List<Map<String, Object>> tasks = new ArrayList<>();
+            int metCount = 0;
+            for (Object[] dr : diaryTasks(entry.getValue()))
+            {
+                Map<String, Object> task = new LinkedHashMap<>();
+                task.put("task", (String) dr[0]);
+                @SuppressWarnings("unchecked")
+                List<Requirement> taskReqs = (List<Requirement>) dr[1];
+                List<Map<String, Object>> reqs = new ArrayList<>();
+                boolean allMet = true;
+                for (Requirement r : taskReqs)
+                {
+                    boolean met;
+                    try { met = r.satisfiesRequirement(client); }
+                    catch (Exception e) { met = false; }
+                    if (!met) allMet = false;
+                    Map<String, Object> rm = new LinkedHashMap<>();
+                    rm.put("requirement", r.toString());
+                    rm.put("met", met);
+                    if (r instanceof SkillRequirement)
+                    {
+                        SkillRequirement sr = (SkillRequirement) r;
+                        int cur = client.getRealSkillLevel(sr.getSkill());
+                        rm.put("skill", sr.getSkill().getName().toLowerCase());
+                        rm.put("required_level", sr.getLevel());
+                        rm.put("current_level", cur);
+                        if (cur < sr.getLevel()) rm.put("levels_short", sr.getLevel() - cur);
+                    }
+                    reqs.add(rm);
+                }
+                task.put("requirements", reqs);
+                task.put("all_requirements_met", allMet);
+                if (allMet) metCount++;
+                tasks.add(task);
+            }
+            Map<String, Object> region = new LinkedHashMap<>();
+            region.put("total_tasks", tasks.size());
+            region.put("tasks_with_requirements_met", metCount);
+            region.put("tasks", tasks);
+            result.put(entry.getKey(), region);
+        }
+        result.put("_note", "Requirements are live-checked against your account. 'met' means you satisfy the task's skill/quest requirement, not that the task is already completed -- use get_diary_states for tier completion.");
+        return result;
+    }
+
+    // --- Next-goal ranking --------------------------------------------------------
+    // Combines locally-verifiable signals: skills closest to a level-up / to 99,
+    // quests already in progress, and diary regions where you already meet the most
+    // task requirements. Everything here is derived from live client data.
+
+    public Map<String, Object> buildNextGoals()
+    {
+        if (!isLoggedIn()) return errorMap("Player is not logged in");
+        Map<String, Object> result = new LinkedHashMap<>();
+
+        // 1. Skills closest to their next level and to 99.
+        List<Map<String, Object>> nextLevel = new ArrayList<>();
+        List<Map<String, Object>> toNinetyNine = new ArrayList<>();
+        for (Skill skill : Skill.values())
+        {
+            if (skill == Skill.OVERALL) continue;
+            int level = client.getRealSkillLevel(skill);
+            int xp    = client.getSkillExperience(skill);
+            if (level >= 99) continue;
+            Map<String, Object> g = new LinkedHashMap<>();
+            g.put("skill", skill.getName().toLowerCase());
+            g.put("level", level);
+            g.put("xp_to_next_level", xpToNextLevel(xp, level));
+            nextLevel.add(g);
+
+            Map<String, Object> n = new LinkedHashMap<>();
+            n.put("skill", skill.getName().toLowerCase());
+            n.put("level", level);
+            n.put("xp_to_99", Math.max(0, XP_TABLE[98] - xp));
+            toNinetyNine.add(n);
+        }
+        nextLevel.sort(Comparator.comparingLong(m -> ((Number) m.get("xp_to_next_level")).longValue()));
+        toNinetyNine.sort(Comparator.comparingLong(m -> ((Number) m.get("xp_to_99")).longValue()));
+        result.put("closest_level_ups",  nextLevel.subList(0, Math.min(5, nextLevel.size())));
+        result.put("closest_to_99",      toNinetyNine.subList(0, Math.min(5, toNinetyNine.size())));
+
+        // 2. Quests already in progress -- finishing started quests is low-friction.
+        List<String> inProgress = new ArrayList<>();
+        for (Quest quest : Quest.values())
+            if (quest.getState(client) == QuestState.IN_PROGRESS) inProgress.add(quest.getName());
+        result.put("quests_in_progress", inProgress);
+
+        // 3. Diary regions ranked by how many task requirements you already meet
+        //    but the tier is not yet complete -- these are the nearest diary wins.
+        int[][] tierVarbits = {
+            {Varbits.DIARY_ARDOUGNE_EASY,  Varbits.DIARY_ARDOUGNE_MEDIUM,  Varbits.DIARY_ARDOUGNE_HARD,  Varbits.DIARY_ARDOUGNE_ELITE},
+            {Varbits.DIARY_DESERT_EASY,    Varbits.DIARY_DESERT_MEDIUM,    Varbits.DIARY_DESERT_HARD,    Varbits.DIARY_DESERT_ELITE},
+            {Varbits.DIARY_FALADOR_EASY,   Varbits.DIARY_FALADOR_MEDIUM,   Varbits.DIARY_FALADOR_HARD,   Varbits.DIARY_FALADOR_ELITE},
+            {Varbits.DIARY_FREMENNIK_EASY, Varbits.DIARY_FREMENNIK_MEDIUM, Varbits.DIARY_FREMENNIK_HARD, Varbits.DIARY_FREMENNIK_ELITE},
+            {Varbits.DIARY_KANDARIN_EASY,  Varbits.DIARY_KANDARIN_MEDIUM,  Varbits.DIARY_KANDARIN_HARD,  Varbits.DIARY_KANDARIN_ELITE},
+            {Varbits.DIARY_KARAMJA_EASY,   Varbits.DIARY_KARAMJA_MEDIUM,   Varbits.DIARY_KARAMJA_HARD,   Varbits.DIARY_KARAMJA_ELITE},
+            {Varbits.DIARY_KOUREND_EASY,   Varbits.DIARY_KOUREND_MEDIUM,   Varbits.DIARY_KOUREND_HARD,   Varbits.DIARY_KOUREND_ELITE},
+            {Varbits.DIARY_LUMBRIDGE_EASY, Varbits.DIARY_LUMBRIDGE_MEDIUM, Varbits.DIARY_LUMBRIDGE_HARD, Varbits.DIARY_LUMBRIDGE_ELITE},
+            {Varbits.DIARY_MORYTANIA_EASY, Varbits.DIARY_MORYTANIA_MEDIUM, Varbits.DIARY_MORYTANIA_HARD, Varbits.DIARY_MORYTANIA_ELITE},
+            {Varbits.DIARY_VARROCK_EASY,   Varbits.DIARY_VARROCK_MEDIUM,   Varbits.DIARY_VARROCK_HARD,   Varbits.DIARY_VARROCK_ELITE},
+            {Varbits.DIARY_WESTERN_EASY,   Varbits.DIARY_WESTERN_MEDIUM,   Varbits.DIARY_WESTERN_HARD,   Varbits.DIARY_WESTERN_ELITE},
+            {Varbits.DIARY_WILDERNESS_EASY,Varbits.DIARY_WILDERNESS_MEDIUM,Varbits.DIARY_WILDERNESS_HARD,Varbits.DIARY_WILDERNESS_ELITE},
+        };
+        LinkedHashMap<String, GenericDiaryRequirement> sources = diaryRequirementSources();
+        List<Map<String, Object>> diaryWins = new ArrayList<>();
+        int idx = 0;
+        for (Map.Entry<String, GenericDiaryRequirement> entry : sources.entrySet())
+        {
+            boolean eliteDone = client.getVarbitValue(tierVarbits[idx][3]) == 1;
+            idx++;
+            if (eliteDone) continue; // whole diary already finished
+
+            int total = 0, met = 0;
+            Map<String, Integer> missingSkills = new LinkedHashMap<>();
+            for (Object[] dr : diaryTasks(entry.getValue()))
+            {
+                total++;
+                boolean allMet = true;
+                @SuppressWarnings("unchecked")
+                List<Requirement> taskReqs = (List<Requirement>) dr[1];
+                for (Requirement r : taskReqs)
+                {
+                    boolean ok;
+                    try { ok = r.satisfiesRequirement(client); } catch (Exception e) { ok = false; }
+                    if (!ok)
+                    {
+                        allMet = false;
+                        if (r instanceof SkillRequirement)
+                        {
+                            SkillRequirement sr = (SkillRequirement) r;
+                            String sk = sr.getSkill().getName().toLowerCase();
+                            int shortBy = sr.getLevel() - client.getRealSkillLevel(sr.getSkill());
+                            missingSkills.merge(sk, Math.max(shortBy, 0), Math::max);
+                        }
+                    }
+                }
+                if (allMet) met++;
+            }
+            Map<String, Object> w = new LinkedHashMap<>();
+            w.put("region", entry.getKey());
+            w.put("total_tasks", total);
+            w.put("tasks_with_requirements_met", met);
+            w.put("tasks_blocked", total - met);
+            if (!missingSkills.isEmpty()) w.put("blocking_skills", missingSkills);
+            diaryWins.add(w);
+        }
+        // Fewest blocked tasks first -> nearest to a full clear.
+        diaryWins.sort(Comparator.comparingInt(m -> (Integer) m.get("tasks_blocked")));
+        result.put("nearest_diary_regions", diaryWins.subList(0, Math.min(5, diaryWins.size())));
+
+        result.put("_note", "Ranking is derived from live client data: skill XP, quest states, and diary task requirements you already meet. It does not account for quest-start requirements (RuneLite does not expose those) -- treat quest suggestions as 'in progress' only.");
         return result;
     }
 
