@@ -50,6 +50,43 @@ Verified-useful ones for planning:
 | `infobox_item`, `infobox_bonuses` | (item + equip stats) | could replace `EquipmentStatsService` scraping | listed |
 | `dropsline`, `drop_table_sources` | (drops) | could replace `DropTableService` scraping | listed |
 
+### Design stance: a self-describing Bucket *gateway*, not just wrappers
+
+Rather than only hand-writing narrow tools, expose Bucket **generically** so the
+AI can query the wiki's structured data for things we never anticipated. Three
+tools, all self-describing so the model can discover schema unaided:
+
+1. **`wiki_list_buckets`** → the ~50 table names (live via
+   `?action=query&list=allpages&apnamespace=9592`, cached).
+2. **`wiki_bucket_schema`** (arg `bucket`) → that table's fields + types, from
+   `Bucket:<Name>?action=raw` (clean JSON, verified `{field:{type}}`).
+3. **`wiki_bucket_query`** (args `bucket`, `select[]`, `where{}`, `limit`,
+   optional `order`) → the plugin builds the validated Lua string, runs it
+   against `action=bucket`, returns rows. Optional `raw` Lua escape hatch for
+   advanced queries (operators/joins), same guardrails.
+
+Workflow the AI follows: `list_buckets` → `bucket_schema(X)` → `bucket_query(X, …)`.
+The `INSTRUCTIONS` field teaches this discovery loop and points at the common
+tables (combat_achievement, money_making_guide, recommended_equipment,
+infobox_monster/item/bonuses, dropsline).
+
+**Guardrails (the gateway is the trust boundary):**
+- Read-only — Bucket is a GET/query API; no writes exist.
+- `limit` capped (default ~50, max ~500) and a response **byte cap** so a wide
+  query can't blow the context window.
+- Values are escaped/encoded when building the Lua string (avoid breakage).
+- Cache with a TTL (reuse the OkHttp pattern in `WikiPriceService`).
+- **Runs OFF the game thread.** Current `dispatchTool` routes every call through
+  `clientThread.invokeLater` with a 5s budget; network calls must not. Add a
+  separate dispatch path for network tools (no game state needed anyway).
+- Bucket rows are **untrusted third-party data** (esp. free-text buckets like
+  transcript/update): treated as data, never instructions; tools have no side
+  effects. Account data still comes from the live in-game tools, not the wiki.
+
+Thin convenience wrappers (e.g. `get_combat_achievements` filtered by tier) stay
+worthwhile for hot, size-sensitive paths, but they become *shortcuts over the
+same gateway* rather than the only way in.
+
 ### Other sources (cleaner than the equivalent bucket)
 
 | Source | URL | Gives | Format |
@@ -161,12 +198,17 @@ player's live state and goal.
 
 ## Build order & tracking
 
-0. **Generator + bundled data** (`tools/gen-quest-data.mjs` →
-   `quest_data.json`), verify a few values against the live wiki.
-1. Layer 1 `get_quest_rewards` — load the resource, add live `meets_requirements`.
-2. Layer 2 `project_plan` simulator on top of Layer 1's graph.
-3. Layer 3 `get_training_methods` (approximate, dated).
-4. Optional `get_optimal_quest_route`.
+0. **Bucket gateway** (`wiki_list_buckets`, `wiki_bucket_schema`,
+   `wiki_bucket_query`) with guardrails + off-game-thread dispatch, and the
+   `INSTRUCTIONS` discovery loop. Foundational — later tools reuse it.
+   `get_combat_achievements` as the first thin wrapper (verifies the gateway).
+1. **Generator + bundled quest data** (`tools/gen-quest-data.mjs` →
+   `quest_data.json`) for requirements (Questreq) + XP rewards; verify vs wiki.
+2. Layer 1 `get_quest_rewards` — load the resource, add live `meets_requirements`.
+3. Layer 2 `project_plan` simulator on top of Layer 1's graph.
+4. Layer 3 `get_training_methods` (from `money_making_guide` bucket where usable;
+   else small dated table).
+5. Optional `get_optimal_quest_route`.
 
 After each layer: register in `McpServer` (`dispatchTool` + `buildToolsList`),
 extend the `INSTRUCTIONS` planning rubric, rebuild (`gradlew jar`), copy to
