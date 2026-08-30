@@ -228,6 +228,30 @@ player's live state and goal.
 
 ---
 
+## Pre-build blockers (settle these first)
+
+1. **Verify the existing base live.** `get_diary_requirements`, `get_next_goals`,
+   the `instructions`/`prompts` — all committed but **never run**. In particular
+   `get_diary_requirements`/`get_next_goals` instantiate RuneLite *internal*
+   classes (`...plugins.achievementdiary.diaries.*`) and reflect on a
+   package-private `DiaryRequirement`. It compiled, but sideloaded-plugin
+   classloader visibility + `setAccessible` on another package could fail at
+   runtime — and the code swallows exceptions, so failure looks like empty data.
+   Restart the dev client and confirm real rows before building further.
+2. **Threading refactor (architectural).** `handleToolCall` runs *every* tool on
+   the client thread with a 5s budget; existing network tools (`get_drop_table`,
+   `get_npc_info`, `get_bis_comparison`) do blocking `.execute()`, so a cold wiki
+   fetch already freezes the game thread up to 5s. Split dispatch: game-state
+   tools on the client thread; network tools (incl. the Bucket gateway) on the
+   HTTP pool thread. Hybrids (read game state → then fetch, e.g.
+   `get_bis_comparison`, `get_flip_suggestions`) read state on the client thread,
+   release it, then fetch off-thread. Do this before adding the gateway.
+3. **Reuse, confirmed available:** inject the existing `OkHttpClient` + `Gson` and
+   the `USER_AGENT` (wiki 403s an empty UA — verified). No new HTTP client.
+4. **Decide: local-only or upstream PR** to nickbeddows-ctrl. Affects whether we
+   add config toggles / keep diffs minimal. Not blocking, but decide before big
+   surface changes.
+
 ## Build order & tracking
 
 0. **Bucket gateway** (`wiki_list_buckets`, `wiki_bucket_schema`,
