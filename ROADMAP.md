@@ -87,6 +87,38 @@ Thin convenience wrappers (e.g. `get_combat_achievements` filtered by tier) stay
 worthwhile for hot, size-sensitive paths, but they become *shortcuts over the
 same gateway* rather than the only way in.
 
+### AI guidance — routing cheat-sheet (so it doesn't discovery-loop every time)
+
+Bake a compact **intent → tool/bucket** map into the `INSTRUCTIONS` field, plus a
+fuller version as an on-demand MCP resource (`osrs://guide`). The discovery loop
+(`wiki_list_buckets` → `wiki_bucket_schema` → `wiki_bucket_query`) is the
+**fallback for the unknown**, not the default path.
+
+**Golden rule:** the player's own state → **live in-game tools**; general game
+knowledge → **Bucket**. Never query the wiki for the player's character data.
+
+**Routing table (intent → where):**
+
+| The AI wants… | Use |
+|---------------|-----|
+| Player stats / gear / inventory / bank / quests / diaries / slayer | live tools (`get_all`, `get_player_stats`, `get_bank_*`, `get_quest_states`, `get_diary_states/requirements`) |
+| "What next?" | `get_next_goals`, then `get_diary_requirements` |
+| Combat achievements (all/by tier/by boss) | `get_combat_achievements` wrapper → else `bucket('combat_achievement')` |
+| Monster stats / weakness / max hit / slayer level | `bucket('infobox_monster')` (fields incl. `combat_level, hitpoints, max_hit, slayer_level, elemental_weakness, *_defence_bonus, attack_style, attack_speed`) |
+| Item info / GE buy limit / alch value / weight | `bucket('infobox_item')` (`item_id, buy_limit, high_alchemy_value, value, weight, tradeable`) |
+| Equipment bonuses by slot | `bucket('infobox_bonuses')` (`equipment_slot, *_attack_bonus, *_defence_bonus, strength_bonus, ranged_strength_bonus, magic_damage_bonus, prayer_bonus, weapon_attack_speed`) — keyed by `page_name` = item name |
+| BiS gear for content | `bucket('recommended_equipment')` (detail in `json`) |
+| Drop tables | `bucket('dropsline')` (`item_name, drop_json, rare_drop_table`) — or existing `get_drop_table` |
+| Money-making methods / GP-hr | `bucket('money_making_guide')` (`value, recurring, json`) |
+| Item creation / materials | `bucket('recipe')` (`uses_material, uses_skill, production_json`) |
+| Live GE prices / trends / flips | `get_item_prices`, `get_price_trends`, `get_flip_suggestions` |
+| Quest requirements + XP rewards (planning) | `get_quest_rewards` (baked Questreq + Experience rewards) |
+
+**Query hygiene the guidance must state:** always pass `select` (never fetch all
+fields) and a small `limit`; filter with `where('page_name', '<Name>')` (the
+implicit per-row key) or a specific field; some buckets put the real detail in a
+`json`/`*_json` field that must be parsed. Prefer a thin wrapper when one exists.
+
 ### Other sources (cleaner than the equivalent bucket)
 
 | Source | URL | Gives | Format |
