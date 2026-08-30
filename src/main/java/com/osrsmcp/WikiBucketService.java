@@ -63,7 +63,9 @@ public class WikiBucketService
             for (JsonElement e : root.getAsJsonObject("query").getAsJsonArray("allpages"))
             {
                 String t = e.getAsJsonObject().get("title").getAsString();
-                names.add(t.replaceFirst("^Bucket:", "").replace('_', ' '));
+                // Return the queryable table name (lowercase, underscored) -- this is
+                // exactly what wiki_bucket_query / wiki_bucket_schema expect.
+                names.add(normalizeBucket(t.replaceFirst("^Bucket:", "")));
             }
             out.put("count", names.size());
             out.put("buckets", names);
@@ -78,7 +80,7 @@ public class WikiBucketService
     {
         Map<String, Object> out = new LinkedHashMap<>();
         if (bucket == null || bucket.isBlank()) { out.put("error", "Provide a bucket name."); return out; }
-        String page = "Bucket:" + bucket.trim().replace(' ', '_');
+        String page = "Bucket:" + normalizeBucket(bucket);
         try
         {
             String raw = getCached(WIKI + enc(page) + "?action=raw");
@@ -116,7 +118,7 @@ public class WikiBucketService
         {
             if (bucket == null || bucket.isBlank()) { out.put("error", "Provide a bucket name (or a raw query)."); return out; }
             if (select == null || select.isEmpty()) { out.put("error", "Provide at least one field in 'select' (never fetch all fields)."); return out; }
-            StringBuilder sb = new StringBuilder("bucket('").append(luaEsc(bucket.trim())).append("')");
+            StringBuilder sb = new StringBuilder("bucket('").append(luaEsc(normalizeBucket(bucket))).append("')");
             sb.append(".select(");
             for (int i = 0; i < select.size(); i++) { if (i > 0) sb.append(","); sb.append("'").append(luaEsc(select.get(i))).append("'"); }
             sb.append(")");
@@ -210,6 +212,15 @@ public class WikiBucketService
             return response.body().string();
         }
     }
+
+    /**
+     * Normalise a bucket name to the queryable table form the Bucket API expects:
+     * lowercase, spaces -> underscores. Accepts display names ("Infobox monster"),
+     * page titles ("Infobox_monster") or the raw form ("infobox_monster") alike.
+     * (MediaWiki auto-capitalises the first letter for the Bucket: page title, so
+     * the lowercase form is also fine for schema lookups.)
+     */
+    private static String normalizeBucket(String s) { return s == null ? "" : s.trim().toLowerCase().replace(' ', '_'); }
 
     private static String enc(String s) { return URLEncoder.encode(s, StandardCharsets.UTF_8); }
 
