@@ -137,7 +137,7 @@ public class OsrsMcpPanel extends PluginPanel
     private JPanel buildHeader()
     {
         JPanel p = col(ColorScheme.DARK_GRAY_COLOR);
-        JLabel title = new JLabel("OSRS MCP");
+        JLabel title = new JLabel("RuneAssist - Server");
         title.setForeground(Color.WHITE);
         title.setFont(FontManager.getRunescapeBoldFont());
         title.setAlignmentX(LEFT_ALIGNMENT);

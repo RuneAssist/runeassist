@@ -28,9 +28,9 @@ import java.util.Collections;
 
 @Slf4j
 @PluginDescriptor(
-    name = "OSRS MCP",
-    description = "Exposes RuneLite data via a local MCP server for AI-assisted in-game advice.",
-    tags = {"claude", "ai", "stats", "helper", "assistant", "mcp"}
+    name = "RuneAssist",
+    description = "In-game AI companion: live account-aware advice, plus a local MCP server for external AI clients.",
+    tags = {"claude", "ai", "stats", "helper", "assistant", "mcp", "companion", "runeassist"}
 )
 public class OsrsMcpPlugin extends Plugin
 {
@@ -68,17 +68,17 @@ public class OsrsMcpPlugin extends Plugin
 
         final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "icon.png");
         navButton = NavigationButton.builder()
-            .tooltip("OSRS MCP")
+            .tooltip("RuneAssist Server")
             .icon(icon)
-            .priority(10)
+            .priority(11)
             .panel(panel)
             .build();
         clientToolbar.addNavigation(navButton);
 
         chatNavButton = NavigationButton.builder()
-            .tooltip("OSRS Companion (AI chat)")
+            .tooltip("RuneAssist (AI chat)")
             .icon(icon)
-            .priority(11)
+            .priority(10)
             .panel(chatPanel)
             .build();
         clientToolbar.addNavigation(chatNavButton);

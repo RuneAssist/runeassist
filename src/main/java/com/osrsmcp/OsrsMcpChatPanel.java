@@ -1,6 +1,7 @@
 package com.osrsmcp;
 
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -18,48 +19,71 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * In-panel AI chat ("OSRS Companion"). Drives {@link CompanionAgent} and renders the
- * conversation. The agent is headless and fires its callbacks on a worker thread, so
- * every {@link CompanionAgent.Listener} method here marshals onto the Swing EDT.
+ * RuneAssist in-panel AI chat. Drives {@link CompanionAgent} and renders the
+ * conversation as a chat app (avatars + soft font). Provider/key settings live in a
+ * collapsible section here so the user never has to leave the panel.
+ *
+ * <p>The agent fires its callbacks on a worker thread, so every
+ * {@link CompanionAgent.Listener} method marshals onto the Swing EDT.
  */
 @Slf4j
 @Singleton
 public class OsrsMcpChatPanel extends PluginPanel
 {
-    private static final Color CARD_BG    = ColorScheme.DARKER_GRAY_COLOR;
-    private static final Color USER_BG     = ColorScheme.MEDIUM_GRAY_COLOR;
+    // RuneAssist accent — deliberately distinct from the MCP panel's orange.
+    private static final Color ACCENT      = new Color(124, 138, 255); // indigo
+    private static final Color USER_ACCENT = new Color(0, 170, 150);   // teal
     private static final Color ERROR_COLOR = ColorScheme.PROGRESS_ERROR_COLOR;
-    private static final int   BUBBLE_TEXT_WIDTH = 176; // px; fits the ~225px side panel
+    private static final Color PANEL_BG     = ColorScheme.DARK_GRAY_COLOR;
+    private static final Color FIELD_BG     = ColorScheme.DARKER_GRAY_COLOR;
+    private static final Color META_COLOR   = ColorScheme.MEDIUM_GRAY_COLOR;
+    private static final int    BODY_WIDTH  = 158; // px; sized to the panel viewport so text never clips
+
+    private static final Font NAME_FONT = new Font("SansSerif", Font.BOLD, 11);
+    private static final Font BODY_FONT = new Font("SansSerif", Font.PLAIN, 12);
+    private static final Font META_FONT = new Font("SansSerif", Font.PLAIN, 10);
 
     @Inject private CompanionAgent agent;
     @Inject private OsrsMcpConfig config;
+    @Inject private ConfigManager configManager;
 
     private final JPanel      messages   = new JPanel();
     private final JScrollPane scroll;
     private final JTextArea   input       = new JTextArea(2, 1);
     private final JButton     sendBtn     = new JButton("Send");
     private final JButton     newChatBtn  = new JButton("New chat");
+    private final JButton     settingsBtn = new JButton("Settings");
     private final JLabel      providerLbl = new JLabel();
-    private final JLabel      statusLbl   = new JLabel(" ");
+
+    // Settings controls
+    private final JPanel                     settingsPanel = new JPanel();
+    private final JComboBox<LlmProviderType> providerCombo =
+        new JComboBox<>(new LlmProviderType[]{ LlmProviderType.ANTHROPIC, LlmProviderType.OPENAI, LlmProviderType.DEEPSEEK });
+    private final JPasswordField keyField   = new JPasswordField();
+    private final JTextField     modelField = new JTextField();
+    private final JLabel         savedLbl   = new JLabel(" ");
+
+    private final JLabel statusLbl = new JLabel(" ");
 
     private volatile boolean busy = false;
+    private boolean settingsOpen = false;
     private List<String> turnTools = new ArrayList<>();
+    private JPanel lastMsg = null; // most recent message block, so the meta line tucks under it
 
     public OsrsMcpChatPanel()
     {
         super(false);
         setLayout(new BorderLayout());
-        setBackground(ColorScheme.DARK_GRAY_COLOR);
+        setBackground(PANEL_BG);
 
         add(buildHeader(), BorderLayout.NORTH);
 
         messages.setLayout(new BoxLayout(messages, BoxLayout.Y_AXIS));
-        messages.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        messages.setBorder(new EmptyBorder(8, 8, 8, 8));
+        messages.setBackground(PANEL_BG);
+        messages.setBorder(new EmptyBorder(8, 10, 8, 10));
 
-        // Wrapper keeps bubbles top-aligned when the transcript is short.
         JPanel wrapper = new JPanel(new BorderLayout());
-        wrapper.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        wrapper.setBackground(PANEL_BG);
         wrapper.add(messages, BorderLayout.NORTH);
 
         scroll = new JScrollPane(wrapper,
@@ -67,75 +91,130 @@ public class OsrsMcpChatPanel extends PluginPanel
             JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         scroll.setBorder(null);
         scroll.getVerticalScrollBar().setUnitIncrement(16);
-        scroll.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        scroll.setBackground(PANEL_BG);
         add(scroll, BorderLayout.CENTER);
 
         add(buildComposer(), BorderLayout.SOUTH);
 
-        addAssistantText("Hi! I can see your live account, the wiki, your planner and "
-            + "your other plugins. Ask me what to do next, how to train something, "
-            + "what your dailies are, or anything OSRS.");
+        addMessage("RuneAssist", ACCENT, "R",
+            "Hi! I can see your live account, the wiki, your planner and your other "
+            + "plugins. Ask me what to do next, how to train something, what your dailies "
+            + "are, or anything OSRS.", ACCENT);
     }
 
-    // ── header ────────────────────────────────────────────────────────────────
+    // ── header (title, provider, actions, settings) ──────────────────────────────
 
     private JPanel buildHeader()
     {
         JPanel p = new JPanel();
         p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        p.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        p.setBackground(PANEL_BG);
         p.setBorder(new EmptyBorder(10, 10, 6, 10));
 
-        JLabel title = new JLabel("OSRS Companion");
+        JLabel title = new JLabel("RuneAssist");
         title.setForeground(Color.WHITE);
-        title.setFont(FontManager.getRunescapeBoldFont());
+        title.setFont(new Font("SansSerif", Font.BOLD, 16));
         title.setAlignmentX(LEFT_ALIGNMENT);
         p.add(title);
-        p.add(Box.createVerticalStrut(4));
+        p.add(Box.createVerticalStrut(3));
 
-        providerLbl.setFont(FontManager.getRunescapeSmallFont());
-        providerLbl.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
+        providerLbl.setFont(META_FONT);
+        providerLbl.setForeground(META_COLOR);
         providerLbl.setAlignmentX(LEFT_ALIGNMENT);
         p.add(providerLbl);
         p.add(Box.createVerticalStrut(6));
 
-        styleButton(newChatBtn);
+        styleButton(newChatBtn, false);
         newChatBtn.addActionListener(e -> onNewChat());
+        styleButton(settingsBtn, false);
+        settingsBtn.addActionListener(e -> toggleSettings());
         JPanel row = new JPanel();
         row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
-        row.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        row.setBackground(PANEL_BG);
         row.setAlignmentX(LEFT_ALIGNMENT);
         row.add(newChatBtn);
+        row.add(Box.createHorizontalStrut(6));
+        row.add(settingsBtn);
         row.add(Box.createHorizontalGlue());
         p.add(row);
+
+        p.add(buildSettingsPanel());
         return p;
     }
 
-    // ── composer (status + input + send) ────────────────────────────────────────
+    private JPanel buildSettingsPanel()
+    {
+        settingsPanel.setLayout(new BoxLayout(settingsPanel, BoxLayout.Y_AXIS));
+        settingsPanel.setBackground(FIELD_BG);
+        settingsPanel.setAlignmentX(LEFT_ALIGNMENT);
+        settingsPanel.setBorder(new CompoundBorder(
+            new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
+            new EmptyBorder(8, 8, 8, 8)));
+        settingsPanel.setVisible(false);
+
+        settingsPanel.add(Box.createVerticalStrut(4));
+        settingsPanel.add(fieldLabel("Provider"));
+        providerCombo.setAlignmentX(LEFT_ALIGNMENT);
+        providerCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+        providerCombo.setFont(BODY_FONT);
+        providerCombo.addActionListener(e -> loadKeyForSelectedProvider());
+        settingsPanel.add(providerCombo);
+
+        settingsPanel.add(Box.createVerticalStrut(6));
+        settingsPanel.add(fieldLabel("API key"));
+        styleField(keyField);
+        settingsPanel.add(keyField);
+
+        settingsPanel.add(Box.createVerticalStrut(6));
+        settingsPanel.add(fieldLabel("Model (optional)"));
+        styleField(modelField);
+        settingsPanel.add(modelField);
+
+        settingsPanel.add(Box.createVerticalStrut(8));
+        JButton save = new JButton("Save");
+        styleButton(save, true);
+        save.addActionListener(e -> onSaveSettings());
+        settingsPanel.add(save);
+
+        savedLbl.setFont(META_FONT);
+        savedLbl.setForeground(USER_ACCENT);
+        savedLbl.setAlignmentX(LEFT_ALIGNMENT);
+        settingsPanel.add(Box.createVerticalStrut(4));
+        settingsPanel.add(savedLbl);
+
+        JLabel hint = new JLabel("<html><body style='width:" + BODY_WIDTH + "px'>"
+            + "Your key is stored locally by RuneLite and used only to call the provider "
+            + "you pick. DeepSeek is the cheapest to run.</body></html>");
+        hint.setFont(META_FONT);
+        hint.setForeground(META_COLOR);
+        hint.setAlignmentX(LEFT_ALIGNMENT);
+        settingsPanel.add(Box.createVerticalStrut(6));
+        settingsPanel.add(hint);
+        return settingsPanel;
+    }
 
     private JPanel buildComposer()
     {
         JPanel p = new JPanel();
         p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        p.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        p.setBackground(PANEL_BG);
         p.setBorder(new EmptyBorder(4, 10, 10, 10));
 
-        statusLbl.setFont(FontManager.getRunescapeSmallFont());
-        statusLbl.setForeground(ColorScheme.BRAND_ORANGE);
+        statusLbl.setFont(META_FONT);
+        statusLbl.setForeground(ACCENT);
         statusLbl.setAlignmentX(LEFT_ALIGNMENT);
         p.add(statusLbl);
         p.add(Box.createVerticalStrut(4));
 
         input.setLineWrap(true);
         input.setWrapStyleWord(true);
-        input.setFont(FontManager.getRunescapeSmallFont());
+        input.setFont(BODY_FONT);
         input.setForeground(Color.WHITE);
-        input.setBackground(CARD_BG);
+        input.setBackground(FIELD_BG);
         input.setCaretColor(Color.WHITE);
         input.setBorder(new CompoundBorder(
             new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
             new EmptyBorder(5, 6, 5, 6)));
-        // Enter sends; Shift+Enter inserts a newline.
         input.addKeyListener(new KeyAdapter()
         {
             @Override public void keyPressed(KeyEvent e)
@@ -156,20 +235,34 @@ public class OsrsMcpChatPanel extends PluginPanel
         p.add(inputScroll);
         p.add(Box.createVerticalStrut(6));
 
-        styleButton(sendBtn);
-        sendBtn.setBackground(ColorScheme.BRAND_ORANGE);
-        sendBtn.setForeground(Color.BLACK);
+        styleButton(sendBtn, true);
         sendBtn.addActionListener(e -> onSend());
         p.add(sendBtn);
         return p;
     }
 
-    // ── actions ─────────────────────────────────────────────────────────────────
+    // ── external hooks ────────────────────────────────────────────────────────────
 
-    /** Called by the plugin once Guice injection is done, to show the active provider. */
+    /** Called by the plugin once Guice injection is done. */
     public void refresh()
     {
-        SwingUtilities.invokeLater(this::updateProviderLabel);
+        SwingUtilities.invokeLater(() ->
+        {
+            syncSettingsFromConfig();
+            updateProviderLabel();
+            if (activeKeyMissing(config.llmProvider())) showSettings(true); // nudge first-run setup
+        });
+    }
+
+    private void syncSettingsFromConfig()
+    {
+        try
+        {
+            providerCombo.setSelectedItem(config.llmProvider());
+            loadKeyForSelectedProvider();
+            modelField.setText(config.llmModel() == null ? "" : config.llmModel());
+        }
+        catch (Exception ignored) {}
     }
 
     private void updateProviderLabel()
@@ -179,10 +272,77 @@ public class OsrsMcpChatPanel extends PluginPanel
             LlmProviderType type = config.llmProvider();
             boolean hasKey = !activeKeyMissing(type);
             providerLbl.setText("Provider: " + type + (hasKey ? "" : "  (no key set)"));
-            providerLbl.setForeground(hasKey ? ColorScheme.MEDIUM_GRAY_COLOR : ERROR_COLOR);
+            providerLbl.setForeground(hasKey ? META_COLOR : ERROR_COLOR);
         }
         catch (Exception ignored) { providerLbl.setText("Provider: -"); }
     }
+
+    // ── settings actions ──────────────────────────────────────────────────────────
+
+    private void toggleSettings() { showSettings(!settingsOpen); }
+
+    private void showSettings(boolean open)
+    {
+        settingsOpen = open;
+        settingsPanel.setVisible(open);
+        settingsBtn.setText(open ? "Hide settings" : "Settings");
+        if (open) syncSettingsFromConfig();
+        savedLbl.setText(" ");
+        revalidate();
+        repaint();
+    }
+
+    private void loadKeyForSelectedProvider()
+    {
+        LlmProviderType type = (LlmProviderType) providerCombo.getSelectedItem();
+        keyField.setText(currentKeyFor(type));
+    }
+
+    private String currentKeyFor(LlmProviderType type)
+    {
+        if (type == null) return "";
+        String k;
+        switch (type)
+        {
+            case ANTHROPIC: k = config.anthropicKey(); break;
+            case OPENAI:    k = config.openAiKey();    break;
+            case DEEPSEEK:  k = config.deepSeekKey();  break;
+            case HOSTED:    k = config.hostedToken();  break;
+            default:        k = "";
+        }
+        return k == null ? "" : k;
+    }
+
+    private void onSaveSettings()
+    {
+        LlmProviderType type = (LlmProviderType) providerCombo.getSelectedItem();
+        String key   = new String(keyField.getPassword()).trim();
+        String model = modelField.getText().trim();
+
+        configManager.setConfiguration("osrsmcp", "llmProvider", type);
+        configManager.setConfiguration("osrsmcp", keyNameFor(type), key);
+        configManager.setConfiguration("osrsmcp", "llmModel", model);
+
+        savedLbl.setText("Saved.");
+        updateProviderLabel();
+        Timer t = new Timer(1500, e -> { savedLbl.setText(" "); showSettings(false); });
+        t.setRepeats(false);
+        t.start();
+    }
+
+    private static String keyNameFor(LlmProviderType type)
+    {
+        switch (type)
+        {
+            case ANTHROPIC: return "anthropicKey";
+            case OPENAI:    return "openAiKey";
+            case DEEPSEEK:  return "deepSeekKey";
+            case HOSTED:    return "hostedToken";
+            default:        return "deepSeekKey";
+        }
+    }
+
+    // ── chat actions ────────────────────────────────────────────────────────────
 
     private void onNewChat()
     {
@@ -190,7 +350,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         messages.removeAll();
         turnTools = new ArrayList<>();
         setStatus(" ");
-        addAssistantText("New chat. What would you like to do?");
+        addMessage("RuneAssist", ACCENT, "R", "New chat. What would you like to do?", ACCENT);
         messages.revalidate();
         messages.repaint();
     }
@@ -204,15 +364,16 @@ public class OsrsMcpChatPanel extends PluginPanel
         LlmProviderType type = config.llmProvider();
         if (activeKeyMissing(type))
         {
-            addUserText(text);
+            addMessage("You", USER_ACCENT, "U", text, Color.WHITE);
             input.setText("");
-            addErrorText("No API key set for " + type + ". Add one in the plugin config "
-                + "under the \"AI Chat\" section (settings cog -> OSRS MCP), then try again.");
+            addMessage("Error", ERROR_COLOR, "!", "No API key set for " + type
+                + ". Open Settings above, pick a provider and paste your key.", ERROR_COLOR);
             updateProviderLabel();
+            showSettings(true);
             return;
         }
 
-        addUserText(text);
+        addMessage("You", USER_ACCENT, "U", text, Color.WHITE);
         input.setText("");
         setBusy(true);
         turnTools = new ArrayList<>();
@@ -222,15 +383,7 @@ public class OsrsMcpChatPanel extends PluginPanel
 
     private boolean activeKeyMissing(LlmProviderType type)
     {
-        String key;
-        switch (type)
-        {
-            case ANTHROPIC: key = config.anthropicKey(); break;
-            case OPENAI:    key = config.openAiKey();    break;
-            case DEEPSEEK:  key = config.deepSeekKey();  break;
-            case HOSTED:    key = config.hostedToken();  break;
-            default:        key = "";
-        }
+        String key = currentKeyFor(type);
         return key == null || key.trim().isEmpty();
     }
 
@@ -242,18 +395,15 @@ public class OsrsMcpChatPanel extends PluginPanel
         input.setEnabled(!b);
     }
 
-    private void setStatus(String s)
-    {
-        statusLbl.setText(s == null || s.isEmpty() ? " " : s);
-    }
+    private void setStatus(String s) { statusLbl.setText(s == null || s.isEmpty() ? " " : s); }
 
-    // ── agent callbacks (fire on the worker thread -> marshal to EDT) ─────────────
+    // ── agent callbacks (worker thread -> EDT) ────────────────────────────────────
 
     private final class UiListener implements CompanionAgent.Listener
     {
         @Override public void onAssistantText(String text)
         {
-            SwingUtilities.invokeLater(() -> addAssistantText(text));
+            SwingUtilities.invokeLater(() -> addMessage("RuneAssist", ACCENT, "R", text, ACCENT));
         }
 
         @Override public void onToolCall(String toolName)
@@ -265,7 +415,7 @@ public class OsrsMcpChatPanel extends PluginPanel
             });
         }
 
-        @Override public void onToolResult(String toolName) { /* status advances on next call */ }
+        @Override public void onToolResult(String toolName) { /* advances on next call */ }
 
         @Override public void onComplete(int inputTokens, int outputTokens)
         {
@@ -282,69 +432,71 @@ public class OsrsMcpChatPanel extends PluginPanel
         {
             SwingUtilities.invokeLater(() ->
             {
-                addErrorText(message != null ? message : "Something went wrong.");
+                addMessage("Error", ERROR_COLOR, "!",
+                    message != null ? message : "Something went wrong.", ERROR_COLOR);
                 setStatus(" ");
                 setBusy(false);
             });
         }
     }
 
-    // ── message rendering ─────────────────────────────────────────────────────────
+    // ── message rendering (avatar + name + full-width body) ───────────────────────
 
-    private void addUserText(String text)      { addBubble("You",       text, USER_BG, Color.WHITE); }
-    private void addAssistantText(String text)  { addBubble("Companion", text, CARD_BG, ColorScheme.LIGHT_GRAY_COLOR); }
-    private void addErrorText(String text)      { addBubble("Error",     text, CARD_BG, ERROR_COLOR); }
-
-    private void addBubble(String role, String text, Color bg, Color fg)
+    private void addMessage(String name, Color avatarColor, String initial, String text, Color nameColor)
     {
-        JPanel bubble = new JPanel();
-        bubble.setLayout(new BoxLayout(bubble, BoxLayout.Y_AXIS));
-        bubble.setBackground(bg);
-        bubble.setAlignmentX(LEFT_ALIGNMENT);
-        bubble.setBorder(new CompoundBorder(
-            new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
-            new EmptyBorder(5, 7, 6, 7)));
-        bubble.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        JPanel msg = new JPanel();
+        msg.setLayout(new BoxLayout(msg, BoxLayout.Y_AXIS));
+        msg.setBackground(PANEL_BG);
+        msg.setAlignmentX(LEFT_ALIGNMENT);
+        msg.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 
-        JLabel roleLbl = new JLabel(role.toUpperCase());
-        roleLbl.setFont(FontManager.getRunescapeSmallFont());
-        roleLbl.setForeground(ColorScheme.BRAND_ORANGE);
-        roleLbl.setAlignmentX(LEFT_ALIGNMENT);
-        bubble.add(roleLbl);
-        bubble.add(Box.createVerticalStrut(2));
+        JPanel headRow = new JPanel();
+        headRow.setLayout(new BoxLayout(headRow, BoxLayout.X_AXIS));
+        headRow.setBackground(PANEL_BG);
+        headRow.setAlignmentX(LEFT_ALIGNMENT);
+        headRow.add(new Avatar(initial, avatarColor));
+        headRow.add(Box.createHorizontalStrut(6));
+        JLabel nameLbl = new JLabel(name);
+        nameLbl.setFont(NAME_FONT);
+        nameLbl.setForeground(nameColor);
+        headRow.add(nameLbl);
+        headRow.add(Box.createHorizontalGlue());
+        msg.add(headRow);
+        msg.add(Box.createVerticalStrut(3));
 
-        JLabel body = new JLabel("<html><body style='width:" + BUBBLE_TEXT_WIDTH + "px'>"
+        JLabel body = new JLabel("<html><body style='width:" + BODY_WIDTH + "px'>"
             + toHtml(text) + "</body></html>");
-        body.setFont(FontManager.getRunescapeSmallFont());
-        body.setForeground(fg);
+        body.setFont(BODY_FONT);
+        body.setForeground(Color.WHITE);
         body.setAlignmentX(LEFT_ALIGNMENT);
-        bubble.add(body);
+        msg.add(body);
 
-        messages.add(bubble);
-        messages.add(Box.createVerticalStrut(6));
+        lastMsg = msg;
+        messages.add(msg);
+        messages.add(Box.createVerticalStrut(10));
         messages.revalidate();
         scrollToBottom();
     }
 
-    /** A faint footer line under the last reply: tools used + token counts. */
     private void addMeta(int inTok, int outTok, List<String> tools)
     {
         StringBuilder sb = new StringBuilder();
         if (tools != null && !tools.isEmpty())
-            sb.append(tools.size()).append(tools.size() == 1 ? " tool" : " tools").append(" - ");
+            sb.append(tools.size()).append(tools.size() == 1 ? " tool" : " tools").append(" · ");
         sb.append(inTok).append(" in / ").append(outTok).append(" out");
 
         JLabel meta = new JLabel(sb.toString());
-        meta.setFont(FontManager.getRunescapeSmallFont());
-        meta.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
+        meta.setFont(META_FONT);
+        meta.setForeground(META_COLOR);
         meta.setAlignmentX(LEFT_ALIGNMENT);
-        meta.setBorder(new EmptyBorder(0, 4, 6, 0));
+        meta.setBorder(new EmptyBorder(3, 26, 0, 0)); // small gap, indented under the name
         if (tools != null && !tools.isEmpty())
             meta.setToolTipText("Checked: " + String.join(", ", tools));
 
-        messages.add(meta);
-        messages.add(Box.createVerticalStrut(4));
-        messages.revalidate();
+        // Tuck it into the reply block so it sits directly beneath the text.
+        JPanel target = lastMsg;
+        if (target != null) { target.add(meta); target.revalidate(); }
+        else { messages.add(meta); messages.revalidate(); }
         scrollToBottom();
     }
 
@@ -357,26 +509,92 @@ public class OsrsMcpChatPanel extends PluginPanel
         });
     }
 
-    /** Escape HTML and preserve line breaks so the JLabel renders user/model text safely. */
+    /** Escape HTML, then render a light subset of markdown (bold + dash bullets). */
     private static String toHtml(String s)
     {
         if (s == null) return "";
-        String esc = s.replace("&", "&amp;")
-                      .replace("<", "&lt;")
-                      .replace(">", "&gt;")
-                      .replace("\n", "<br>");
-        return esc;
+        String[] lines = s.split("\n", -1);
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < lines.length; i++)
+        {
+            String line = lines[i]
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
+            // **bold** -> <b>bold</b>
+            line = line.replaceAll("\\*\\*(.+?)\\*\\*", "<b>$1</b>");
+            // leading "- " or "* " bullet -> bullet glyph, keeping any indentation
+            line = line.replaceFirst("^(\\s*)[-*]\\s+", "$1&#8226; ");
+            out.append(line);
+            if (i < lines.length - 1) out.append("<br>");
+        }
+        return out.toString();
     }
 
-    private void styleButton(JButton btn)
+    // ── small styled widgets ──────────────────────────────────────────────────────
+
+    private JLabel fieldLabel(String text)
     {
-        btn.setFont(FontManager.getRunescapeSmallFont());
-        btn.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        btn.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
-        btn.setBorder(new EmptyBorder(5, 10, 5, 10));
+        JLabel l = new JLabel(text.toUpperCase());
+        l.setFont(META_FONT);
+        l.setForeground(ACCENT);
+        l.setAlignmentX(LEFT_ALIGNMENT);
+        return l;
+    }
+
+    private void styleField(JTextField f)
+    {
+        f.setFont(BODY_FONT);
+        f.setForeground(Color.WHITE);
+        f.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        f.setCaretColor(Color.WHITE);
+        f.setAlignmentX(LEFT_ALIGNMENT);
+        f.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+        f.setBorder(new CompoundBorder(
+            new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
+            new EmptyBorder(3, 5, 3, 5)));
+    }
+
+    private void styleButton(JButton btn, boolean accent)
+    {
+        btn.setFont(new Font("SansSerif", Font.BOLD, 11));
+        btn.setForeground(accent ? Color.BLACK : ColorScheme.LIGHT_GRAY_COLOR);
+        btn.setBackground(accent ? ACCENT : ColorScheme.MEDIUM_GRAY_COLOR);
+        btn.setBorder(new EmptyBorder(6, 12, 6, 12));
         btn.setFocusPainted(false);
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setAlignmentX(LEFT_ALIGNMENT);
-        btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
+        btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+    }
+
+    /** A small round avatar with a centred initial. */
+    private static final class Avatar extends JComponent
+    {
+        private static final int SIZE = 20;
+        private final String initial;
+        private final Color color;
+
+        Avatar(String initial, Color color)
+        {
+            this.initial = initial;
+            this.color = color;
+            Dimension d = new Dimension(SIZE, SIZE);
+            setPreferredSize(d); setMinimumSize(d); setMaximumSize(d);
+        }
+
+        @Override protected void paintComponent(Graphics g)
+        {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.fillOval(0, 0, SIZE, SIZE);
+            g2.setColor(Color.WHITE);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 11));
+            FontMetrics fm = g2.getFontMetrics();
+            int tw = fm.stringWidth(initial);
+            int th = fm.getAscent();
+            g2.drawString(initial, (SIZE - tw) / 2, (SIZE + th) / 2 - 2);
+            g2.dispose();
+        }
     }
 }
