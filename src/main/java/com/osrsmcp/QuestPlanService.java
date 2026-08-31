@@ -12,12 +12,18 @@ import net.runelite.api.Skill;
 import net.runelite.api.VarPlayer;
 import net.runelite.api.vars.AccountType;
 
+import net.runelite.client.RuneLite;
+
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Type;
+import java.util.function.Consumer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -41,6 +47,8 @@ import java.util.Set;
 public class QuestPlanService
 {
     private static final String RESOURCE = "/com/osrsmcp/quest_data.json";
+    // Optional override dir: drop regenerated JSON here and call reload_planner_data (no restart).
+    private static final File EXTERNAL_DIR = new File(RuneLite.RUNELITE_DIR, "osrs-mcp");
 
     @Inject private Client client;
     @Inject private Gson gson;
@@ -48,10 +56,37 @@ public class QuestPlanService
 
     // Parsed resource: quest name -> { requirements{...}, xp_rewards{...}, xp_choice?, unlocks? }
     private volatile Map<String, Map<String, Object>> questData;
+    private volatile List<String> optimalOrder;
+    private volatile String questSource = "?";
+    private volatile String questGenerated = "?";
     // normalized wiki quest name -> RuneLite Quest (built once from Quest.values())
     private volatile Map<String, Quest> liveByNorm;
 
     // --- data loading -------------------------------------------------------
+
+    /** Read a JSON root object, preferring EXTERNAL_DIR/<filename> over the bundled resource. */
+    private Map<String, Object> readRoot(String filename, String bundledResource, Consumer<String> sourceSink)
+    {
+        Type t = new TypeToken<Map<String, Object>>(){}.getType();
+        File ext = new File(EXTERNAL_DIR, filename);
+        if (ext.isFile())
+        {
+            try (Reader r = new InputStreamReader(new FileInputStream(ext), StandardCharsets.UTF_8))
+            {
+                Map<String, Object> root = gson.fromJson(r, t);
+                if (root != null) { sourceSink.accept("external (" + ext.getAbsolutePath() + ")"); return root; }
+            }
+            catch (Exception e) { log.warn("Failed to read external {}: {} -- falling back to bundled", ext, e.getMessage()); }
+        }
+        try (InputStream in = QuestPlanService.class.getResourceAsStream(bundledResource))
+        {
+            if (in == null) { sourceSink.accept("missing"); return new LinkedHashMap<>(); }
+            Map<String, Object> root = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), t);
+            sourceSink.accept("bundled");
+            return root != null ? root : new LinkedHashMap<>();
+        }
+        catch (Exception e) { log.warn("Failed to load {}: {}", bundledResource, e.getMessage()); sourceSink.accept("error"); return new LinkedHashMap<>(); }
+    }
 
     @SuppressWarnings("unchecked")
     private Map<String, Map<String, Object>> data()
@@ -61,17 +96,36 @@ public class QuestPlanService
         synchronized (this)
         {
             if (questData != null) return questData;
-            try (InputStream in = QuestPlanService.class.getResourceAsStream(RESOURCE))
-            {
-                if (in == null) { log.warn("quest_data.json not found on classpath"); questData = new LinkedHashMap<>(); return questData; }
-                Type t = new TypeToken<Map<String, Object>>(){}.getType();
-                Map<String, Object> root = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), t);
-                questData = (Map<String, Map<String, Object>>) (Map<?, ?>) root.getOrDefault("quests", new LinkedHashMap<>());
-                log.info("Loaded quest_data.json: {} quests (generated {})", questData.size(), root.get("_generated"));
-            }
-            catch (Exception e) { log.warn("Failed to load quest_data.json: {}", e.getMessage()); questData = new LinkedHashMap<>(); }
+            Map<String, Object> root = readRoot("quest_data.json", RESOURCE, s -> questSource = s);
+            questData = (Map<String, Map<String, Object>>) (Map<?, ?>) root.getOrDefault("quests", new LinkedHashMap<>());
+            Object ord = root.get("optimal_order");
+            optimalOrder = ord instanceof List ? asList(ord) : new ArrayList<>();
+            questGenerated = String.valueOf(root.getOrDefault("_generated", "?"));
+            log.info("Loaded quest_data ({}): {} quests, {} route entries (generated {})", questSource, questData.size(), optimalOrder.size(), questGenerated);
             return questData;
         }
+    }
+
+    /** Clear caches so the next call re-reads from EXTERNAL_DIR (or bundled). Used by reload_planner_data. */
+    public synchronized Map<String, Object> reloadData()
+    {
+        questData = null; optimalOrder = null; trainingData = null;
+        questSource = "?"; questGenerated = "?";
+        data();
+        Map<String, Object> td = trainingData();
+        Object methods = td.get("methods");
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("reloaded", true);
+        out.put("external_dir", EXTERNAL_DIR.getAbsolutePath());
+        out.put("quest_data_source", questSource);
+        out.put("quest_data_generated", questGenerated);
+        out.put("quests_loaded", questData.size());
+        out.put("route_entries", optimalOrder.size());
+        out.put("training_methods_source", trainingSource);
+        out.put("training_methods_loaded", methods instanceof List ? ((List<?>) methods).size() : 0);
+        out.put("_note", "Drop regenerated quest_data.json / training_methods.json in external_dir and call this to apply them without restarting the client. Plugin CODE changes still need a restart.");
+        return out;
     }
 
     /** Normalise a quest name for fuzzy matching between wiki names and RuneLite's Quest enum. */
@@ -412,34 +466,19 @@ public class QuestPlanService
         return result;
     }
 
-    private volatile List<String> optimalOrder;
-
     private List<String> loadOptimalOrder()
     {
+        data();   // populates optimalOrder alongside questData from the same root
         List<String> o = optimalOrder;
-        if (o != null) return o;
-        synchronized (this)
-        {
-            if (optimalOrder != null) return optimalOrder;
-            try (InputStream in = QuestPlanService.class.getResourceAsStream(RESOURCE))
-            {
-                if (in == null) { optimalOrder = new ArrayList<>(); return optimalOrder; }
-                Type t = new TypeToken<Map<String, Object>>(){}.getType();
-                Map<String, Object> root = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), t);
-                Object ord = root.get("optimal_order");
-                optimalOrder = ord instanceof List ? asList(ord) : new ArrayList<>();
-            }
-            catch (Exception e) { optimalOrder = new ArrayList<>(); }
-            return optimalOrder;
-        }
+        return o != null ? o : new ArrayList<>();
     }
 
     // --- get_training_methods (Layer 3) -------------------------------------
 
     private static final String TRAINING_RESOURCE = "/com/osrsmcp/training_methods.json";
     private volatile Map<String, Object> trainingData;
+    private volatile String trainingSource = "?";
 
-    @SuppressWarnings("unchecked")
     private Map<String, Object> trainingData()
     {
         Map<String, Object> t = trainingData;
@@ -447,14 +486,7 @@ public class QuestPlanService
         synchronized (this)
         {
             if (trainingData != null) return trainingData;
-            try (InputStream in = QuestPlanService.class.getResourceAsStream(TRAINING_RESOURCE))
-            {
-                if (in == null) { trainingData = new LinkedHashMap<>(); return trainingData; }
-                Type ty = new TypeToken<Map<String, Object>>(){}.getType();
-                trainingData = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), ty);
-                if (trainingData == null) trainingData = new LinkedHashMap<>();
-            }
-            catch (Exception e) { log.warn("Failed to load training_methods.json: {}", e.getMessage()); trainingData = new LinkedHashMap<>(); }
+            trainingData = readRoot("training_methods.json", TRAINING_RESOURCE, s -> trainingSource = s);
             return trainingData;
         }
     }

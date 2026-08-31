@@ -199,6 +199,7 @@ public class McpServer
             case "project_plan":      return questPlanService.buildProjectPlan(jsonToMap(args));
             case "get_training_methods": return questPlanService.buildTrainingMethods(jsonToMap(args));
             case "get_optimal_quest_route": return questPlanService.buildOptimalQuestRoute(jsonToMap(args));
+            case "reload_planner_data": return questPlanService.reloadData();
             case "get_slayer_task":   return playerDataService.buildSlayerTask();
             case "get_clue_scroll":   return playerDataService.buildClueScroll();
             case "get_nearby_npcs":       return playerDataService.buildNearbyNpcs();
@@ -422,6 +423,7 @@ public class McpServer
             props.add("only_remaining", onlyRem);
             tools.add(buildToolWithSchema("get_optimal_quest_route", "The OSRS Wiki Optimal Quest Guide ordering as a planning prior, annotated with your live quest state: how far you've progressed, the next route quest you can start now (next_startable_now), and upcoming ones still blocked (next_blocked, with reasons). Use it to anchor a quest plan on the community route, then adapt to the player's goal. Not account-specific ordering -- it's a recommendation.", props, new String[]{}));
         }
+        tools.add(buildTool("reload_planner_data", "Reload the planner's bundled data (quest_data.json, training_methods.json) from disk without restarting the client -- picks up a regenerated copy placed in the external override dir. Returns where each dataset was loaded from and its counts. Plugin code changes still require a restart."));
         tools.add(buildTool("get_slayer_task",   "Get current Slayer task: creature name, remaining count, location, points and streak."));
         tools.add(buildTool("get_clue_scroll",   "Check if the player has an active clue scroll in their inventory and which tier it is."));
         tools.add(buildTool("get_nearby_npcs",     "Get a list of NPCs currently visible to the player, sorted by combat level. Includes name, combat level, and approximate health."));
