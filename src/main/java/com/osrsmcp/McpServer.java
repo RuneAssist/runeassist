@@ -41,6 +41,8 @@ public class McpServer
         + "- project_plan: the source of truth for 'what if'. Give it quests to assume done and/or skill training targets; it returns the EXACT resulting levels, XP still to train, newly-eligible quests and newly requirement-complete diary regions. Never do quest/level arithmetic yourself -- call project_plan and trust it. Propose an order, verify each step with it, iterate.\n"
         + "- get_training_methods: approximate XP/hr per method (+ live meets_requirements) so you can turn 'XP to train' into rough hours. Rates are ballpark and dated -- say so.\n"
         + "- get_optimal_quest_route: the wiki's Optimal Quest Guide ordering annotated with the player's state (next_startable_now / next_blocked). Anchor quest plans on this route, then adapt to the goal.\n"
+        + "- get_wom_gains / get_wom_profile: recent XP/KC gains and progress rates from Wise Old Man -- ground 'what next' advice in what the player has actually been doing.\n"
+        + "\nOTHER PLUGINS: get_inventory_setups + view_inventory_setup (their gear presets; can open one in-game). get_tcg_unlocks (OSRS TCG: only suggest unlocked content). path_to draws an in-game route via Shortest Path (guide, never auto-move).\n"
         + "- Rank suggestions by leverage: unlocks that gate multiple diaries/quests, skills within a level or two of a milestone, and content the player's gear and stats already support.\n"
         + "- For gear/BiS questions use get_equipment_stats and get_bis_comparison, and note when the player is not in combat gear (stats will read low).\n"
         + "- For money-making, prefer the player's measured context (get_money_making_context, get_boss_kc) and account for GE buy limits and the 1% GE tax on flips.\n"
@@ -60,6 +62,7 @@ public class McpServer
     @Inject private WikiBucketService wikiBucketService;
     @Inject private QuestPlanService questPlanService;
     @Inject private InteropService interopService;
+    @Inject private WiseOldManService wiseOldManService;
     @Inject private ClientThread clientThread;
     @Inject private OsrsMcpConfig config;
 
@@ -73,7 +76,9 @@ public class McpServer
         // hold the client thread (they only take a name argument and hit HTTP).
         "get_drop_table", "get_npc_info",
         // inter-plugin messaging (post on client thread internally, then await a reply)
-        "get_tcg_unlocks", "path_to"));
+        "get_tcg_unlocks", "path_to", "get_inventory_setups", "view_inventory_setup",
+        // Wise Old Man web API (progress history / gains)
+        "get_wom_profile", "get_wom_gains"));
 
     // Hybrid tools: read live game state, THEN do per-item HTTP. Handled in two
     // phases -- a quick client-thread snapshot, then the fetch off the client thread.
@@ -308,6 +313,15 @@ public class McpServer
         }
     }
 
+    /** Username from the 'username' arg, else the logged-in RSN (resolved on the client thread). */
+    private String resolveUsername(JsonObject args)
+    {
+        String u = strArg(args, "username", null);
+        if (u != null && !u.isBlank()) return u;
+        try { return onClientThread(playerDataService::currentUsername); }
+        catch (Exception e) { return null; }
+    }
+
     private Map<String, Object> dispatchNetworkTool(String toolName, JsonObject args)
     {
         switch (toolName)
@@ -348,6 +362,17 @@ public class McpServer
             }
             case "get_tcg_unlocks":
                 return interopService.getTcgUnlocks();
+            case "get_inventory_setups":
+                return interopService.getInventorySetups();
+            case "view_inventory_setup":
+            {
+                boolean clear = args.has("clear") && args.get("clear").isJsonPrimitive() && args.get("clear").getAsBoolean();
+                return interopService.viewInventorySetup(strArg(args, "name", null), clear);
+            }
+            case "get_wom_profile":
+                return wiseOldManService.getProfile(resolveUsername(args));
+            case "get_wom_gains":
+                return wiseOldManService.getGains(resolveUsername(args), strArg(args, "period", null));
             case "path_to":
             {
                 Integer x = args.has("x") && args.get("x").isJsonPrimitive() ? args.get("x").getAsInt() : null;
@@ -511,6 +536,25 @@ public class McpServer
             props.add("title", strProp("Exact page title (from wiki_search), e.g. 'Zulrah/Strategies'."));
             props.add("max_chars", numProp("Max characters to return (default 6000, max 20000)."));
             tools.add(buildToolWithSchema("wiki_get_page", "Get the readable plain-text content of a wiki page by title -- prose, strategy, walkthroughs. Tables/infoboxes are stripped (use wiki_bucket_* for structured stats). Pair with wiki_search to find the title.", props, new String[]{"title"}));
+        }
+        {
+            JsonObject props = new JsonObject();
+            props.add("username", strProp("RSN to look up. Omit to use the logged-in player."));
+            tools.add(buildToolWithSchema("get_wom_profile", "Wise Old Man overview for a player (wiseoldman.net): total level/XP, EHP, EHB, time-to-max, combat level, and per-skill levels/xp/rank. Progress data our live/wiki tools don't have. Omit username to use the logged-in account.", props, new String[]{}));
+        }
+        {
+            JsonObject props = new JsonObject();
+            props.add("username", strProp("RSN to look up. Omit to use the logged-in player."));
+            props.add("period", strProp("Time window: five_min, day, week (default), month, or year."));
+            tools.add(buildToolWithSchema("get_wom_gains", "Wise Old Man GAINS over a period: XP gained per skill, boss KC gained, activity score gained (non-zero only, sorted). Shows what the player has ACTUALLY been doing lately -- use it to ground 'what next' advice in real recent activity. Omit username to use the logged-in account.", props, new String[]{}));
+        }
+        tools.add(buildTool("get_inventory_setups", "List the player's saved Inventory Setups (gear/inventory presets) by name, via the Inventory Setups plugin. Use to know their intended loadouts (e.g. a 'Zulrah' setup) before advising on gear. Returns setups_available and the names."));
+        {
+            JsonObject props = new JsonObject();
+            props.add("name", strProp("Setup name to open (from get_inventory_setups)."));
+            JsonObject clr = new JsonObject(); clr.addProperty("type", "boolean"); clr.addProperty("description", "If true, clear the active setup instead of opening one.");
+            props.add("clear", clr);
+            tools.add(buildToolWithSchema("view_inventory_setup", "Open one of the player's Inventory Setups in-game and filter the bank to it (Inventory Setups plugin required). Read-only: it shows the setup, it does not move or equip items. Use to help the player gear up for an activity.", props, new String[]{}));
         }
         tools.add(buildTool("get_tcg_unlocks", "Read the player's OSRS TCG collection from the TCG plugin (owned card names, owned item ids, owned NPC ids). In OSRS TCG, items/teleports/monsters stay locked until their card is pulled -- use this to only recommend unlocked content and to flag what they'd need to pull. Returns tcg_available=false if the TCG plugin isn't running."));
         {
