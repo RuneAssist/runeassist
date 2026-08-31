@@ -191,6 +191,7 @@ public class McpServer
             case "get_diary_requirements": return playerDataService.buildDiaryRequirements();
             case "get_next_goals":    return playerDataService.buildNextGoals();
             case "get_quest_rewards": return questPlanService.buildQuestRewards();
+            case "project_plan":      return questPlanService.buildProjectPlan(jsonToMap(args));
             case "get_slayer_task":   return playerDataService.buildSlayerTask();
             case "get_clue_scroll":   return playerDataService.buildClueScroll();
             case "get_nearby_npcs":       return playerDataService.buildNearbyNpcs();
@@ -278,6 +279,14 @@ public class McpServer
     private String strArg(JsonObject args, String key, String def)
     {
         return (args != null && args.has(key) && !args.get(key).isJsonNull()) ? args.get(key).getAsString() : def;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> jsonToMap(JsonObject args)
+    {
+        if (args == null) return new LinkedHashMap<>();
+        Map<String, Object> m = gson.fromJson(args, Map.class);
+        return m != null ? m : new LinkedHashMap<>();
     }
 
     private void handleSse(HttpExchange exchange) throws IOException
@@ -382,6 +391,15 @@ public class McpServer
         tools.add(buildTool("get_diary_requirements", "Get task-level Achievement Diary requirements for every region, each live-checked against the account. For each task, shows the skill/quest requirements and whether they are met, including how many levels short you are. Use this to find diary tasks you already qualify for and exactly what is blocking the rest."));
         tools.add(buildTool("get_next_goals",    "Get a ranked list of the most actionable next goals derived from live data: skills closest to a level-up and to 99, quests already in progress, and diary regions where you already meet the most task requirements (nearest to a full clear, with blocking skills)."));
         tools.add(buildTool("get_quest_rewards", "For every quest: its requirements (prerequisite quests, skill levels, quest points), XP rewards, skill-choice lamps, notable unlocks, and a live meets_requirements flag checked against the account (with blocked_by reasons). Use for quest planning -- which quests you can start now, and what each is worth. account_type and eligible_now_count summarise the set."));
+        {
+            JsonObject props = new JsonObject();
+            JsonObject cq = new JsonObject(); cq.addProperty("type", "array"); JsonObject cqi = new JsonObject(); cqi.addProperty("type", "string"); cq.add("items", cqi);
+            cq.addProperty("description", "Quest names to assume completed (their fixed XP rewards are applied and they count as prerequisites).");
+            props.add("complete_quests", cq);
+            JsonObject tr = new JsonObject(); tr.addProperty("type", "object"); tr.addProperty("description", "Training targets, skill -> target level (1-99), e.g. {\"agility\":70}.");
+            props.add("train", tr);
+            tools.add(buildToolWithSchema("project_plan", "Deterministically simulate a plan against the live account and report the exact outcome: resulting_levels, xp_gained_from_quests, xp_still_to_train, newly_eligible_quests, and diary regions that become requirement-complete. Give it quests to assume done and/or skill training targets; it does the multi-step XP/level/requirement arithmetic exactly so advice is trustworthy. Propose an ordering, call this to verify each step, iterate.", props, new String[]{}));
+        }
         tools.add(buildTool("get_slayer_task",   "Get current Slayer task: creature name, remaining count, location, points and streak."));
         tools.add(buildTool("get_clue_scroll",   "Check if the player has an active clue scroll in their inventory and which tier it is."));
         tools.add(buildTool("get_nearby_npcs",     "Get a list of NPCs currently visible to the player, sorted by combat level. Includes name, combat level, and approximate health."));
