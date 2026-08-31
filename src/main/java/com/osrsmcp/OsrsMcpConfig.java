@@ -58,4 +58,44 @@ public interface OsrsMcpConfig extends Config
         section = privacySection, position = 4,
         description = "Include your RSN in responses. Disable for privacy.")
     default boolean shareUsername() { return true; }
+
+    // ── AI CHAT ──────────────────────────────────────────────────────────────
+
+    @ConfigSection(name = "AI Chat", description = "LLM provider settings for in-game chat", position = 2)
+    String aiChatSection = "aiChat";
+
+    @ConfigItem(keyName = "llmProvider", name = "AI provider",
+        description = "Which LLM provider to use for AI chat.",
+        section = aiChatSection, position = 0)
+    default LlmProviderType llmProvider() { return LlmProviderType.ANTHROPIC; }
+
+    @ConfigItem(keyName = "anthropicKey", name = "Anthropic API key",
+        description = "API key for Anthropic.",
+        section = aiChatSection, position = 1, secret = true)
+    default String anthropicKey() { return ""; }
+
+    @ConfigItem(keyName = "openAiKey", name = "OpenAI API key",
+        description = "API key for OpenAI.",
+        section = aiChatSection, position = 2, secret = true)
+    default String openAiKey() { return ""; }
+
+    @ConfigItem(keyName = "deepSeekKey", name = "DeepSeek API key",
+        description = "API key for DeepSeek.",
+        section = aiChatSection, position = 3, secret = true)
+    default String deepSeekKey() { return ""; }
+
+    @ConfigItem(keyName = "llmModel", name = "Model override",
+        description = "Leave blank to use the provider's default model.",
+        section = aiChatSection, position = 4)
+    default String llmModel() { return ""; }
+
+    @ConfigItem(keyName = "hostedUrl", name = "Hosted service URL",
+        description = "Paid hosted tier endpoint (OpenAI-compatible). Leave blank unless subscribed.",
+        section = aiChatSection, position = 5)
+    default String hostedUrl() { return ""; }
+
+    @ConfigItem(keyName = "hostedToken", name = "Hosted account token",
+        description = "Sign-in token for the hosted tier. Not a raw API key.",
+        section = aiChatSection, position = 6, secret = true)
+    default String hostedToken() { return ""; }
 }
