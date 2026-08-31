@@ -1,5 +1,5 @@
 {
- "_generated": "2026-08-31T09:07:36.883Z",
+ "_generated": "2026-08-31T09:12:30.106Z",
  "_source": "oldschool.runescape.wiki",
  "optimal_order": [
   "Learning the Ropes",
@@ -328,6 +328,15 @@
    },
    "xp_rewards": {}
   },
+  "Alfred Grimhand's Barcrawl": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
   "Animal Magnetism": {
    "requirements": {
     "quests": [
@@ -391,6 +400,85 @@
     "herblore": 500,
     "hunter": 4500
    }
+  },
+  "Barbarian Farming": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "farming": 15
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Barbarian Firemaking": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "crafting": 11,
+     "firemaking": 35
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Barbarian Fishing": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "agility": 15,
+     "fishing": 55,
+     "strength": 35
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Barbarian Herblore": {
+   "requirements": {
+    "quests": [
+     "Druidic Ritual"
+    ],
+    "skills": {
+     "herblore": 4
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Barbarian Smithing": {
+   "requirements": {
+    "quests": [
+     "Tai Bwo Wannai Trio",
+     "Barbarian Firemaking",
+     "Barbarian Fishing"
+    ],
+    "skills": {
+     "smithing": 5
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Barbarian Training": {
+   "requirements": {
+    "quests": [
+     "Barbarian Firemaking",
+     "Barbarian Fishing",
+     "Barbarian Herblore",
+     "Barbarian Smithing",
+     "Barbarian Farming"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
   },
   "Bear Your Soul": {
    "requirements": {
@@ -624,22 +712,21 @@
    "requirements": {
     "quests": [
      "Desert Treasure I",
-     "The Restless Ghost",
-     "Making History",
-     "Rune Mysteries",
-     "Family Crest",
-     "Desert Treasure I",
-     "Curse of the Empty Lord",
-     "Fight Arena"
+     "The Restless Ghost"
     ],
     "skills": {
      "prayer": 31,
-     "thieving": 53,
-     "agility": 70,
-     "hitpoints": 70,
-     "ranged": 70,
-     "strength": 70
+     "thieving": 53
     },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Daddy's Home": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
     "skills_ironman": {},
     "quest_points": 0
    },
@@ -971,6 +1058,37 @@
     "hunter": 2500
    }
   },
+  "Easy Ardougne Diary": {
+   "requirements": {
+    "quests": [
+     "Biohazard",
+     "Rune Mysteries"
+    ],
+    "skills": {
+     "thieving": 5
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Easy Kandarin Diary": {
+   "requirements": {
+    "quests": [
+     "Started:Elemental Workshop I"
+    ],
+    "skills": {
+     "agility": 20,
+     "farming": 13,
+     "fishing": 16
+    },
+    "skills_ironman": {
+     "crafting": 42
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
   "Elemental Workshop I": {
    "requirements": {
     "quests": [],
@@ -1005,6 +1123,59 @@
     "crafting": 7500,
     "smithing": 7500
    }
+  },
+  "Elite Ardougne Diary": {
+   "requirements": {
+    "quests": [
+     "Desert Treasure I",
+     "Haunted Mine"
+    ],
+    "skills": {
+     "ranged": 40,
+     "magic": 94,
+     "agility": 90,
+     "thieving": 82,
+     "crafting": 35,
+     "fletching": 69,
+     "smithing": 91,
+     "fishing": 81,
+     "cooking": 91,
+     "firemaking": 50,
+     "farming": 85
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Elite Kandarin Diary": {
+   "requirements": {
+    "quests": [
+     "Hard Kandarin Diary",
+     "Barbarian Training",
+     "Family Crest",
+     "Lunar Diplomacy",
+     "Tai Bwo Wannai Trio"
+    ],
+    "skills": {
+     "agility": 60,
+     "cooking": 80,
+     "crafting": 85,
+     "farming": 79,
+     "firemaking": 85,
+     "fishing": 76,
+     "herblore": 86,
+     "magic": 87,
+     "smithing": 90,
+     "barbarian assault: attacker": 5,
+     "barbarian assault: collector": 5,
+     "barbarian assault: defender": 5,
+     "barbarian assault: healer": 5
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
   },
   "Enakhra's Lament": {
    "requirements": {
@@ -1047,7 +1218,9 @@
   },
   "Enter the Abyss": {
    "requirements": {
-    "quests": [],
+    "quests": [
+     "Rune Mysteries"
+    ],
     "skills": {},
     "skills_ironman": {},
     "quest_points": 0
@@ -1140,6 +1313,17 @@
      "mining": 40,
      "smithing": 40
     },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Family Pest": {
+   "requirements": {
+    "quests": [
+     "Family Crest"
+    ],
+    "skills": {},
     "skills_ironman": {},
     "quest_points": 0
    },
@@ -1282,6 +1466,70 @@
     "woodcutting": 60000
    }
   },
+  "Hard Ardougne Diary": {
+   "requirements": {
+    "quests": [
+     "Legends' Quest",
+     "Monkey Madness I",
+     "Mourning's End Part II",
+     "Watchtower "
+    ],
+    "skills": {
+     "strength": 50,
+     "ranged": 60,
+     "prayer": 42,
+     "magic": 66,
+     "runecraft": 65,
+     "construction": 50,
+     "agility": 56,
+     "herblore": 45,
+     "thieving": 72,
+     "crafting": 50,
+     "fletching": 5,
+     "hunter": 59,
+     "mining": 52,
+     "smithing": 68,
+     "fishing": 53,
+     "cooking": 53,
+     "woodcutting": 50,
+     "farming": 70
+    },
+    "skills_ironman": {},
+    "quest_points": 107
+   },
+   "xp_rewards": {}
+  },
+  "Hard Kandarin Diary": {
+   "requirements": {
+    "quests": [
+     "Medium Kandarin Diary",
+     "Barbarian Firemaking",
+     "Barbarian Fishing",
+     "Barbarian Smithing",
+     "Knight Waves Training Grounds",
+     "Tai Bwo Wannai Trio",
+     "Started:Desert Treasure I"
+    ],
+    "skills": {
+     "agility": 60,
+     "construction": 50,
+     "crafting": 10,
+     "defence": 70,
+     "firemaking": 65,
+     "fishing": 70,
+     "fletching": 70,
+     "magic": 56,
+     "prayer": 70,
+     "smithing": 75,
+     "strength": 50,
+     "thieving": 53,
+     "woodcutting": 60
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
   "Haunted Mine": {
    "requirements": {
     "quests": [
@@ -1374,85 +1622,13 @@
      "Started:The Restless Ghost",
      "Desert Treasure I",
      "Fairytale II - Cure a Queen",
-     "Land of the Goblins",
-     "Beneath Cursed Sands",
-     "Haunted Mine",
-     "Mage Arena I",
-     "Druidic Ritual",
-     "Tai Bwo Wannai Trio",
-     "Barbarian Firemaking",
-     "Barbarian Fishing",
-     "King's Ransom",
-     "The Feud",
-     "Rune Mysteries",
-     "Icthlarin's Little Helper",
-     "Biohazard",
-     "Rune Mysteries",
-     "Enlightened Journey",
-     "The Hand in the Sand",
-     "Tower of Life",
-     "Underground Pass",
-     "Started:Fairytale II - Cure a Queen",
-     "Started:Sea Slug",
-     "Started:Watchtower",
-     "Legends' Quest",
-     "Monkey Madness I",
-     "Mourning's End Part II",
-     "Watchtower ",
-     "Desert Treasure I",
-     "Haunted Mine",
-     "Started:Elemental Workshop I",
-     "Easy Kandarin Diary",
-     "Alfred Grimhand's Barcrawl",
-     "Elemental Workshop II",
-     "Started:Fairytale II - Cure a Queen",
-     "Started:Waterfall Quest",
-     "Medium Kandarin Diary",
-     "Barbarian Firemaking",
-     "Barbarian Fishing",
-     "Barbarian Smithing",
-     "Knight Waves Training Grounds",
-     "Tai Bwo Wannai Trio",
-     "Started:Desert Treasure I",
-     "Hard Kandarin Diary",
-     "Barbarian Training",
-     "Family Crest",
-     "Lunar Diplomacy",
-     "Tai Bwo Wannai Trio"
+     "Land of the Goblins"
     ],
     "skills": {
-     "prayer": 70,
-     "slayer": 40,
-     "magic": 87,
-     "cooking": 80,
-     "crafting": 85,
-     "firemaking": 85,
-     "farming": 79,
-     "agility": 60,
-     "fishing": 76,
-     "strength": 50,
-     "herblore": 86,
-     "smithing": 90,
-     "thieving": 53,
-     "ranged": 40,
-     "woodcutting": 60,
-     "runecraft": 65,
-     "construction": 50,
-     "fletching": 70,
-     "hunter": 59,
-     "mining": 30,
-     "defence": 70,
-     "barbarian assault: attacker": 5,
-     "barbarian assault: collector": 5,
-     "barbarian assault: defender": 5,
-     "barbarian assault: healer": 5
+     "prayer": 50
     },
-    "skills_ironman": {
-     "crafting": 42,
-     "fletching": 59,
-     "smithing": 59
-    },
-    "quest_points": 107
+    "skills_ironman": {},
+    "quest_points": 0
    },
    "xp_rewards": {}
   },
@@ -1523,6 +1699,15 @@
     "strength": 2000
    }
   },
+  "In Search of Knowledge": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
   "In Search of the Myreque": {
    "requirements": {
     "quests": [
@@ -1541,6 +1726,17 @@
     "hitpoints": 600,
     "strength": 600
    }
+  },
+  "Into the Tombs": {
+   "requirements": {
+    "quests": [
+     "Beneath Cursed Sands"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
   },
   "Jungle Potion": {
    "requirements": {
@@ -1587,6 +1783,30 @@
    "xp_rewards": {
     "attack": 20000
    }
+  },
+  "Knight Waves Training Grounds": {
+   "requirements": {
+    "quests": [
+     "King's Ransom"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Lair of Tarn Razorlor": {
+   "requirements": {
+    "quests": [
+     "Haunted Mine"
+    ],
+    "skills": {
+     "slayer": 40
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
   },
   "Land of the Goblins": {
    "requirements": {
@@ -1676,6 +1896,30 @@
     "Baba Yaga / Moonclan"
    ]
   },
+  "Mage Arena I": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "magic": 60
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Mage Arena II": {
+   "requirements": {
+    "quests": [
+     "Mage Arena I"
+    ],
+    "skills": {
+     "magic": 75
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
   "Making Friends with My Arm": {
    "requirements": {
     "quests": [
@@ -1727,6 +1971,66 @@
    "xp_rewards": {
     "cooking": 8000
    }
+  },
+  "Medium Ardougne Diary": {
+   "requirements": {
+    "quests": [
+     "Enlightened Journey",
+     "The Hand in the Sand",
+     "Tower of Life",
+     "Underground Pass",
+     "Started:Fairytale II - Cure a Queen",
+     "Started:Sea Slug",
+     "Started:Watchtower"
+    ],
+    "skills": {
+     "strength": 38,
+     "ranged": 21,
+     "magic": 51,
+     "agility": 39,
+     "thieving": 38,
+     "firemaking": 50,
+     "woodcutting": 36,
+     "farming": 31
+    },
+    "skills_ironman": {
+     "crafting": 36,
+     "fletching": 59,
+     "smithing": 59
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Medium Kandarin Diary": {
+   "requirements": {
+    "quests": [
+     "Easy Kandarin Diary",
+     "Alfred Grimhand's Barcrawl",
+     "Elemental Workshop II",
+     "Started:Fairytale II - Cure a Queen",
+     "Started:Waterfall Quest"
+    ],
+    "skills": {
+     "agility": 36,
+     "cooking": 43,
+     "farming": 26,
+     "fishing": 46,
+     "fletching": 50,
+     "herblore": 48,
+     "magic": 45,
+     "mining": 30,
+     "ranged": 40,
+     "strength": 22,
+     "thieving": 47
+    },
+    "skills_ironman": {
+     "fletching": 59,
+     "smithing": 59
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {}
   },
   "Merlin's Crystal": {
    "requirements": {
@@ -1886,6 +2190,15 @@
     "farming": 5000,
     "herblore": 10000
    }
+  },
+  "Natural History Quiz": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
   },
   "Nature Spirit": {
    "requirements": {
@@ -2322,6 +2635,19 @@
     "agility": 13750
    }
   },
+  "Rogue Trader": {
+   "requirements": {
+    "quests": [
+     "The Feud",
+     "Rune Mysteries",
+     "Icthlarin's Little Helper"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
   "Romeo & Juliet": {
    "requirements": {
     "quests": [],
@@ -2388,6 +2714,15 @@
    }
   },
   "Rune Mysteries": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Sacred Bone Burner restoration": {
    "requirements": {
     "quests": [],
     "skills": {},
@@ -2567,6 +2902,17 @@
      "magic": 49,
      "slayer": 50,
      "woodcutting": 62
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Skippy and the Mogres": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "cooking": 20
     },
     "skills_ironman": {},
     "quest_points": 0
@@ -2819,6 +3165,17 @@
     "mining": 15300
    }
   },
+  "The Enchanted Key": {
+   "requirements": {
+    "quests": [
+     "Making History"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
   "The Eyes of Glouphrie": {
    "requirements": {
     "quests": [
@@ -2949,6 +3306,22 @@
     "Lunar/other regional access path"
    ]
   },
+  "The Frozen Door": {
+   "requirements": {
+    "quests": [
+     "Desert Treasure I"
+    ],
+    "skills": {
+     "agility": 70,
+     "hitpoints": 70,
+     "ranged": 70,
+     "strength": 70
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
   "The Garden of Death": {
    "requirements": {
     "quests": [],
@@ -2961,6 +3334,18 @@
    "xp_rewards": {
     "farming": 10000
    }
+  },
+  "The General's Shadow": {
+   "requirements": {
+    "quests": [
+     "Curse of the Empty Lord",
+     "Fight Arena"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
   },
   "The Giant Dwarf": {
    "requirements": {
@@ -3309,6 +3694,15 @@
     "slayer": 8000
    }
   },
+  "Tutorial Island": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
   "Twilight's Promise": {
    "requirements": {
     "quests": [
@@ -3479,12 +3873,7 @@
    "requirements": {
     "quests": [
      "Big Chompy Bird Hunting",
-     "Jungle Potion",
-     "Barbarian Firemaking",
-     "Barbarian Fishing",
-     "Barbarian Herblore",
-     "Barbarian Smithing",
-     "Barbarian Farming"
+     "Jungle Potion"
     ],
     "skills": {
      "herblore": 8,
