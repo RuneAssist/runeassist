@@ -13,6 +13,7 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
@@ -44,6 +45,8 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private CacheWriter cacheWriter;
     @Inject private EquipmentStatsService equipmentStatsService;
     @Inject private InteropService interopService;
+    @Inject private QuestPlanService questPlanService;
+    @Inject private PluginManager pluginManager;
 
     private NavigationButton navButton;
 
@@ -55,6 +58,7 @@ public class OsrsMcpPlugin extends Plugin
         cacheWriter.init();
         panel.setTailscaleService(tailscaleService);
         panel.setConfigManager(configManager);
+        panel.setStatusSupplier(this::buildPanelStatus);
         startServer();
 
         final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "icon.png");
@@ -70,8 +74,51 @@ public class OsrsMcpPlugin extends Plugin
     @Override
     protected void shutDown() throws Exception
     {
+        panel.stopStatusUpdates();
         stopServer();
         clientToolbar.removeNavigation(navButton);
+    }
+
+    /** Live status for the panel: quest-data source, request activity, interop-plugin availability. */
+    private java.util.Map<String, Object> buildPanelStatus()
+    {
+        java.util.Map<String, Object> s = new java.util.LinkedHashMap<>();
+        try
+        {
+            String gen = questPlanService.getQuestGenerated();
+            if (gen != null && gen.length() >= 10) gen = gen.substring(0, 10);
+            s.put("quest_data", questPlanService.getQuestSource() + " · " + gen + " (" + questPlanService.getQuestCount() + ")");
+        }
+        catch (Exception e) { s.put("quest_data", "--"); }
+
+        long n = mcpServer.getRequestCount();
+        String last = mcpServer.getLastToolName();
+        String act = "Requests: " + n;
+        if (last != null)
+        {
+            long age = (System.currentTimeMillis() - mcpServer.getLastToolAtMs()) / 1000;
+            act += " · last " + last + " " + age + "s ago";
+        }
+        s.put("activity", act);
+
+        s.put("shortestpath",    isPluginEnabled("Shortest Path"));
+        s.put("osrstcg",         isPluginEnabled("OSRS TCG"));
+        s.put("inventorysetups", isPluginEnabled("Inventory Setups"));
+        return s;
+    }
+
+    private boolean isPluginEnabled(String name)
+    {
+        try
+        {
+            for (Plugin p : pluginManager.getPlugins())
+            {
+                PluginDescriptor d = p.getClass().getAnnotation(PluginDescriptor.class);
+                if (d != null && name.equals(d.name())) return pluginManager.isPluginEnabled(p);
+            }
+        }
+        catch (Exception ignored) {}
+        return false;
     }
 
     private void startServer()

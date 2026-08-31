@@ -54,6 +54,15 @@ public class OsrsMcpPanel extends PluginPanel
     private JPanel tailscalePanelRef;
     private JLabel tailscaleHeaderRef;
 
+    // ── Integrations & activity ────────────────────────────────────────────────
+    private final JLabel dataStatusLabel = new JLabel("Quest data: --");
+    private final JLabel activityLabel    = new JLabel("Requests: 0");
+    private final JLabel spDot   = new JLabel("⬤ Shortest Path");
+    private final JLabel tcgDot  = new JLabel("⬤ OSRS TCG");
+    private final JLabel invDot  = new JLabel("⬤ Inventory Setups");
+    private java.util.function.Supplier<java.util.Map<String, Object>> statusSupplier;
+    private javax.swing.Timer statusTimer;
+
     // Callbacks
     private Runnable      restartCallback;
     private ConfigManager configManager;
@@ -88,11 +97,80 @@ public class OsrsMcpPanel extends PluginPanel
         root.add(Box.createVerticalStrut(6));
         root.add(buildSeparator());
         root.add(Box.createVerticalStrut(6));
+        root.add(buildSectionHeader("Integrations & activity"));
+        root.add(Box.createVerticalStrut(4));
+        root.add(buildIntegrationsSection());
+        root.add(Box.createVerticalStrut(6));
+        root.add(buildSeparator());
+        root.add(Box.createVerticalStrut(6));
         root.add(buildSectionHeader("Available tools"));
         root.add(Box.createVerticalStrut(4));
         root.add(buildToolsSection());
 
         add(root, BorderLayout.NORTH);
+    }
+
+    /** Provide a supplier of live status; the panel polls it every 2s. */
+    public void setStatusSupplier(java.util.function.Supplier<java.util.Map<String, Object>> supplier)
+    {
+        this.statusSupplier = supplier;
+        if (statusTimer == null)
+        {
+            statusTimer = new javax.swing.Timer(2000, e -> refreshStatus());
+            statusTimer.start();
+        }
+        refreshStatus();
+    }
+
+    public void stopStatusUpdates()
+    {
+        if (statusTimer != null) { statusTimer.stop(); statusTimer = null; }
+        statusSupplier = null;
+    }
+
+    private void refreshStatus()
+    {
+        if (statusSupplier == null) return;
+        java.util.Map<String, Object> s;
+        try { s = statusSupplier.get(); } catch (Exception ex) { return; }
+        if (s == null) return;
+        dataStatusLabel.setText("Quest data: " + String.valueOf(s.getOrDefault("quest_data", "--")));
+        activityLabel.setText(String.valueOf(s.getOrDefault("activity", "Requests: 0")));
+        paintDot(spDot,  "Shortest Path",     truthy(s.get("shortestpath")));
+        paintDot(tcgDot, "OSRS TCG",          truthy(s.get("osrstcg")));
+        paintDot(invDot, "Inventory Setups",  truthy(s.get("inventorysetups")));
+    }
+
+    private static boolean truthy(Object o) { return Boolean.TRUE.equals(o); }
+
+    private void paintDot(JLabel label, String name, boolean on)
+    {
+        label.setText("⬤ " + name);
+        label.setForeground(on ? GREEN : ColorScheme.MEDIUM_GRAY_COLOR);
+        label.setToolTipText(on ? name + " is enabled -- its tools will work." : name + " is not enabled; its tools return unavailable.");
+    }
+
+    private JPanel buildIntegrationsSection()
+    {
+        JPanel p = box(true);
+        dataStatusLabel.setFont(FontManager.getRunescapeSmallFont());
+        dataStatusLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        dataStatusLabel.setAlignmentX(LEFT_ALIGNMENT);
+        activityLabel.setFont(FontManager.getRunescapeSmallFont());
+        activityLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        activityLabel.setAlignmentX(LEFT_ALIGNMENT);
+        p.add(dataStatusLabel);
+        p.add(Box.createVerticalStrut(2));
+        p.add(activityLabel);
+        p.add(Box.createVerticalStrut(4));
+        for (JLabel dot : new JLabel[]{ spDot, tcgDot, invDot })
+        {
+            dot.setFont(FontManager.getRunescapeSmallFont());
+            dot.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
+            dot.setAlignmentX(LEFT_ALIGNMENT);
+            p.add(dot);
+        }
+        return p;
     }
 
     public void setRestartCallback(Runnable cb)              { this.restartCallback  = cb; }
@@ -367,6 +445,22 @@ public class OsrsMcpPanel extends PluginPanel
             {"get_price_trends",      "Price trend data"},
             {"get_cache_index",       "List cache files"},
             {"read_cache",            "Read a cache file"},
+            {"get_quest_rewards",     "Quest reqs + XP, live-checked"},
+            {"project_plan",          "Simulate quests/training exactly"},
+            {"get_training_methods",  "XP/hr per method"},
+            {"get_optimal_quest_route","Wiki quest order + your state"},
+            {"get_next_goals",        "Ranked next actions"},
+            {"wiki_search",           "Search the wiki (prose)"},
+            {"wiki_get_page",         "Read a wiki page"},
+            {"wiki_bucket_query",     "Structured wiki data"},
+            {"get_wom_profile",       "Wise Old Man overview"},
+            {"get_wom_gains",         "Recent XP/KC gains"},
+            {"get_farm_run",          "Herb-run assistant"},
+            {"path_to",               "Draw route (Shortest Path)"},
+            {"get_tcg_unlocks",       "OSRS TCG owned cards"},
+            {"get_inventory_setups",  "Your gear presets"},
+            {"export_inventory_setup","Make an importable setup"},
+            {"reload_planner_data",   "Refresh data, no restart"},
         };
         for (String[] t : tools) p.add(buildToolRow(t[0], t[1]));
         return p;
