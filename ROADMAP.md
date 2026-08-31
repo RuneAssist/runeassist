@@ -254,17 +254,25 @@ player's live state and goal.
 
 ## Build order & tracking
 
-0. **Bucket gateway** (`wiki_list_buckets`, `wiki_bucket_schema`,
+0. ✅ **Bucket gateway** (`wiki_list_buckets`, `wiki_bucket_schema`,
    `wiki_bucket_query`) with guardrails + off-game-thread dispatch, and the
    `INSTRUCTIONS` discovery loop. Foundational — later tools reuse it.
-   `get_combat_achievements` as the first thin wrapper (verifies the gateway).
-1. **Generator + bundled quest data** (`tools/gen-quest-data.mjs` →
-   `quest_data.json`) for requirements (Questreq) + XP rewards; verify vs wiki.
-2. Layer 1 `get_quest_rewards` — load the resource, add live `meets_requirements`.
-3. Layer 2 `project_plan` simulator on top of Layer 1's graph.
-4. Layer 3 `get_training_methods` (from `money_making_guide` bucket where usable;
-   else small dated table).
-5. Optional `get_optimal_quest_route`.
+   `get_combat_achievements` as the first thin wrapper. **Verified live.**
+1. ✅ **Generator + bundled quest data** (`tools/gen-quest-data.mjs` →
+   `quest_data.json`, 196 quests) for requirements (Questreq) + XP rewards;
+   values spot-checked vs wiki. Refresh wired into `Update OSRS MCP.bat`.
+2. ✅ Layer 1 `get_quest_rewards` — loads the resource, live `meets_requirements`
+   (skills/quests/QP, ironman-aware) + `blocked_by`. **Needs live verification.**
+3. ✅ Layer 2 `project_plan` simulator on top of Layer 1's graph. **Needs live
+   verification.**
+4. ✅ Layer 3 `get_training_methods` — curated dated XP/hr table (no clean
+   machine-readable source), live-annotated. **Needs live verification.**
+5. Optional `get_optimal_quest_route` — not built.
+
+**Live verification still owed** (require a logged-in dev client): `get_quest_rewards`,
+`project_plan`, `get_training_methods`. The 4 gateway tools + tools/list registration
+are already verified live. Restart the dev client logged in, then confirm each returns
+correct account-accurate data.
 
 After each layer: register in `McpServer` (`dispatchTool` + `buildToolsList`),
 extend the `INSTRUCTIONS` planning rubric, rebuild (`gradlew jar`), copy to
