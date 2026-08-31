@@ -120,6 +120,9 @@ public class WikiPriceService
     public long getAge5mMs() { return System.currentTimeMillis() - last5mFetch; }
     public long getAge1hMs() { return System.currentTimeMillis() - last1hFetch; }
 
+    /** Age of the latest-prices cache in seconds, or -1 if it has never loaded (avoids a bogus ~56-year age). */
+    public long getPricesAgeSeconds() { return lastPriceFetch == 0 ? -1 : (System.currentTimeMillis() - lastPriceFetch) / 1000; }
+
     public ItemMeta getMeta(int itemId)
     {
         ensureMappingLoaded();

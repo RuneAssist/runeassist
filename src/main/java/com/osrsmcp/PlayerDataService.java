@@ -990,7 +990,7 @@ public class PlayerDataService
 
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id",   id);
-            item.put("name", meta != null ? meta.name : itemManager.getItemComposition(id).getName());
+            item.put("name", meta != null ? meta.name : "item " + id);
 
             if (latest != null)
             {
@@ -1024,7 +1024,7 @@ public class PlayerDataService
         }
 
         result.put("items",              items);
-        result.put("prices_age_seconds", wikiPriceService.getAge5mMs() / 1000);
+        result.put("prices_age_seconds", wikiPriceService.getPricesAgeSeconds());
         return result;
     }
 
@@ -1911,7 +1911,7 @@ public class PlayerDataService
             WikiPriceService.ItemMeta  meta = wikiPriceService.getMeta(id);
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("id",   id);
-            entry.put("name", meta != null ? meta.name : itemManager.getItemComposition(id).getName());
+            entry.put("name", meta != null ? meta.name : "item " + id);
             if (pd != null)
             {
                 entry.put("buy_price",   pd.high);
@@ -1923,8 +1923,7 @@ public class PlayerDataService
             else entry.put("error", "Price not available");
             prices.add(entry);
         }
-        result.put("prices_age_seconds",
-            (System.currentTimeMillis() - wikiPriceService.lastPriceFetch) / 1000);
+        result.put("prices_age_seconds", wikiPriceService.getPricesAgeSeconds());
         result.put("items", prices);
         return result;
     }
@@ -2000,8 +1999,7 @@ public class PlayerDataService
             return Double.compare(bScore, aScore);
         });
 
-        result.put("prices_age_seconds",
-            (System.currentTimeMillis() - wikiPriceService.lastPriceFetch) / 1000);
+        result.put("prices_age_seconds", wikiPriceService.getPricesAgeSeconds());
         result.put("suggestion_count", suggestions.size());
         result.put("suggestions",      suggestions.subList(0, Math.min(20, suggestions.size())));
         return result;
