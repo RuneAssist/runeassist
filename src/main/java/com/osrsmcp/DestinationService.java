@@ -4,10 +4,15 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import lombok.extern.slf4j.Slf4j;
 
+import net.runelite.client.RuneLite;
+
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -29,7 +34,12 @@ public class DestinationService
 
     @Inject private Gson gson;
 
+    private static final File EXTERNAL = new File(new File(RuneLite.RUNELITE_DIR, "osrs-mcp"), "destinations.json");
+
     private volatile List<Map<String, Object>> destinations;
+    private volatile String source = "?";
+
+    public String getSource() { all(); return source; }
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> all()
@@ -39,15 +49,28 @@ public class DestinationService
         synchronized (this)
         {
             if (destinations != null) return destinations;
-            try (InputStream in = DestinationService.class.getResourceAsStream(RESOURCE))
+            Type t = new TypeToken<Map<String, Object>>(){}.getType();
+            Map<String, Object> root = null;
+
+            if (EXTERNAL.isFile())
             {
-                if (in == null) { destinations = new ArrayList<>(); return destinations; }
-                Type t = new TypeToken<Map<String, Object>>(){}.getType();
-                Map<String, Object> root = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), t);
-                Object list = root.get("destinations");
-                destinations = list instanceof List ? (List<Map<String, Object>>) list : new ArrayList<>();
+                try (Reader r = new InputStreamReader(new FileInputStream(EXTERNAL), StandardCharsets.UTF_8))
+                { root = gson.fromJson(r, t); source = "external"; }
+                catch (Exception e) { log.warn("Failed to read external destinations.json: {}", e.getMessage()); root = null; }
             }
-            catch (Exception e) { log.warn("Failed to load destinations.json: {}", e.getMessage()); destinations = new ArrayList<>(); }
+            if (root == null)
+            {
+                try (InputStream in = DestinationService.class.getResourceAsStream(RESOURCE))
+                {
+                    if (in == null) { source = "resource-missing"; destinations = new ArrayList<>(); return destinations; }
+                    root = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), t);
+                    source = "bundled";
+                }
+                catch (Exception e) { log.warn("Failed to load bundled destinations.json: {}", e.getMessage()); source = "error:" + e.getMessage(); destinations = new ArrayList<>(); return destinations; }
+            }
+
+            Object list = root != null ? root.get("destinations") : null;
+            destinations = list instanceof List ? (List<Map<String, Object>>) list : new ArrayList<>();
             return destinations;
         }
     }
@@ -86,6 +109,7 @@ public class DestinationService
         Map<String, Object> res = new LinkedHashMap<>();
         res.put("count", out.size());
         res.put("destinations", out);
+        res.put("_source", source);
         res.put("_hint", "Pass a destination name to path_to to draw a route there. Coordinates are approximate.");
         return res;
     }
