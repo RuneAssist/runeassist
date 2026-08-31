@@ -79,6 +79,8 @@ public class McpServer
         // pure wiki-scrape tools: no live game state, so a slow page fetch must not
         // hold the client thread (they only take a name argument and hit HTTP).
         "get_drop_table", "get_npc_info",
+        // live GE price lookups (blocking HTTP, no live game state needed)
+        "get_item_prices", "get_price_trends",
         // inter-plugin messaging (post on client thread internally, then await a reply)
         "get_tcg_unlocks", "path_to", "get_inventory_setups", "view_inventory_setup", "get_destinations",
         // Wise Old Man web API (progress history / gains)
@@ -296,21 +298,7 @@ public class McpServer
             }
             case "get_combat_context":     return playerDataService.buildCombatContext();
             case "get_boss_kc":             return playerDataService.buildBossKc();
-            case "get_price_trends":        {
-                java.util.List<Integer> ids = new java.util.ArrayList<>();
-                if (args != null && args.has("item_ids"))
-                    for (com.google.gson.JsonElement e : args.getAsJsonArray("item_ids"))
-                        ids.add(e.getAsInt());
-                return playerDataService.buildPriceTrends(ids);
-            }
-            case "get_item_prices":         {
-                java.util.List<Integer> ids = new java.util.ArrayList<>();
-                if (args != null && args.has("item_ids")) {
-                    for (com.google.gson.JsonElement e : args.getAsJsonArray("item_ids"))
-                        ids.add(e.getAsInt());
-                }
-                return playerDataService.buildItemPrices(ids);
-            }
+            // get_price_trends / get_item_prices are handled off-thread in dispatchNetworkTool
             case "get_flip_suggestions":    return playerDataService.buildFlipSuggestions();
             case "get_money_making_context":return playerDataService.buildMoneyMakingContext();
             case "get_installed_plugins": return playerDataService.buildInstalledPlugins();
@@ -388,6 +376,10 @@ public class McpServer
                 return playerDataService.buildDropTable(strArg(args, "name", ""));
             case "get_npc_info":
                 return playerDataService.buildNpcInfo(strArg(args, "name", ""));
+            case "get_item_prices":
+                return playerDataService.buildItemPrices(intListArg(args, "item_ids"));
+            case "get_price_trends":
+                return playerDataService.buildPriceTrends(intListArg(args, "item_ids"));
             case "wiki_search":
             {
                 Integer lim = args.has("limit") && args.get("limit").isJsonPrimitive() ? args.get("limit").getAsInt() : null;
@@ -436,6 +428,34 @@ public class McpServer
     private String strArg(JsonObject args, String key, String def)
     {
         return (args != null && args.has(key) && !args.get(key).isJsonNull()) ? args.get(key).getAsString() : def;
+    }
+
+    /** Parse an int-list argument tolerantly: a JSON array, a single number, or a stringified array / CSV. */
+    private java.util.List<Integer> intListArg(JsonObject args, String key)
+    {
+        java.util.List<Integer> out = new java.util.ArrayList<>();
+        if (args == null || !args.has(key) || args.get(key).isJsonNull()) return out;
+        JsonElement el = args.get(key);
+        try
+        {
+            if (el.isJsonArray())
+            {
+                for (JsonElement e : el.getAsJsonArray())
+                    try { out.add(e.getAsInt()); } catch (Exception ignored) {}
+            }
+            else if (el.isJsonPrimitive())
+            {
+                String s = el.getAsString().trim();
+                if (s.startsWith("["))
+                    for (JsonElement e : gson.fromJson(s, com.google.gson.JsonArray.class))
+                        try { out.add(e.getAsInt()); } catch (Exception ignored) {}
+                else
+                    for (String part : s.split("[,\\s]+"))
+                        try { if (!part.isEmpty()) out.add(Integer.parseInt(part)); } catch (Exception ignored) {}
+            }
+        }
+        catch (Exception ignored) {}
+        return out;
     }
 
     @SuppressWarnings("unchecked")
@@ -657,7 +677,7 @@ public class McpServer
         tools.add(buildTool("get_boss_kc",          "Get boss kill counts: game-tracked slayer boss KCs and profile-stored KCs from ChatCommands plugin."));
         tools.add(buildTool("get_price_trends",  "Get price trend data for specific items: current price, 5m and 1h averages, trade volume, and rising/falling/stable direction. Pass item_ids array."));
         tools.add(buildTool("get_item_prices",          "Get live Wiki GE prices for specific item IDs. Pass item_ids as an array of integers."));
-        tools.add(buildTool("get_flip_suggestions",     "Get flip suggestions from bank items cross-referenced with live GE margins, filtered by coin budget."));
+        tools.add(buildTool("get_flip_suggestions",     "Flip ideas from items ALREADY IN THE BANK (needs the bank opened this session) cross-referenced with live GE margins. It does NOT propose fresh buys -- for that, look up specific items with get_item_prices / get_price_trends (from wiki_bucket_query infobox_item ids or the player's goals)."));
         tools.add(buildTool("get_money_making_context", "Get location, stats, coins and slayer task for money making method recommendations."));
         tools.add(buildTool("get_installed_plugins", "Get all installed RuneLite plugins (both built-in and Plugin Hub) with their enabled state. Use this to suggest relevant Plugin Hub plugins."));
         tools.add(buildTool("get_ge_offers",          "Get all active Grand Exchange offers including item, quantity, price and state."));
