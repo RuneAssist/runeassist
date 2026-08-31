@@ -40,6 +40,7 @@ public class McpServer
         + "- get_quest_rewards: every quest's requirements, XP rewards, unlocks and a live meets_requirements flag (with blocked_by). Use to see what's startable now and what each quest is worth.\n"
         + "- project_plan: the source of truth for 'what if'. Give it quests to assume done and/or skill training targets; it returns the EXACT resulting levels, XP still to train, newly-eligible quests and newly requirement-complete diary regions. Never do quest/level arithmetic yourself -- call project_plan and trust it. Propose an order, verify each step with it, iterate.\n"
         + "- get_training_methods: approximate XP/hr per method (+ live meets_requirements) so you can turn 'XP to train' into rough hours. Rates are ballpark and dated -- say so.\n"
+        + "- get_optimal_quest_route: the wiki's Optimal Quest Guide ordering annotated with the player's state (next_startable_now / next_blocked). Anchor quest plans on this route, then adapt to the goal.\n"
         + "- Rank suggestions by leverage: unlocks that gate multiple diaries/quests, skills within a level or two of a milestone, and content the player's gear and stats already support.\n"
         + "- For gear/BiS questions use get_equipment_stats and get_bis_comparison, and note when the player is not in combat gear (stats will read low).\n"
         + "- For money-making, prefer the player's measured context (get_money_making_context, get_boss_kc) and account for GE buy limits and the 1% GE tax on flips.\n"
@@ -197,6 +198,7 @@ public class McpServer
             case "get_quest_rewards": return questPlanService.buildQuestRewards();
             case "project_plan":      return questPlanService.buildProjectPlan(jsonToMap(args));
             case "get_training_methods": return questPlanService.buildTrainingMethods(jsonToMap(args));
+            case "get_optimal_quest_route": return questPlanService.buildOptimalQuestRoute(jsonToMap(args));
             case "get_slayer_task":   return playerDataService.buildSlayerTask();
             case "get_clue_scroll":   return playerDataService.buildClueScroll();
             case "get_nearby_npcs":       return playerDataService.buildNearbyNpcs();
@@ -413,6 +415,12 @@ public class McpServer
             JsonObject props = new JsonObject();
             props.add("skill", strProp("Optional skill to filter to, e.g. 'agility'."));
             tools.add(buildToolWithSchema("get_training_methods", "Curated training methods with approximate XP/hr and start requirements, so you can reason about TIME not just XP. Optionally filter by skill. When logged in, each method is annotated with meets_requirements and your current_level. Rates are ballpark and dated -- state that when advising.", props, new String[]{}));
+        }
+        {
+            JsonObject props = new JsonObject();
+            JsonObject onlyRem = new JsonObject(); onlyRem.addProperty("type", "boolean"); onlyRem.addProperty("description", "If true, omit already-completed quests and return only what's left of the route.");
+            props.add("only_remaining", onlyRem);
+            tools.add(buildToolWithSchema("get_optimal_quest_route", "The OSRS Wiki Optimal Quest Guide ordering as a planning prior, annotated with your live quest state: how far you've progressed, the next route quest you can start now (next_startable_now), and upcoming ones still blocked (next_blocked, with reasons). Use it to anchor a quest plan on the community route, then adapt to the player's goal. Not account-specific ordering -- it's a recommendation.", props, new String[]{}));
         }
         tools.add(buildTool("get_slayer_task",   "Get current Slayer task: creature name, remaining count, location, points and streak."));
         tools.add(buildTool("get_clue_scroll",   "Check if the player has an active clue scroll in their inventory and which tier it is."));
