@@ -42,7 +42,7 @@ public class McpServer
         + "- get_training_methods: approximate XP/hr per method (+ live meets_requirements) so you can turn 'XP to train' into rough hours. Rates are ballpark and dated -- say so.\n"
         + "- get_optimal_quest_route: the wiki's Optimal Quest Guide ordering annotated with the player's state (next_startable_now / next_blocked). Anchor quest plans on this route, then adapt to the goal.\n"
         + "- get_wom_gains / get_wom_profile: recent XP/KC gains and progress rates from Wise Old Man -- ground 'what next' advice in what the player has actually been doing.\n"
-        + "\nOTHER PLUGINS: get_inventory_setups + view_inventory_setup (their gear presets; can open one in-game). get_tcg_unlocks (OSRS TCG: only suggest unlocked content). path_to draws an in-game route via Shortest Path (guide, never auto-move).\n"
+        + "\nOTHER PLUGINS / ACTIVITIES: get_inventory_setups + view_inventory_setup (gear presets; open one in-game). export_inventory_setup designs a loadout the player imports. get_tcg_unlocks (OSRS TCG: only suggest unlocked content). path_to draws a route via Shortest Path -- pass a get_destinations name or coords (guide, never auto-move). get_farm_run for herb runs (states, kit, per-patch teleport + path_to coords).\n"
         + "- Rank suggestions by leverage: unlocks that gate multiple diaries/quests, skills within a level or two of a milestone, and content the player's gear and stats already support.\n"
         + "- For gear/BiS questions use get_equipment_stats and get_bis_comparison, and note when the player is not in combat gear (stats will read low).\n"
         + "- For money-making, prefer the player's measured context (get_money_making_context, get_boss_kc) and account for GE buy limits and the 1% GE tax on flips.\n"
@@ -63,6 +63,7 @@ public class McpServer
     @Inject private QuestPlanService questPlanService;
     @Inject private InteropService interopService;
     @Inject private WiseOldManService wiseOldManService;
+    @Inject private DestinationService destinationService;
     @Inject private ClientThread clientThread;
     @Inject private OsrsMcpConfig config;
 
@@ -76,7 +77,7 @@ public class McpServer
         // hold the client thread (they only take a name argument and hit HTTP).
         "get_drop_table", "get_npc_info",
         // inter-plugin messaging (post on client thread internally, then await a reply)
-        "get_tcg_unlocks", "path_to", "get_inventory_setups", "view_inventory_setup",
+        "get_tcg_unlocks", "path_to", "get_inventory_setups", "view_inventory_setup", "get_destinations",
         // Wise Old Man web API (progress history / gains)
         "get_wom_profile", "get_wom_gains"));
 
@@ -247,6 +248,17 @@ public class McpServer
             }
             case "get_seed_vault":          return playerDataService.buildSeedVault();
             case "get_farming_patches":    return playerDataService.buildFarmingPatches();
+            case "get_farm_run":           return playerDataService.buildFarmRun();
+            case "export_inventory_setup":
+            {
+                Map<String, Object> equip = args.has("equipment") && args.get("equipment").isJsonObject()
+                    ? jsonToMap(args.getAsJsonObject("equipment")) : new LinkedHashMap<>();
+                java.util.List<Object> invList = new java.util.ArrayList<>();
+                if (args.has("inventory") && args.get("inventory").isJsonArray())
+                    for (JsonElement e : args.getAsJsonArray("inventory"))
+                        invList.add(e.isJsonObject() ? jsonToMap(e.getAsJsonObject()) : (Object) e.getAsInt());
+                return interopService.exportInventorySetup(strArg(args, "name", null), equip, invList, strArg(args, "notes", null));
+            }
             case "get_drop_table":          {
                 String npcName = args != null && args.has("name") ? args.get("name").getAsString() : "";
                 return playerDataService.buildDropTable(npcName);
@@ -375,12 +387,21 @@ public class McpServer
                 return wiseOldManService.getGains(resolveUsername(args), strArg(args, "period", null));
             case "path_to":
             {
+                boolean clear = args.has("clear") && args.get("clear").isJsonPrimitive() && args.get("clear").getAsBoolean();
                 Integer x = args.has("x") && args.get("x").isJsonPrimitive() ? args.get("x").getAsInt() : null;
                 Integer y = args.has("y") && args.get("y").isJsonPrimitive() ? args.get("y").getAsInt() : null;
                 Integer plane = args.has("plane") && args.get("plane").isJsonPrimitive() ? args.get("plane").getAsInt() : null;
-                boolean clear = args.has("clear") && args.get("clear").isJsonPrimitive() && args.get("clear").getAsBoolean();
+                String name = strArg(args, "name", null);
+                if (!clear && (x == null || y == null) && name != null)
+                {
+                    int[] c = destinationService.resolve(name);
+                    if (c == null) { Map<String,Object> e = new LinkedHashMap<>(); e.put("error", "Unknown destination '" + name + "'. Use get_destinations for names, or pass x/y."); return e; }
+                    x = c[0]; y = c[1]; plane = c[2];
+                }
                 return interopService.pathTo(x, y, plane, clear);
             }
+            case "get_destinations":
+                return destinationService.list(strArg(args, "category", null));
             default:
                 Map<String, Object> err = new LinkedHashMap<>(); err.put("error", "Unknown network tool: " + toolName); return err;
         }
@@ -559,12 +580,30 @@ public class McpServer
         tools.add(buildTool("get_tcg_unlocks", "Read the player's OSRS TCG collection from the TCG plugin (owned card names, owned item ids, owned NPC ids). In OSRS TCG, items/teleports/monsters stay locked until their card is pulled -- use this to only recommend unlocked content and to flag what they'd need to pull. Returns tcg_available=false if the TCG plugin isn't running."));
         {
             JsonObject props = new JsonObject();
-            props.add("x", numProp("Destination world X coordinate."));
-            props.add("y", numProp("Destination world Y coordinate."));
+            props.add("name", strProp("A named destination (from get_destinations) -- e.g. 'Catherby herb patch', 'Duradel', 'Grand Exchange'. Alternative to x/y."));
+            props.add("x", numProp("Destination world X coordinate (if not using name)."));
+            props.add("y", numProp("Destination world Y coordinate (if not using name)."));
             props.add("plane", numProp("Destination plane/level (0-3, default 0)."));
             JsonObject clr = new JsonObject(); clr.addProperty("type", "boolean"); clr.addProperty("description", "If true, clear the current drawn path instead of setting one.");
             props.add("clear", clr);
-            tools.add(buildToolWithSchema("path_to", "Draw an in-game route to a world coordinate using the Shortest Path plugin (requires it installed + enabled). Only draws a path -- it never moves the character. Use for 'guide me to X': a slayer-task monster location, a farm patch, a quest step. Get coordinates from the wiki (infobox_location bucket / wiki pages) or known patch locations. Pass clear:true to remove the route.", props, new String[]{}));
+            tools.add(buildToolWithSchema("path_to", "Draw an in-game route using the Shortest Path plugin (requires it installed + enabled). Only draws a path -- it never moves the character. Pass a named destination (name) or a coordinate (x/y). Use for 'guide me to X': a farm patch, slayer master, quest step. For places not in get_destinations, get coordinates from the wiki (infobox_location bucket). clear:true removes the route.", props, new String[]{}));
+        }
+        {
+            JsonObject props = new JsonObject();
+            props.add("category", strProp("Optional filter: herb_patch, bank, or slayer_master."));
+            tools.add(buildToolWithSchema("get_destinations", "List named destinations (herb patches, banks, slayer masters) with coordinates that path_to accepts by name. Optionally filter by category.", props, new String[]{}));
+        }
+        tools.add(buildTool("get_farm_run", "Herb-run assistant from live patch tracking: which patches are ready/growing/empty, a recommendation, the kit to bring, and each patch's teleport hint + coordinates (use path_to with a patch's destination_name to route there). Herb patches only. States are cached from last visit."));
+        {
+            JsonObject props = new JsonObject();
+            props.add("name", strProp("Name for the new setup."));
+            JsonObject eq = new JsonObject(); eq.addProperty("type", "object"); eq.addProperty("description", "Equipment by slot -> item id. Slots: head, cape, amulet, weapon, body, shield, legs, hands, feet, ring, ammo.");
+            props.add("equipment", eq);
+            JsonObject inv = new JsonObject(); inv.addProperty("type", "array"); JsonObject invItem = new JsonObject(); invItem.addProperty("type", "integer"); inv.add("items", invItem);
+            inv.addProperty("description", "Inventory item ids in order (up to 28). Use an object {\"id\":n,\"q\":n} for stack quantities.");
+            props.add("inventory", inv);
+            props.add("notes", strProp("Optional notes for the setup."));
+            tools.add(buildToolWithSchema("export_inventory_setup", "Design a gear/inventory loadout and get an Inventory Setups IMPORT STRING for the player to paste into the plugin (Import button). Safe + additive -- never overwrites existing setups. Needs item IDs (get them from the wiki infobox_item.item_id or get_item_prices). Give it a name, equipment (slot->id), and inventory (list of ids).", props, new String[]{"name"}));
         }
         tools.add(buildTool("reload_planner_data", "Reload the planner's bundled data (quest_data.json, training_methods.json) from disk without restarting the client -- picks up a regenerated copy placed in the external override dir. Returns where each dataset was loaded from and its counts. Plugin code changes still require a restart."));
         tools.add(buildTool("get_slayer_task",   "Get current Slayer task: creature name, remaining count, location, points and streak."));

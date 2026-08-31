@@ -26,6 +26,22 @@ public class FarmingPatchService
     @Inject private ConfigManager configManager;
     @Inject private net.runelite.client.game.ItemManager itemManager;
     @Inject private WikiPriceService wikiPriceService;
+    @Inject private DestinationService destinationService;
+
+    // Per-patch teleport hint for a herb run.
+    private static final Map<String, String> PATCH_TELEPORT = new java.util.HashMap<>();
+    static {
+        PATCH_TELEPORT.put("Ardougne", "Ardougne cloak / Ardougne teleport");
+        PATCH_TELEPORT.put("Catherby", "Camelot teleport (Seers) then run, or Catherby teleport");
+        PATCH_TELEPORT.put("Civitas illa Fortis", "Civitas illa Fortis teleport (Varlamore)");
+        PATCH_TELEPORT.put("Falador", "Falador teleport / Explorer's ring");
+        PATCH_TELEPORT.put("Kourend", "Xeric's talisman (Xeric's Glade) or Hosidius teleport");
+        PATCH_TELEPORT.put("Morytania", "Ectophial (then run to Canifis)");
+        PATCH_TELEPORT.put("Troll Stronghold", "Trollheim / Stony basalt");
+        PATCH_TELEPORT.put("Weiss", "Icy basalt");
+        PATCH_TELEPORT.put("Farming Guild", "Skills necklace (Farming Guild) / Jewellery box");
+        PATCH_TELEPORT.put("Harmony", "Harmony Island (POH portal / spellbook)");
+    }
 
     // Herb patch definitions: name, regionID, varbitID
     private static final int[][] HERB_PATCHES = {
@@ -85,6 +101,74 @@ public class FarmingPatchService
         {103,106,"Torstol",      false},
         {107,109,"Torstol",      true},
     };
+
+    /**
+     * Herb-run assistant: live patch states + a recommendation, a kit list, and each
+     * patch's teleport hint and coordinates (for path_to). Herb patches only (the
+     * common run); other patch types use get_farming_patches / live tracking.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> buildFarmRun()
+    {
+        Map<String, Object> base = buildFarmingPatches();
+        int ready   = (int) base.getOrDefault("ready", 0);
+        int growing = (int) base.getOrDefault("growing", 0);
+        int empty   = (int) base.getOrDefault("empty", 0);
+        int other   = (int) base.getOrDefault("other", 0);
+
+        List<Map<String, Object>> patches = new ArrayList<>();
+        long soonest = Long.MAX_VALUE;
+        for (Map<String, Object> p : (List<Map<String, Object>>) base.get("patches"))
+        {
+            String name = String.valueOf(p.get("location"));
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("patch", name);
+            entry.put("state", p.get("state"));
+            if (p.containsKey("herb")) entry.put("herb", p.get("herb"));
+            if (p.containsKey("est_minutes_remaining"))
+            {
+                Object rem = p.get("est_minutes_remaining");
+                entry.put("est_minutes_remaining", rem);
+                if (rem instanceof Number) soonest = Math.min(soonest, ((Number) rem).longValue());
+            }
+            entry.put("teleport", PATCH_TELEPORT.getOrDefault(name, "-"));
+            int[] c = destinationService.herbPatch(name);
+            if (c != null)
+            {
+                Map<String, Object> coord = new LinkedHashMap<>();
+                coord.put("x", c[0]); coord.put("y", c[1]); coord.put("plane", c[2]);
+                entry.put("coords", coord);
+                entry.put("destination_name", name + " herb patch");
+            }
+            patches.add(entry);
+        }
+
+        String recommendation;
+        if (ready > 0)
+            recommendation = "Herb run recommended: " + ready + " patch(es) ready to harvest and replant"
+                + (empty > 0 ? " (" + empty + " empty to plant too)." : ".");
+        else if (empty > 0 && growing == 0)
+            recommendation = empty + " empty patch(es) -- plant a new herb run now.";
+        else if (growing > 0)
+            recommendation = "Patches still growing" + (soonest != Long.MAX_VALUE ? "; earliest ready in ~" + soonest + " min." : ".");
+        else
+            recommendation = "No fresh data -- visit the patches (or check the Time Tracking plugin) to update states.";
+
+        List<String> kit = new ArrayList<>(java.util.Arrays.asList(
+            "Seed dibber, rake (or magic secateurs to skip weeds with 65 Farming build)", "Spade",
+            "Herb seeds (best you can plant) x number of patches",
+            "Ultracompost (or bottomless compost bucket)",
+            "Magic secateurs (10% more yield)", "Teleports per patch (see each patch's 'teleport')"));
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("summary", "ready " + ready + " / growing " + growing + " / empty " + empty + " / unknown " + other);
+        out.put("recommendation", recommendation);
+        out.put("items_to_bring", kit);
+        out.put("patches", patches);
+        out.put("_hint", "Use path_to with a patch's destination_name to draw the route to it. States are cached from last visit -- visit to refresh.");
+        out.put("_note", "Herb patches only. Bring the highest-level herb seed you can plant; disease-free patches (e.g. Weiss, Trollheim, Hosidius with 100% favour) reduce losses.");
+        return out;
+    }
 
     public Map<String, Object> buildFarmingPatches()
     {

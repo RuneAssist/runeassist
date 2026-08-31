@@ -1035,6 +1035,11 @@ public class PlayerDataService
         return result;
     }
 
+    public Map<String, Object> buildFarmRun()
+    {
+        return farmingPatchService.buildFarmRun();
+    }
+
     public Map<String, Object> buildDropTable(String npcName)
     {
         return dropTableService.getDropTable(npcName);

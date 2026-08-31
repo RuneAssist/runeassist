@@ -1,0 +1,30 @@
+{
+  "_note": "Curated named destinations for path_to. Coordinates are approximate; Shortest Path routes to the nearest walkable tile. Herb-patch names match the farm-run patch names.",
+  "destinations": [
+    { "name": "Ardougne herb patch",            "x": 2670, "y": 3374, "plane": 0, "category": "herb_patch" },
+    { "name": "Catherby herb patch",            "x": 2813, "y": 3463, "plane": 0, "category": "herb_patch" },
+    { "name": "Civitas illa Fortis herb patch", "x": 1587, "y": 3105, "plane": 0, "category": "herb_patch" },
+    { "name": "Falador herb patch",             "x": 3058, "y": 3307, "plane": 0, "category": "herb_patch" },
+    { "name": "Kourend herb patch",             "x": 1738, "y": 3550, "plane": 0, "category": "herb_patch" },
+    { "name": "Morytania herb patch",           "x": 3605, "y": 3529, "plane": 0, "category": "herb_patch" },
+    { "name": "Troll Stronghold herb patch",    "x": 2826, "y": 3695, "plane": 0, "category": "herb_patch" },
+    { "name": "Weiss herb patch",               "x": 2848, "y": 3934, "plane": 0, "category": "herb_patch" },
+    { "name": "Farming Guild herb patch",       "x": 1238, "y": 3726, "plane": 0, "category": "herb_patch" },
+    { "name": "Harmony herb patch",             "x": 3789, "y": 2837, "plane": 0, "category": "herb_patch" },
+
+    { "name": "Grand Exchange",       "x": 3164, "y": 3486, "plane": 0, "category": "bank" },
+    { "name": "Varrock west bank",    "x": 3185, "y": 3436, "plane": 0, "category": "bank" },
+    { "name": "Falador east bank",    "x": 3013, "y": 3355, "plane": 0, "category": "bank" },
+    { "name": "Edgeville bank",       "x": 3094, "y": 3491, "plane": 0, "category": "bank" },
+    { "name": "Camelot bank",         "x": 2726, "y": 3491, "plane": 0, "category": "bank" },
+    { "name": "Lumbridge",            "x": 3222, "y": 3218, "plane": 0, "category": "bank" },
+
+    { "name": "Turael",    "x": 2930, "y": 3536, "plane": 0, "category": "slayer_master" },
+    { "name": "Mazchna",   "x": 3510, "y": 3507, "plane": 0, "category": "slayer_master" },
+    { "name": "Nieve",     "x": 2432, "y": 3423, "plane": 0, "category": "slayer_master" },
+    { "name": "Duradel",   "x": 2869, "y": 2982, "plane": 0, "category": "slayer_master" },
+    { "name": "Konar",     "x": 1311, "y": 3808, "plane": 0, "category": "slayer_master" },
+    { "name": "Chaeldar",  "x": 2445, "y": 4430, "plane": 0, "category": "slayer_master" },
+    { "name": "Krystilia", "x": 3108, "y": 3515, "plane": 0, "category": "slayer_master" }
+  ]
+}
