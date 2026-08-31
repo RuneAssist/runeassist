@@ -47,6 +47,7 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private InteropService interopService;
     @Inject private QuestPlanService questPlanService;
     @Inject private PluginManager pluginManager;
+    @Inject private DailyTracker dailyTracker;
 
     private NavigationButton navButton;
 
@@ -229,6 +230,13 @@ public class OsrsMcpPlugin extends Plugin
                     () -> cacheWriter.writeEquipment(snapshot, equipmentStatsService));
             }
         }
+    }
+
+    @Subscribe
+    public void onChatMessage(net.runelite.api.events.ChatMessage event)
+    {
+        // Capture daily "waiting to be collected" login messages for live status.
+        dailyTracker.onChatMessage(event.getMessage());
     }
 
     @Subscribe
