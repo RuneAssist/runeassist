@@ -36,6 +36,10 @@ public class McpServer
         + "- Always call get_all first for a cheap overview, then drill in with specific tools.\n"
         + "- Respect account type: check is_ironman/is_uim/is_hcim in stats. Ironmen cannot buy gear on the GE (bonds only), so never suggest 'just buy X' for them; suggest how to obtain it instead.\n"
         + "- For 'what should I do next', prefer get_next_goals, then get_diary_requirements for concrete diary tasks the player already qualifies for.\n"
+        + "\nPLANNING (multi-step goals): to plan quests/levels/diaries, use the planner tools instead of guessing:\n"
+        + "- get_quest_rewards: every quest's requirements, XP rewards, unlocks and a live meets_requirements flag (with blocked_by). Use to see what's startable now and what each quest is worth.\n"
+        + "- project_plan: the source of truth for 'what if'. Give it quests to assume done and/or skill training targets; it returns the EXACT resulting levels, XP still to train, newly-eligible quests and newly requirement-complete diary regions. Never do quest/level arithmetic yourself -- call project_plan and trust it. Propose an order, verify each step with it, iterate.\n"
+        + "- get_training_methods: approximate XP/hr per method (+ live meets_requirements) so you can turn 'XP to train' into rough hours. Rates are ballpark and dated -- say so.\n"
         + "- Rank suggestions by leverage: unlocks that gate multiple diaries/quests, skills within a level or two of a milestone, and content the player's gear and stats already support.\n"
         + "- For gear/BiS questions use get_equipment_stats and get_bis_comparison, and note when the player is not in combat gear (stats will read low).\n"
         + "- For money-making, prefer the player's measured context (get_money_making_context, get_boss_kc) and account for GE buy limits and the 1% GE tax on flips.\n"
@@ -192,6 +196,7 @@ public class McpServer
             case "get_next_goals":    return playerDataService.buildNextGoals();
             case "get_quest_rewards": return questPlanService.buildQuestRewards();
             case "project_plan":      return questPlanService.buildProjectPlan(jsonToMap(args));
+            case "get_training_methods": return questPlanService.buildTrainingMethods(jsonToMap(args));
             case "get_slayer_task":   return playerDataService.buildSlayerTask();
             case "get_clue_scroll":   return playerDataService.buildClueScroll();
             case "get_nearby_npcs":       return playerDataService.buildNearbyNpcs();
@@ -350,16 +355,20 @@ public class McpServer
                 description = "What to work on next";
                 text = "Call get_next_goals and get_diary_requirements, then tell me the 3-5 most useful things "
                      + "to work on next on this OSRS account. Be specific: name the exact skills, diary tasks and "
-                     + "quests, with the levels or XP involved, and rank by leverage.";
+                     + "quests, with the levels or XP involved, and rank by leverage. Use get_quest_rewards to see "
+                     + "what's startable now, project_plan to verify any 'do X then Y unlocks Z' claim exactly, and "
+                     + "get_training_methods to turn XP into rough hours.";
                 break;
             case "analyze_account":
             default:
                 description = "Full account analysis";
                 text = "Analyse my OSRS account. Call get_all first, then get_player_stats, get_quest_states, "
-                     + "get_diary_states, get_diary_requirements, get_equipment_stats, get_bank_summary and "
-                     + "get_next_goals as needed. Then give me: (1) a short account summary, (2) my biggest "
-                     + "weaknesses, and (3) a ranked list of the most useful things to work on next, with concrete "
-                     + "levels, tasks and items. Respect my account type and account for GE limits and tax.";
+                     + "get_diary_states, get_diary_requirements, get_equipment_stats, get_bank_summary, "
+                     + "get_next_goals and get_quest_rewards as needed. Use project_plan to verify any multi-step "
+                     + "recommendation exactly and get_training_methods for rough time estimates. Then give me: "
+                     + "(1) a short account summary, (2) my biggest weaknesses, and (3) a ranked list of the most "
+                     + "useful things to work on next, with concrete levels, tasks and items. Respect my account "
+                     + "type and account for GE limits and tax.";
                 break;
         }
 
@@ -399,6 +408,11 @@ public class McpServer
             JsonObject tr = new JsonObject(); tr.addProperty("type", "object"); tr.addProperty("description", "Training targets, skill -> target level (1-99), e.g. {\"agility\":70}.");
             props.add("train", tr);
             tools.add(buildToolWithSchema("project_plan", "Deterministically simulate a plan against the live account and report the exact outcome: resulting_levels, xp_gained_from_quests, xp_still_to_train, newly_eligible_quests, and diary regions that become requirement-complete. Give it quests to assume done and/or skill training targets; it does the multi-step XP/level/requirement arithmetic exactly so advice is trustworthy. Propose an ordering, call this to verify each step, iterate.", props, new String[]{}));
+        }
+        {
+            JsonObject props = new JsonObject();
+            props.add("skill", strProp("Optional skill to filter to, e.g. 'agility'."));
+            tools.add(buildToolWithSchema("get_training_methods", "Curated training methods with approximate XP/hr and start requirements, so you can reason about TIME not just XP. Optionally filter by skill. When logged in, each method is annotated with meets_requirements and your current_level. Rates are ballpark and dated -- state that when advising.", props, new String[]{}));
         }
         tools.add(buildTool("get_slayer_task",   "Get current Slayer task: creature name, remaining count, location, points and streak."));
         tools.add(buildTool("get_clue_scroll",   "Check if the player has an active clue scroll in their inventory and which tier it is."));
