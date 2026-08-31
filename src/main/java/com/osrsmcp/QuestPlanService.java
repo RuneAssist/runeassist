@@ -62,6 +62,11 @@ public class QuestPlanService
     // normalized wiki quest name -> RuneLite Quest (built once from Quest.values())
     private volatile Map<String, Quest> liveByNorm;
 
+    /** For the panel: where quest data loaded from, and its generation timestamp. */
+    public String getQuestSource()    { data(); return questSource; }
+    public String getQuestGenerated() { data(); return questGenerated; }
+    public int getQuestCount()        { return data().size(); }
+
     // --- data loading -------------------------------------------------------
 
     /** Read a JSON root object, preferring EXTERNAL_DIR/<filename> over the bundled resource. */

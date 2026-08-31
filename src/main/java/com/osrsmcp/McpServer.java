@@ -88,6 +88,14 @@ public class McpServer
 
     private HttpServer server;
     @Inject private Gson gson;
+
+    // Lightweight activity tracking for the plugin panel.
+    private final java.util.concurrent.atomic.AtomicLong requestCount = new java.util.concurrent.atomic.AtomicLong();
+    private volatile String lastToolName = null;
+    private volatile long lastToolAtMs = 0;
+    public long getRequestCount()   { return requestCount.get(); }
+    public String getLastToolName() { return lastToolName; }
+    public long getLastToolAtMs()   { return lastToolAtMs; }
     private final Set<SseClient> sseClients = ConcurrentHashMap.newKeySet();
 
     public void start(int port) throws IOException
@@ -169,6 +177,10 @@ public class McpServer
         JsonObject params = request.has("params") ? request.getAsJsonObject("params") : new JsonObject();
         String toolName = params.has("name") ? params.get("name").getAsString() : "";
         JsonObject arguments = params.has("arguments") ? params.getAsJsonObject("arguments") : new JsonObject();
+
+        requestCount.incrementAndGet();
+        lastToolName = toolName;
+        lastToolAtMs = System.currentTimeMillis();
 
         Map<String, Object> toolResult;
         if (NETWORK_TOOLS.contains(toolName))
