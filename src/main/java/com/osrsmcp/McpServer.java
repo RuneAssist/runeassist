@@ -32,7 +32,7 @@ public class McpServer
     // reason about the data these tools expose, so advice is OSRS-aware by default.
     private static final String INSTRUCTIONS =
         "This server exposes live Old School RuneScape (OSRS) data for the connected RuneLite account. "
-        + "RESPONSE STYLE (important): keep it digestible. Lead with the single biggest takeaway and the immediate next 1-3 actions -- do NOT open with a giant multi-step plan. Big goals (quest cape, max, all diaries) are long journeys: give the headline, the very next concrete step, and a one-line sense of scale, then ASK 'want the full plan?' before dumping it. Default to short: a few lines or a small table beats paragraphs. Only produce a long ordered plan when the player explicitly asks for the whole thing, and even then put a 2-3 line TL;DR at the top and consider offering it in stages. Match depth to the question -- a quick question gets a quick answer.\n"
+        + "RESPONSE STYLE (important): keep it digestible and match depth to the question. Lead with the single biggest takeaway. For 'what next', give at MOST 2 concrete next moves, each from a DIFFERENT category (skilling / combat i.e. slayer or bossing / a single quest / a diary / money-making or flipping) -- pick the 2 with the best value now, then offer the rest ('want combat, money-making or diary ideas instead?'). Be realistic about scale: never present something gated behind a huge grind (e.g. a diary needing a skill dozens of levels above the player's current) as a near-term step -- name the grind and set it aside. For any SKILLING suggestion, ALWAYS give the method, its XP/hr and the rough hours to the target (use get_training_methods + the XP gap) and where to train (path_to can draw the route). For QUESTS, suggest ONE high-value quest, not a batch. Do NOT open with a giant multi-step plan; ASK 'want the full plan?' before dumping one, and even then lead with a 2-3 line TL;DR. A few lines or a small table beats paragraphs.\n"
         + "When giving advice:\n"
         + "- Always call get_all first for a cheap overview, then drill in with specific tools.\n"
         + "- Respect account type: check is_ironman/is_uim/is_hcim in stats. Ironmen cannot buy gear on the GE (bonds only), so never suggest 'just buy X' for them; suggest how to obtain it instead.\n"
@@ -513,11 +513,13 @@ public class McpServer
                 description = "Full account analysis";
                 text = "Analyse my OSRS account. Call get_all first, then get_player_stats, get_quest_states, "
                      + "get_diary_states, get_diary_requirements, get_equipment_stats, get_bank_summary, "
-                     + "get_next_goals and get_quest_rewards as needed (project_plan to verify anything multi-step). "
-                     + "Then keep the reply SHORT: a 2-3 line account summary, then just the top 3 things to work on "
-                     + "next (one line each, with the concrete level/task/item). Do NOT write a full multi-step plan "
-                     + "yet -- end by asking which of the three I want you to plan out in detail. Respect my account "
-                     + "type and GE limits/tax.";
+                     + "get_next_goals and get_quest_rewards as needed (project_plan to verify anything multi-step, "
+                     + "get_training_methods for XP/hr). Then keep it SHORT: a 2-3 line summary, then the 2 best next "
+                     + "moves -- each from a DIFFERENT category (skilling / combat / a single quest / diary / "
+                     + "money-making). One line each with concrete detail: for skilling give the method, XP/hr and "
+                     + "rough hours; for a quest name ONE high-value quest. Be realistic -- don't put anything behind "
+                     + "a massive grind in the shortlist. Then offer the other categories and ask which to plan in "
+                     + "detail. Do NOT write a full multi-step plan yet. Respect my account type and GE limits/tax.";
                 break;
         }
 
