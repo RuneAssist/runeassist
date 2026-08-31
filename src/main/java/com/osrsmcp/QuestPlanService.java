@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Layer 1 of the account planner. Loads the build-time bundled quest_data.json
@@ -43,6 +44,7 @@ public class QuestPlanService
 
     @Inject private Client client;
     @Inject private Gson gson;
+    @Inject private PlayerDataService playerDataService;
 
     // Parsed resource: quest name -> { requirements{...}, xp_rewards{...}, xp_choice?, unlocks? }
     private volatile Map<String, Map<String, Object>> questData;
@@ -185,6 +187,153 @@ public class QuestPlanService
             int have = client.getRealSkillLevel(sk);
             if (have < need) unmet.add(s.getKey() + " " + have + "/" + need);
         }
+    }
+
+    // --- project_plan (Layer 2 deterministic simulator) ---------------------
+
+    /**
+     * Deterministically apply a plan onto the live account and report the exact result.
+     * args: complete_quests (list of quest names to assume done), train (skill -> target level).
+     */
+    public Map<String, Object> buildProjectPlan(Map<String, Object> args)
+    {
+        if (client.getGameState() != GameState.LOGGED_IN)
+            return err("Player is not logged in -- project_plan simulates against live account state.");
+        Map<String, Map<String, Object>> d = data();
+        if (d.isEmpty()) return err("quest_data.json missing or empty (run tools/gen-quest-data.mjs and rebuild).");
+
+        List<String> completeQuests = asList(args == null ? null : args.get("complete_quests"));
+        Map<String, Object> train   = asMap(args == null ? null : args.get("train"));
+
+        // 1. current XP + levels for every real skill
+        Map<Skill, Integer> curXp = new LinkedHashMap<>();
+        Map<Skill, Integer> curLvl = new LinkedHashMap<>();
+        for (Skill sk : Skill.values())
+        {
+            if (sk == Skill.OVERALL) continue;
+            int xp = client.getSkillExperience(sk);
+            curXp.put(sk, xp);
+            curLvl.put(sk, client.getRealSkillLevel(sk));
+        }
+
+        // 2. XP gained from completing the listed quests (fixed rewards only)
+        Map<String, Integer> xpFromQuests = new LinkedHashMap<>();
+        List<Map<String, Object>> choiceXp = new ArrayList<>();
+        List<String> unknownQuests = new ArrayList<>();
+        for (String qn : completeQuests)
+        {
+            Map<String, Object> def = d.get(qn);
+            if (def == null) { def = matchQuestKey(d, qn); }
+            if (def == null) { unknownQuests.add(qn); continue; }
+            Map<String, Object> xr = asMap(def.get("xp_rewards"));
+            for (Map.Entry<String, Object> e : xr.entrySet())
+                xpFromQuests.merge(e.getKey(), asInt(e.getValue()), Integer::sum);
+            if (def.get("xp_choice") instanceof List)
+                for (Object c : (List<?>) def.get("xp_choice")) { Map<String, Object> cm = asMap(c); cm.put("from_quest", qn); choiceXp.add(cm); }
+        }
+
+        // 3. projected XP = current + quest XP; then trained up to target levels
+        Map<Skill, Integer> projXp = new LinkedHashMap<>(curXp);
+        for (Map.Entry<String, Integer> e : xpFromQuests.entrySet())
+        {
+            Skill sk = skillByName(e.getKey());
+            if (sk != null) projXp.merge(sk, e.getValue(), Integer::sum);
+        }
+        Map<String, Object> xpStillToTrain = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> e : train.entrySet())
+        {
+            Skill sk = skillByName(e.getKey());
+            int target = asInt(e.getValue());
+            if (sk == null || target < 1 || target > 99) continue;
+            int needXp = xpForLevel(target);
+            int have = projXp.getOrDefault(sk, 0);
+            if (needXp > have) { xpStillToTrain.put(e.getKey().toLowerCase(), needXp - have); projXp.put(sk, needXp); }
+            else xpStillToTrain.put(e.getKey().toLowerCase(), 0);
+        }
+
+        // 4. resulting levels for every skill that changed
+        Map<Skill, Integer> projLvl = new LinkedHashMap<>();
+        Map<String, Object> resultingLevels = new LinkedHashMap<>();
+        for (Skill sk : curXp.keySet())
+        {
+            int lvl = levelForXp(projXp.get(sk));
+            projLvl.put(sk, lvl);
+            if (lvl != curLvl.get(sk)) resultingLevels.put(sk.getName().toLowerCase(), lvl);
+        }
+
+        // 5. finished-quest sets (live now vs projected)
+        Set<Quest> finishedNow = new java.util.HashSet<>();
+        for (Quest q : Quest.values()) if (q.getState(client) == QuestState.FINISHED) finishedNow.add(q);
+        Set<Quest> finishedPlan = new java.util.HashSet<>(finishedNow);
+        for (String qn : completeQuests) { Quest lq = questNameToLive(qn); if (lq != null) finishedPlan.add(lq); }
+        int qp = client.getVarpValue(VarPlayer.QUEST_POINTS);
+
+        // 6. quests newly eligible under the plan (met under plan, not met now, not finished)
+        List<String> newlyEligible = new ArrayList<>();
+        for (Map.Entry<String, Map<String, Object>> e : d.entrySet())
+        {
+            Quest live = questNameToLive(e.getKey());
+            if (live != null && live.getState(client) == QuestState.FINISHED) continue;
+            if (finishedPlan.contains(live) && !finishedNow.contains(live)) continue; // will have just done it
+            Map<String, Object> req = asMap(e.getValue().get("requirements"));
+            boolean now  = questMeets(req, curLvl, finishedNow, qp);
+            boolean plan = questMeets(req, projLvl, finishedPlan, qp);
+            if (plan && !now) newlyEligible.add(e.getKey());
+        }
+        java.util.Collections.sort(newlyEligible);
+
+        // 7. diary regions that become requirement-complete under the plan
+        List<Map<String, Object>> newlyCompleteDiaries = new ArrayList<>();
+        for (Map<String, Object> reg : playerDataService.evaluateDiaryRegions(projLvl, finishedPlan))
+        {
+            int total = asInt(reg.get("total_tasks")), now = asInt(reg.get("met_now")), plan = asInt(reg.get("met_under_plan"));
+            if (plan == total && now < total) newlyCompleteDiaries.add(reg);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("applied", mapOf("complete_quests", completeQuests, "train", train));
+        result.put("resulting_levels", resultingLevels);
+        result.put("xp_gained_from_quests", xpFromQuests);
+        result.put("xp_still_to_train", xpStillToTrain);
+        if (!choiceXp.isEmpty()) result.put("unassigned_choice_xp", choiceXp);
+        result.put("newly_eligible_quests", newlyEligible);
+        result.put("newly_requirement_complete_diary_regions", newlyCompleteDiaries);
+        if (!unknownQuests.isEmpty()) result.put("_unknown_quests", unknownQuests);
+        result.put("_notes", "Deterministic: quest XP applied to live XP, levels recomputed, requirements re-evaluated. "
+            + "Quest-point totals are not projected (per-quest QP rewards are not in the bundled data), so a quest blocked only by QP may not appear until you gain the points. "
+            + "Skill-choice lamp XP is reported as unassigned_choice_xp, not auto-placed. Diary results are region-level (requirements met, not tier completion).");
+        return result;
+    }
+
+    private boolean questMeets(Map<String, Object> req, Map<Skill, Integer> levels, Set<Quest> finished, int qp)
+    {
+        for (Map.Entry<String, Object> s : asMap(req.get("skills")).entrySet())
+        {
+            Skill sk = skillByName(s.getKey());
+            if (sk == null) continue;
+            if (levels.getOrDefault(sk, 1) < asInt(s.getValue())) return false;
+        }
+        if (qp < asInt(req.get("quest_points"))) return false;
+        for (String pr : asList(req.get("quests")))
+        {
+            Quest pq = questNameToLive(pr);
+            if (pq != null && !finished.contains(pq)) return false;
+        }
+        return true;
+    }
+
+    private Map<String, Object> matchQuestKey(Map<String, Map<String, Object>> d, String name)
+    {
+        for (Map.Entry<String, Map<String, Object>> e : d.entrySet())
+            if (norm(e.getKey()).equals(norm(name))) return e.getValue();
+        return null;
+    }
+
+    private static Map<String, Object> mapOf(String k1, Object v1, String k2, Object v2)
+    {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put(k1, v1); m.put(k2, v2);
+        return m;
     }
 
     // --- shared XP helpers (used by project_plan too) -----------------------

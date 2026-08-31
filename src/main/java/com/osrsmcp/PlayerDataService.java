@@ -347,6 +347,73 @@ public class PlayerDataService
         return out;
     }
 
+    /**
+     * Evaluate each diary region's task requirements twice: against the live account
+     * ("met_now") and against a projected state ("met_under_plan") -- projected skill
+     * levels and a projected set of finished quests. Used by project_plan to find
+     * regions that become requirement-complete under a plan. Region granularity: the
+     * RuneLite diary requirement classes do not expose per-tier task splits.
+     * Runs on the client thread (reads live state for non-skill/quest requirements).
+     */
+    public List<Map<String, Object>> evaluateDiaryRegions(Map<Skill, Integer> projLevels, Set<Quest> projFinished)
+    {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map.Entry<String, GenericDiaryRequirement> entry : diaryRequirementSources().entrySet())
+        {
+            int total = 0, metNow = 0, metPlan = 0;
+            for (Object[] dr : diaryTasks(entry.getValue()))
+            {
+                total++;
+                @SuppressWarnings("unchecked")
+                List<Requirement> reqs = (List<Requirement>) dr[1];
+                boolean allNow = true, allPlan = true;
+                for (Requirement r : reqs)
+                {
+                    boolean now;
+                    try { now = r.satisfiesRequirement(client); } catch (Exception e) { now = false; }
+                    boolean plan = satisfiesUnderPlan(r, projLevels, projFinished, now);
+                    if (!now)  allNow = false;
+                    if (!plan) allPlan = false;
+                }
+                if (allNow)  metNow++;
+                if (allPlan) metPlan++;
+            }
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("region", entry.getKey());
+            m.put("total_tasks", total);
+            m.put("met_now", metNow);
+            m.put("met_under_plan", metPlan);
+            out.add(m);
+        }
+        return out;
+    }
+
+    // Evaluate a single diary Requirement under a projected plan: SkillRequirements use
+    // projected levels; quest requirements use the projected finished set; anything else
+    // falls back to its live value (unchanged by the plan).
+    private boolean satisfiesUnderPlan(Requirement r, Map<Skill, Integer> projLevels, Set<Quest> projFinished, boolean liveValue)
+    {
+        if (r instanceof SkillRequirement)
+        {
+            SkillRequirement sr = (SkillRequirement) r;
+            int have = projLevels.getOrDefault(sr.getSkill(), client.getRealSkillLevel(sr.getSkill()));
+            return have >= sr.getLevel();
+        }
+        try
+        {
+            java.lang.reflect.Method mq = r.getClass().getMethod("getQuest");
+            mq.setAccessible(true);
+            Object q = mq.invoke(r);
+            if (q instanceof Quest)
+            {
+                Quest quest = (Quest) q;
+                return projFinished.contains(quest) || quest.getState(client) == QuestState.FINISHED;
+            }
+        }
+        catch (Exception ignored) { /* not a quest requirement */ }
+        return liveValue;
+    }
+
     public Map<String, Object> buildDiaryRequirements()
     {
         if (!isLoggedIn()) return errorMap("Player is not logged in");
