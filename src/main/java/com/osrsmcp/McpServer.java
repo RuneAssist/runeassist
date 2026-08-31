@@ -59,6 +59,7 @@ public class McpServer
     @Inject private PlayerDataService playerDataService;
     @Inject private WikiBucketService wikiBucketService;
     @Inject private QuestPlanService questPlanService;
+    @Inject private InteropService interopService;
     @Inject private ClientThread clientThread;
     @Inject private OsrsMcpConfig config;
 
@@ -70,7 +71,9 @@ public class McpServer
         "wiki_search", "wiki_get_page",
         // pure wiki-scrape tools: no live game state, so a slow page fetch must not
         // hold the client thread (they only take a name argument and hit HTTP).
-        "get_drop_table", "get_npc_info"));
+        "get_drop_table", "get_npc_info",
+        // inter-plugin messaging (post on client thread internally, then await a reply)
+        "get_tcg_unlocks", "path_to"));
 
     // Hybrid tools: read live game state, THEN do per-item HTTP. Handled in two
     // phases -- a quick client-thread snapshot, then the fetch off the client thread.
@@ -343,6 +346,16 @@ public class McpServer
                 Integer mc = args.has("max_chars") && args.get("max_chars").isJsonPrimitive() ? args.get("max_chars").getAsInt() : null;
                 return wikiBucketService.wikiGetPage(strArg(args, "title", null), mc);
             }
+            case "get_tcg_unlocks":
+                return interopService.getTcgUnlocks();
+            case "path_to":
+            {
+                Integer x = args.has("x") && args.get("x").isJsonPrimitive() ? args.get("x").getAsInt() : null;
+                Integer y = args.has("y") && args.get("y").isJsonPrimitive() ? args.get("y").getAsInt() : null;
+                Integer plane = args.has("plane") && args.get("plane").isJsonPrimitive() ? args.get("plane").getAsInt() : null;
+                boolean clear = args.has("clear") && args.get("clear").isJsonPrimitive() && args.get("clear").getAsBoolean();
+                return interopService.pathTo(x, y, plane, clear);
+            }
             default:
                 Map<String, Object> err = new LinkedHashMap<>(); err.put("error", "Unknown network tool: " + toolName); return err;
         }
@@ -498,6 +511,16 @@ public class McpServer
             props.add("title", strProp("Exact page title (from wiki_search), e.g. 'Zulrah/Strategies'."));
             props.add("max_chars", numProp("Max characters to return (default 6000, max 20000)."));
             tools.add(buildToolWithSchema("wiki_get_page", "Get the readable plain-text content of a wiki page by title -- prose, strategy, walkthroughs. Tables/infoboxes are stripped (use wiki_bucket_* for structured stats). Pair with wiki_search to find the title.", props, new String[]{"title"}));
+        }
+        tools.add(buildTool("get_tcg_unlocks", "Read the player's OSRS TCG collection from the TCG plugin (owned card names, owned item ids, owned NPC ids). In OSRS TCG, items/teleports/monsters stay locked until their card is pulled -- use this to only recommend unlocked content and to flag what they'd need to pull. Returns tcg_available=false if the TCG plugin isn't running."));
+        {
+            JsonObject props = new JsonObject();
+            props.add("x", numProp("Destination world X coordinate."));
+            props.add("y", numProp("Destination world Y coordinate."));
+            props.add("plane", numProp("Destination plane/level (0-3, default 0)."));
+            JsonObject clr = new JsonObject(); clr.addProperty("type", "boolean"); clr.addProperty("description", "If true, clear the current drawn path instead of setting one.");
+            props.add("clear", clr);
+            tools.add(buildToolWithSchema("path_to", "Draw an in-game route to a world coordinate using the Shortest Path plugin (requires it installed + enabled). Only draws a path -- it never moves the character. Use for 'guide me to X': a slayer-task monster location, a farm patch, a quest step. Get coordinates from the wiki (infobox_location bucket / wiki pages) or known patch locations. Pass clear:true to remove the route.", props, new String[]{}));
         }
         tools.add(buildTool("reload_planner_data", "Reload the planner's bundled data (quest_data.json, training_methods.json) from disk without restarting the client -- picks up a regenerated copy placed in the external override dir. Returns where each dataset was loaded from and its counts. Plugin code changes still require a restart."));
         tools.add(buildTool("get_slayer_task",   "Get current Slayer task: creature name, remaining count, location, points and streak."));

@@ -43,6 +43,7 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private PlayerDataService playerDataService;
     @Inject private CacheWriter cacheWriter;
     @Inject private EquipmentStatsService equipmentStatsService;
+    @Inject private InteropService interopService;
 
     private NavigationButton navButton;
 
@@ -178,6 +179,13 @@ public class OsrsMcpPlugin extends Plugin
                     () -> cacheWriter.writeEquipment(snapshot, equipmentStatsService));
             }
         }
+    }
+
+    @Subscribe
+    public void onPluginMessage(net.runelite.client.events.PluginMessage event)
+    {
+        // Cache inbound data from other plugins (OSRS TCG owned-cards replies/pushes).
+        interopService.onPluginMessage(event);
     }
 
     @Subscribe
