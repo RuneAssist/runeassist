@@ -32,15 +32,17 @@ function parseQuestreq(lua) {
   lua = lua.replace(/--\[\[[\s\S]*?\]\]/g, '');   // strip Lua block comments (contains the quest TEMPLATE)
   const quests = {};
   let cur = null, mode = null;
-  const headerRe = new RegExp('^\\s{4}\\[' + LSTR + '\\]\\s*=\\s*\\{');
+  // The source mixes tabs and spaces, so match a quest header at ANY indentation.
+  // Distinguish it from the reserved ['quests']/['skills'] sub-keys by checking those first.
+  const headerRe = new RegExp('^\\s*\\[' + LSTR + '\\]\\s*=\\s*\\{');
   const strRe    = new RegExp(LSTR);
   const skillRe  = new RegExp('\\{\\s*' + LSTR + '\\s*,\\s*(\\d+)((?:\\s*,\\s*' + LSTR + ')*)\\s*\\}');
   for (const raw of lua.split(/\r?\n/)) {
-    const header = raw.match(headerRe);                         // top-level quest entry
+    if (/^\s*\['quests'\]/.test(raw)) { mode = 'quests'; continue; }
+    if (/^\s*\['skills'\]/.test(raw)) { mode = 'skills'; continue; }
+    const header = raw.match(headerRe);                         // top-level quest entry (any indent)
     if (header) { cur = unesc(header[1]); quests[cur] = { quests: [], skills: {}, skills_ironman: {}, quest_points: 0 }; mode = null; continue; }
     if (!cur) continue;
-    if (/\['quests'\]/.test(raw)) { mode = 'quests'; continue; }
-    if (/\['skills'\]/.test(raw)) { mode = 'skills'; continue; }
     if (mode === 'quests') {
       const m = raw.match(strRe);
       if (m) quests[cur].quests.push(unesc(m[1]));
