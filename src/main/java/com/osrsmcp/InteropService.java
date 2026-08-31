@@ -1,5 +1,6 @@
 package com.osrsmcp;
 
+import com.google.gson.Gson;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.callback.ClientThread;
@@ -33,6 +34,16 @@ public class InteropService
 {
     @Inject private EventBus eventBus;
     @Inject private ClientThread clientThread;
+    @Inject private Gson gson;
+
+    // Inventory Setups equipment-container slot indices (14 slots; 6/8/11 unused).
+    private static final Map<String, Integer> EQUIP_SLOT = new LinkedHashMap<>();
+    static {
+        EQUIP_SLOT.put("head", 0); EQUIP_SLOT.put("cape", 1); EQUIP_SLOT.put("amulet", 2);
+        EQUIP_SLOT.put("weapon", 3); EQUIP_SLOT.put("body", 4); EQUIP_SLOT.put("shield", 5);
+        EQUIP_SLOT.put("legs", 7); EQUIP_SLOT.put("hands", 9); EQUIP_SLOT.put("feet", 10);
+        EQUIP_SLOT.put("ring", 12); EQUIP_SLOT.put("ammo", 13);
+    }
 
     private volatile Map<String, Object> tcgOwned;   // latest OSRS TCG payload
     private volatile long tcgUpdatedAt = 0;
@@ -171,6 +182,74 @@ public class InteropService
         out.put("viewing", name);
         out.put("note", "Opened the setup in-game and filtered the bank (Inventory Setups plugin required). Does not move or equip items automatically.");
         return out;
+    }
+
+    // --- export_inventory_setup ---------------------------------------------
+    // Build an Inventory Setups import string (InventorySetupPortable JSON). The AI
+    // designs the loadout; the player pastes this into the plugin's Import button.
+    // Safe: import is user-initiated and additive -- a bad string just errors.
+
+    public Map<String, Object> exportInventorySetup(String name, Map<String, Object> equipment, List<Object> inventory, String notes)
+    {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (name == null || name.isBlank()) { out.put("error", "Provide a setup name."); return out; }
+
+        // equipment: 14 slots, defaults to empty (-1)
+        List<Object> eq = new ArrayList<>();
+        for (int i = 0; i < 14; i++) eq.add(item(-1, 1));
+        if (equipment != null)
+            for (Map.Entry<String, Object> e : equipment.entrySet())
+            {
+                Integer idx = EQUIP_SLOT.get(e.getKey().toLowerCase().trim());
+                int id = asInt(e.getValue());
+                if (idx != null && id > 0) eq.set(idx, item(id, 1));
+            }
+
+        // inventory: 28 slots, fill in order from the provided list
+        List<Object> inv = new ArrayList<>();
+        if (inventory != null)
+            for (Object o : inventory)
+            {
+                if (inv.size() >= 28) break;
+                int id, q = 1;
+                if (o instanceof Map) { Map<?, ?> m = (Map<?, ?>) o; id = asInt(m.get("id")); if (m.get("q") != null) q = asInt(m.get("q")); }
+                else id = asInt(o);
+                if (id > 0) inv.add(item(id, q));
+            }
+        while (inv.size() < 28) inv.add(item(-1, 1));
+
+        Map<String, Object> setup = new LinkedHashMap<>();
+        setup.put("inv", inv);
+        setup.put("eq", eq);
+        setup.put("rp", null); setup.put("bp", null); setup.put("qv", null);
+        setup.put("afi", new LinkedHashMap<>());
+        setup.put("name", name);
+        setup.put("notes", notes != null && !notes.isBlank() ? notes : null);
+        setup.put("hc", null); setup.put("dc", null);
+        Map<String, Object> portable = new LinkedHashMap<>();
+        portable.put("setup", setup);
+        portable.put("layout", null);
+
+        out.put("name", name);
+        out.put("import_string", gson.toJson(portable));
+        out.put("instructions", "In RuneLite: open the Inventory Setups panel, click the Import (down-arrow) button, and paste this string. It adds a new setup; it does not overwrite existing ones.");
+        out.put("_note", "Item ids required (get them from the wiki infobox_item.item_id or get_item_prices). Best-effort format -- if import fails, tell me and I'll adjust.");
+        return out;
+    }
+
+    private static Map<String, Object> item(int id, int q)
+    {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", id);
+        if (q != 1) m.put("q", q);
+        return m;
+    }
+
+    private static int asInt(Object o)
+    {
+        if (o instanceof Number) return ((Number) o).intValue();
+        try { return o == null ? 0 : (int) Double.parseDouble(o.toString()); }
+        catch (NumberFormatException e) { return 0; }
     }
 
     private static int sizeOf(Object o)
