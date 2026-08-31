@@ -33,9 +33,10 @@ public class OsrsMcpPanel extends PluginPanel
     private static final int   ACTIVITY_ROWS = 6;
 
     // Header / status
-    private final JLabel statusDot   = new JLabel("⬤");
-    private final JLabel statusText  = new JLabel("Starting…");
-    private final JLabel gameState   = new JLabel("⬤ Not logged in");
+    private final JLabel statusDot   = squareDot();
+    private final JLabel statusText  = new JLabel("Starting...");
+    private final JLabel gameDot     = squareDot();
+    private final JLabel gameState   = new JLabel("Not logged in");
 
     // Connect
     private final JTextField endpointField = new JTextField();
@@ -51,14 +52,14 @@ public class OsrsMcpPanel extends PluginPanel
     private final JLabel[] actName = new JLabel[ACTIVITY_ROWS];
     private final JLabel[] actAge  = new JLabel[ACTIVITY_ROWS];
     private final JPanel[] actRow  = new JPanel[ACTIVITY_ROWS];
-    private final JLabel activityEmpty = new JLabel("No requests yet — connect a client.");
+    private final JLabel activityEmpty = new JLabel("No requests yet - connect a client.");
 
     // Integrations / data
-    private final JLabel questData = new JLabel("Quest data: —");
+    private final JLabel questData = new JLabel("Quest data: -");
     private final JButton reloadBtn = new JButton("Refresh data");
-    private final JLabel spDot  = new JLabel("⬤ Shortest Path");
-    private final JLabel tcgDot = new JLabel("⬤ OSRS TCG");
-    private final JLabel invDot = new JLabel("⬤ Inventory Setups");
+    private final JLabel spDot  = squareDot();
+    private final JLabel tcgDot = squareDot();
+    private final JLabel invDot = squareDot();
 
     // Footer
     private final JButton restartBtn = new JButton("Restart server");
@@ -143,19 +144,20 @@ public class OsrsMcpPanel extends PluginPanel
         p.add(title);
         p.add(vGap(6));
 
-        statusDot.setFont(statusDot.getFont().deriveFont(9f));
-        statusDot.setForeground(Color.GRAY);
         statusText.setFont(FontManager.getRunescapeSmallFont());
         statusText.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
         JPanel sr = row();
-        sr.add(statusDot); sr.add(Box.createHorizontalStrut(5)); sr.add(statusText);
+        sr.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        sr.add(statusDot); sr.add(Box.createHorizontalStrut(6)); sr.add(statusText);
         p.add(sr);
 
         gameState.setFont(FontManager.getRunescapeSmallFont());
         gameState.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
-        gameState.setAlignmentX(LEFT_ALIGNMENT);
-        p.add(vGap(2));
-        p.add(gameState);
+        JPanel gr = row();
+        gr.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        gr.add(gameDot); gr.add(Box.createHorizontalStrut(6)); gr.add(gameState);
+        p.add(vGap(3));
+        p.add(gr);
         return p;
     }
 
@@ -249,7 +251,7 @@ public class OsrsMcpPanel extends PluginPanel
         reloadBtn.addActionListener(e -> {
             if (reloadCallback == null) return;
             reloadBtn.setEnabled(false);
-            reloadBtn.setText("Refreshing…");
+            reloadBtn.setText("Refreshing...");
             new Thread(() -> {
                 try { reloadCallback.run(); } catch (Exception ignored) {}
                 SwingUtilities.invokeLater(() -> { reloadBtn.setEnabled(true); reloadBtn.setText("Refresh data"); refreshStatus(); });
@@ -257,14 +259,11 @@ public class OsrsMcpPanel extends PluginPanel
         });
         p.add(reloadBtn);
         p.add(vGap(6));
-        for (JLabel d : new JLabel[]{ spDot, tcgDot, invDot })
-        {
-            d.setFont(FontManager.getRunescapeSmallFont());
-            d.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
-            d.setAlignmentX(LEFT_ALIGNMENT);
-            p.add(d);
-            p.add(vGap(1));
-        }
+        p.add(dotRow(spDot,  "Shortest Path"));
+        p.add(vGap(2));
+        p.add(dotRow(tcgDot, "OSRS TCG"));
+        p.add(vGap(2));
+        p.add(dotRow(invDot, "Inventory Setups"));
         return p;
     }
 
@@ -275,7 +274,7 @@ public class OsrsMcpPanel extends PluginPanel
         restartBtn.addActionListener(e -> {
             if (restartCallback == null) return;
             restartBtn.setEnabled(false);
-            restartBtn.setText("Restarting…");
+            restartBtn.setText("Restarting...");
             new Thread(() -> {
                 restartCallback.run();
                 SwingUtilities.invokeLater(() -> { restartBtn.setEnabled(true); restartBtn.setText("Restart server"); });
@@ -300,13 +299,14 @@ public class OsrsMcpPanel extends PluginPanel
         try { s = statusSupplier.get(); } catch (Exception ex) { return; }
         if (s == null) return;
 
-        questData.setText("Quest data: " + s.getOrDefault("quest_data", "—"));
+        questData.setText("Quest data: " + s.getOrDefault("quest_data", "-"));
         long n = s.get("request_count") instanceof Number ? ((Number) s.get("request_count")).longValue() : 0;
         requestCount.setText(n + (n == 1 ? " request" : " requests"));
 
         paintDot(spDot,  "Shortest Path",    Boolean.TRUE.equals(s.get("shortestpath")));
         paintDot(tcgDot, "OSRS TCG",         Boolean.TRUE.equals(s.get("osrstcg")));
         paintDot(invDot, "Inventory Setups", Boolean.TRUE.equals(s.get("inventorysetups")));
+        // (dots are the small squares next to each name)
 
         Object recent = s.get("recent");
         int shown = 0;
@@ -338,12 +338,11 @@ public class OsrsMcpPanel extends PluginPanel
         return (a / 3600) + "h ago";
     }
 
-    private void paintDot(JLabel label, String name, boolean on)
+    private void paintDot(JLabel square, String name, boolean on)
     {
-        label.setText("⬤ " + name);
-        label.setForeground(on ? GREEN : ColorScheme.MEDIUM_GRAY_COLOR);
-        label.setToolTipText(on ? name + " is enabled — its tools will work."
-                                : name + " is not enabled; its tools return unavailable.");
+        square.setBackground(on ? GREEN : ColorScheme.MEDIUM_GRAY_COLOR);
+        square.setToolTipText(on ? name + " is enabled - its tools will work."
+                                 : name + " is not enabled; its tools return unavailable.");
     }
 
     // ── public state (called by the plugin) ─────────────────────────────────
@@ -355,8 +354,8 @@ public class OsrsMcpPanel extends PluginPanel
             currentPort = port;
             currentMode = mode;
             currentLanIp = running ? lanIp : null;
-            statusDot.setForeground(running ? GREEN : Color.GRAY);
-            statusText.setText(running ? "Server running · port " + port + " · " + mode : "Server stopped");
+            statusDot.setBackground(running ? GREEN : Color.GRAY);
+            statusText.setText(running ? "Server running - port " + port + " - " + mode : "Server stopped");
             endpointField.setText(running ? endpointUrl() : "");
             copyUrlBtn.setEnabled(running);
             copyConfigBtn.setEnabled(running);
@@ -378,7 +377,7 @@ public class OsrsMcpPanel extends PluginPanel
     {
         SwingUtilities.invokeLater(() ->
         {
-            statusDot.setForeground(ColorScheme.PROGRESS_ERROR_COLOR);
+            statusDot.setBackground(ColorScheme.PROGRESS_ERROR_COLOR);
             statusText.setText("Error: " + message);
         });
     }
@@ -389,10 +388,10 @@ public class OsrsMcpPanel extends PluginPanel
         {
             switch (state)
             {
-                case LOGGED_IN:    gameState.setForeground(GREEN); gameState.setText("⬤ Logged in"); break;
-                case LOGIN_SCREEN: gameState.setForeground(ColorScheme.MEDIUM_GRAY_COLOR); gameState.setText("⬤ Login screen"); break;
-                case LOADING:      gameState.setForeground(MONO_ORANGE); gameState.setText("⬤ Loading…"); break;
-                default:           gameState.setForeground(ColorScheme.MEDIUM_GRAY_COLOR); gameState.setText("⬤ " + state.name().toLowerCase());
+                case LOGGED_IN:    gameDot.setBackground(GREEN); gameState.setForeground(ColorScheme.LIGHT_GRAY_COLOR); gameState.setText("Logged in"); break;
+                case LOGIN_SCREEN: gameDot.setBackground(Color.GRAY); gameState.setForeground(ColorScheme.MEDIUM_GRAY_COLOR); gameState.setText("Login screen"); break;
+                case LOADING:      gameDot.setBackground(MONO_ORANGE); gameState.setForeground(ColorScheme.MEDIUM_GRAY_COLOR); gameState.setText("Loading..."); break;
+                default:           gameDot.setBackground(Color.GRAY); gameState.setForeground(ColorScheme.MEDIUM_GRAY_COLOR); gameState.setText(state.name().toLowerCase());
             }
         });
     }
@@ -498,6 +497,32 @@ public class OsrsMcpPanel extends PluginPanel
     }
 
     private Component vGap(int h) { return Box.createVerticalStrut(h); }
+
+    /** A small opaque colored square used as a status indicator (renders on any font). */
+    private static JLabel squareDot()
+    {
+        JLabel l = new JLabel();
+        l.setOpaque(true);
+        l.setBackground(Color.GRAY);
+        Dimension d = new Dimension(9, 9);
+        l.setPreferredSize(d); l.setMinimumSize(d); l.setMaximumSize(d);
+        return l;
+    }
+
+    /** A row of [colored square] + [name] for an integration/status line. */
+    private JPanel dotRow(JLabel dot, String name)
+    {
+        JPanel r = new JPanel();
+        r.setLayout(new BoxLayout(r, BoxLayout.X_AXIS));
+        r.setBackground(CARD_BG);
+        r.setAlignmentX(LEFT_ALIGNMENT);
+        r.setMaximumSize(new Dimension(Integer.MAX_VALUE, 16));
+        JLabel n = new JLabel(name);
+        n.setFont(FontManager.getRunescapeSmallFont());
+        n.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
+        r.add(dot); r.add(Box.createHorizontalStrut(6)); r.add(n);
+        return r;
+    }
 
     private void styleButton(JButton btn)
     {
