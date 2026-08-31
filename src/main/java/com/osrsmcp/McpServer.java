@@ -32,6 +32,7 @@ public class McpServer
     // reason about the data these tools expose, so advice is OSRS-aware by default.
     private static final String INSTRUCTIONS =
         "This server exposes live Old School RuneScape (OSRS) data for the connected RuneLite account. "
+        + "RESPONSE STYLE (important): keep it digestible. Lead with the single biggest takeaway and the immediate next 1-3 actions -- do NOT open with a giant multi-step plan. Big goals (quest cape, max, all diaries) are long journeys: give the headline, the very next concrete step, and a one-line sense of scale, then ASK 'want the full plan?' before dumping it. Default to short: a few lines or a small table beats paragraphs. Only produce a long ordered plan when the player explicitly asks for the whole thing, and even then put a 2-3 line TL;DR at the top and consider offering it in stages. Match depth to the question -- a quick question gets a quick answer.\n"
         + "When giving advice:\n"
         + "- Always call get_all first for a cheap overview, then drill in with specific tools.\n"
         + "- Respect account type: check is_ironman/is_uim/is_hcim in stats. Ironmen cannot buy gear on the GE (bonds only), so never suggest 'just buy X' for them; suggest how to obtain it instead.\n"
@@ -512,11 +513,11 @@ public class McpServer
                 description = "Full account analysis";
                 text = "Analyse my OSRS account. Call get_all first, then get_player_stats, get_quest_states, "
                      + "get_diary_states, get_diary_requirements, get_equipment_stats, get_bank_summary, "
-                     + "get_next_goals and get_quest_rewards as needed. Use project_plan to verify any multi-step "
-                     + "recommendation exactly and get_training_methods for rough time estimates. Then give me: "
-                     + "(1) a short account summary, (2) my biggest weaknesses, and (3) a ranked list of the most "
-                     + "useful things to work on next, with concrete levels, tasks and items. Respect my account "
-                     + "type and account for GE limits and tax.";
+                     + "get_next_goals and get_quest_rewards as needed (project_plan to verify anything multi-step). "
+                     + "Then keep the reply SHORT: a 2-3 line account summary, then just the top 3 things to work on "
+                     + "next (one line each, with the concrete level/task/item). Do NOT write a full multi-step plan "
+                     + "yet -- end by asking which of the three I want you to plan out in detail. Respect my account "
+                     + "type and GE limits/tax.";
                 break;
         }
 
