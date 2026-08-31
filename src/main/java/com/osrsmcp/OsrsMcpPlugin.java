@@ -48,8 +48,11 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private QuestPlanService questPlanService;
     @Inject private PluginManager pluginManager;
     @Inject private DailyTracker dailyTracker;
+    @Inject private OsrsMcpChatPanel chatPanel;
+    @Inject private CompanionAgent companionAgent;
 
     private NavigationButton navButton;
+    private NavigationButton chatNavButton;
 
     @Override
     protected void startUp() throws Exception
@@ -71,14 +74,25 @@ public class OsrsMcpPlugin extends Plugin
             .panel(panel)
             .build();
         clientToolbar.addNavigation(navButton);
+
+        chatNavButton = NavigationButton.builder()
+            .tooltip("OSRS Companion (AI chat)")
+            .icon(icon)
+            .priority(11)
+            .panel(chatPanel)
+            .build();
+        clientToolbar.addNavigation(chatNavButton);
+        chatPanel.refresh();
     }
 
     @Override
     protected void shutDown() throws Exception
     {
         panel.stopStatusUpdates();
+        companionAgent.shutdown();
         stopServer();
         clientToolbar.removeNavigation(navButton);
+        clientToolbar.removeNavigation(chatNavButton);
     }
 
     /** Live status for the panel: quest-data source, request activity, interop-plugin availability. */
