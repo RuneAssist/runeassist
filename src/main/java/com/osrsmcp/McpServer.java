@@ -53,6 +53,7 @@ public class McpServer
         + "- Equipment bonuses by slot -> wiki_bucket_query('infobox_bonuses', ...) keyed by where('page_name','<item>').\n"
         + "- BiS gear -> wiki_bucket_query('recommended_equipment', ...); money-making -> 'money_making_guide'; drops -> 'dropsline'; recipes -> 'recipe'.\n"
         + "- For anything else, discover with wiki_list_buckets then wiki_bucket_schema before querying.\n"
+        + "- Narrative content (strategy, mechanics, walkthroughs) is NOT in the buckets -- use wiki_search then wiki_get_page for readable prose.\n"
         + "- Query hygiene: always pass 'select' and a small 'limit'; filter with 'where'; some buckets hold detail in a json/*_json field to parse. Never query the wiki for the player's character data.";
 
     @Inject private PlayerDataService playerDataService;
@@ -66,6 +67,7 @@ public class McpServer
     // the 5s client-thread budget).
     private static final Set<String> NETWORK_TOOLS = new HashSet<>(Arrays.asList(
         "wiki_list_buckets", "wiki_bucket_schema", "wiki_bucket_query", "get_combat_achievements",
+        "wiki_search", "wiki_get_page",
         // pure wiki-scrape tools: no live game state, so a slow page fetch must not
         // hold the client thread (they only take a name argument and hit HTTP).
         "get_drop_table", "get_npc_info"));
@@ -331,6 +333,16 @@ public class McpServer
                 return playerDataService.buildDropTable(strArg(args, "name", ""));
             case "get_npc_info":
                 return playerDataService.buildNpcInfo(strArg(args, "name", ""));
+            case "wiki_search":
+            {
+                Integer lim = args.has("limit") && args.get("limit").isJsonPrimitive() ? args.get("limit").getAsInt() : null;
+                return wikiBucketService.wikiSearch(strArg(args, "query", null), lim);
+            }
+            case "wiki_get_page":
+            {
+                Integer mc = args.has("max_chars") && args.get("max_chars").isJsonPrimitive() ? args.get("max_chars").getAsInt() : null;
+                return wikiBucketService.wikiGetPage(strArg(args, "title", null), mc);
+            }
             default:
                 Map<String, Object> err = new LinkedHashMap<>(); err.put("error", "Unknown network tool: " + toolName); return err;
         }
@@ -474,6 +486,18 @@ public class McpServer
             JsonObject onlyRem = new JsonObject(); onlyRem.addProperty("type", "boolean"); onlyRem.addProperty("description", "If true, omit already-completed quests and return only what's left of the route.");
             props.add("only_remaining", onlyRem);
             tools.add(buildToolWithSchema("get_optimal_quest_route", "The OSRS Wiki Optimal Quest Guide ordering as a planning prior, annotated with your live quest state: how far you've progressed, the next route quest you can start now (next_startable_now), and upcoming ones still blocked (next_blocked, with reasons). Use it to anchor a quest plan on the community route, then adapt to the player's goal. Not account-specific ordering -- it's a recommendation.", props, new String[]{}));
+        }
+        {
+            JsonObject props = new JsonObject();
+            props.add("query", strProp("Search term, e.g. 'Zulrah strategy' or 'fairy ring codes'."));
+            props.add("limit", numProp("Max results (default 6, max 20)."));
+            tools.add(buildToolWithSchema("wiki_search", "Full-text search the OSRS Wiki for pages by term, returning titles + snippets. Use for narrative/how-to content the structured buckets don't hold (strategy, mechanics, walkthroughs). Then read a page with wiki_get_page.", props, new String[]{"query"}));
+        }
+        {
+            JsonObject props = new JsonObject();
+            props.add("title", strProp("Exact page title (from wiki_search), e.g. 'Zulrah/Strategies'."));
+            props.add("max_chars", numProp("Max characters to return (default 6000, max 20000)."));
+            tools.add(buildToolWithSchema("wiki_get_page", "Get the readable plain-text content of a wiki page by title -- prose, strategy, walkthroughs. Tables/infoboxes are stripped (use wiki_bucket_* for structured stats). Pair with wiki_search to find the title.", props, new String[]{"title"}));
         }
         tools.add(buildTool("reload_planner_data", "Reload the planner's bundled data (quest_data.json, training_methods.json) from disk without restarting the client -- picks up a regenerated copy placed in the external override dir. Returns where each dataset was loaded from and its counts. Plugin code changes still require a restart."));
         tools.add(buildTool("get_slayer_task",   "Get current Slayer task: creature name, remaining count, location, points and streak."));
