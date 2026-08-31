@@ -16,6 +16,7 @@ const OUT  = join(ROOT, 'src/main/resources/com/osrsmcp/quest_data.json');
 const HAND = join(ROOT, 'tools/quest_unlocks.json');
 const QUESTREQ_URL = 'https://oldschool.runescape.wiki/w/Module:Questreq/data?action=raw';
 const XP_URL       = 'https://oldschool.runescape.wiki/w/Quest_experience_rewards?action=raw';
+const OQG_URL      = 'https://oldschool.runescape.wiki/w/Optimal_quest_guide?action=raw';
 
 async function fetchText(url) {
   const r = await fetch(url, { headers: { 'User-Agent': UA } });
@@ -77,17 +78,32 @@ function parseXpRewards(wt) {
   return xp;
 }
 
+// --- parse the Optimal Quest Guide ordered table ----------------------------
+function parseOptimalOrder(wt) {
+  const order = [];
+  let inRow = false;
+  for (const raw of wt.split(/\r?\n/)) {
+    if (/^\|- data-rowid="/.test(raw)) { inRow = true; continue; }
+    if (inRow) {
+      const m = raw.match(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/);   // first wikilink = the quest/activity
+      if (m) { order.push(m[1].trim()); inRow = false; }
+    }
+  }
+  return order;
+}
+
 (async () => {
   console.log('Fetching sources...');
-  const [luaTxt, xpTxt] = await Promise.all([fetchText(QUESTREQ_URL), fetchText(XP_URL)]);
-  const reqs = parseQuestreq(luaTxt);
-  const xp   = parseXpRewards(xpTxt);
-  const hand = existsSync(HAND) ? JSON.parse(readFileSync(HAND, 'utf8')) : {};
+  const [luaTxt, xpTxt, oqgTxt] = await Promise.all([fetchText(QUESTREQ_URL), fetchText(XP_URL), fetchText(OQG_URL)]);
+  const reqs  = parseQuestreq(luaTxt);
+  const xp    = parseXpRewards(xpTxt);
+  const order = parseOptimalOrder(oqgTxt);
+  const hand  = existsSync(HAND) ? JSON.parse(readFileSync(HAND, 'utf8')) : {};
 
   // union of quest names from requirements + xp + hand data (ignore _meta keys)
   const handKeys = Object.keys(hand).filter(k => !k.startsWith('_'));
   const names = new Set([...Object.keys(reqs), ...Object.keys(xp), ...handKeys]);
-  const out = { _generated: new Date().toISOString(), _source: 'oldschool.runescape.wiki', quests: {} };
+  const out = { _generated: new Date().toISOString(), _source: 'oldschool.runescape.wiki', optimal_order: order, quests: {} };
   for (const name of [...names].sort()) {
     const r = reqs[name] || { quests: [], skills: {}, skills_ironman: {}, quest_points: 0 };
     const h = hand[name] || {};
@@ -101,6 +117,6 @@ function parseXpRewards(wt) {
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, JSON.stringify(out, null, 1));
   const nReq = Object.keys(reqs).length, nXp = Object.keys(xp).length;
-  console.log(`quests: ${Object.keys(out.quests).length}  (reqs ${nReq}, xp ${nXp}, hand ${Object.keys(hand).length})`);
+  console.log(`quests: ${Object.keys(out.quests).length}  (reqs ${nReq}, xp ${nXp}, hand ${Object.keys(hand).length}, optimal_order ${order.length})`);
   console.log(`wrote ${OUT}`);
 })().catch(e => { console.error('FAILED:', e.message); process.exit(1); });

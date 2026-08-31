@@ -336,6 +336,104 @@ public class QuestPlanService
         return m;
     }
 
+    // --- get_optimal_quest_route --------------------------------------------
+
+    /**
+     * The OSRS Wiki's Optimal Quest Guide ordering (baked into quest_data.json) as a
+     * planning prior, annotated with live quest state. Returns the ordered route, how
+     * far the account has progressed, and the next quests -- separating the next one
+     * that is startable now from those still blocked (with the reasons).
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> buildOptimalQuestRoute(Map<String, Object> args)
+    {
+        Map<String, Map<String, Object>> qd = data();
+        // optimal_order lives at the root of the resource, not under quests
+        List<String> order = loadOptimalOrder();
+        if (order.isEmpty()) return err("optimal_order missing from quest_data.json (regenerate with tools/gen-quest-data.mjs).");
+
+        boolean loggedIn = client.getGameState() == GameState.LOGGED_IN;
+        int qp = loggedIn ? client.getVarpValue(VarPlayer.QUEST_POINTS) : 0;
+        boolean onlyRemaining = args != null && Boolean.TRUE.equals(args.get("only_remaining"));
+
+        List<Map<String, Object>> route = new ArrayList<>();
+        List<Map<String, Object>> nextBlocked = new ArrayList<>();
+        Map<String, Object> nextStartable = null;
+        int completed = 0, pos = 0;
+        for (String name : order)
+        {
+            pos++;
+            Quest live = questNameToLive(name);
+            QuestState state = live != null ? live.getState(client) : null;
+            boolean done = state == QuestState.FINISHED;
+            if (done) completed++;
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("position", pos);
+            row.put("quest", name);
+            row.put("state", state != null ? state.name().toLowerCase() : "unknown");
+
+            // for not-yet-finished quests, live-check whether requirements are met now
+            if (loggedIn && !done && live != null)
+            {
+                Map<String, Object> def = qd.get(name);
+                if (def == null) def = matchQuestKey(qd, name);
+                if (def != null)
+                {
+                    Map<String, Object> req = asMap(def.get("requirements"));
+                    List<String> unmet = new ArrayList<>();
+                    checkSkills(asMap(req.get("skills")), unmet);
+                    if (qp < asInt(req.get("quest_points"))) unmet.add("quest points " + qp + "/" + asInt(req.get("quest_points")));
+                    for (String pr : asList(req.get("quests")))
+                    {
+                        Quest pqq = questNameToLive(pr);
+                        if (pqq != null && pqq.getState(client) != QuestState.FINISHED) unmet.add("quest: " + pr);
+                    }
+                    row.put("meets_requirements", unmet.isEmpty());
+                    if (!unmet.isEmpty()) row.put("blocked_by", unmet);
+                    if (nextStartable == null && unmet.isEmpty()) nextStartable = row;
+                    else if (!unmet.isEmpty() && nextBlocked.size() < 10) nextBlocked.add(row);
+                }
+            }
+
+            if (!(onlyRemaining && done)) route.add(row);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("source", "OSRS Wiki Optimal Quest Guide (a recommended ordering, not account-specific -- adapt to the player's goal).");
+        result.put("route_length", order.size());
+        result.put("completed_in_route", completed);
+        if (loggedIn)
+        {
+            if (nextStartable != null) result.put("next_startable_now", nextStartable);
+            if (!nextBlocked.isEmpty()) result.put("next_blocked", nextBlocked);
+        }
+        result.put("route", route);
+        return result;
+    }
+
+    private volatile List<String> optimalOrder;
+
+    private List<String> loadOptimalOrder()
+    {
+        List<String> o = optimalOrder;
+        if (o != null) return o;
+        synchronized (this)
+        {
+            if (optimalOrder != null) return optimalOrder;
+            try (InputStream in = QuestPlanService.class.getResourceAsStream(RESOURCE))
+            {
+                if (in == null) { optimalOrder = new ArrayList<>(); return optimalOrder; }
+                Type t = new TypeToken<Map<String, Object>>(){}.getType();
+                Map<String, Object> root = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), t);
+                Object ord = root.get("optimal_order");
+                optimalOrder = ord instanceof List ? asList(ord) : new ArrayList<>();
+            }
+            catch (Exception e) { optimalOrder = new ArrayList<>(); }
+            return optimalOrder;
+        }
+    }
+
     // --- get_training_methods (Layer 3) -------------------------------------
 
     private static final String TRAINING_RESOURCE = "/com/osrsmcp/training_methods.json";
