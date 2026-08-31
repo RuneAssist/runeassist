@@ -205,7 +205,7 @@ public class WikiBucketService
             { out.put("error", "No page titled '" + title + "'. Try wiki_search for the exact title."); return out; }
             String extract = page.has("extract") ? page.get("extract").getAsString() : "";
             out.put("title", page.get("title").getAsString());
-            out.put("url", WIKI + enc(page.get("title").getAsString().replace(' ', '_')));
+            out.put("url", WIKI + page.get("title").getAsString().replace(' ', '_'));
             out.put("content", extract);
             if (extract.length() >= chars) out.put("_note", "Truncated to " + chars + " chars; raise maxChars (max 20000) for more.");
             out.put("_hint", "Plain text only (tables/infoboxes stripped). For structured stats use the wiki_bucket_* tools.");
