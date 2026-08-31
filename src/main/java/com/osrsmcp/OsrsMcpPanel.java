@@ -1,12 +1,12 @@
 package com.osrsmcp;
 
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.GameState;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
-import net.runelite.api.GameState;
 
-import net.runelite.client.config.ConfigManager;
 import javax.inject.Singleton;
 import javax.swing.*;
 import javax.swing.border.CompoundBorder;
@@ -14,58 +14,67 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.MatteBorder;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Supplier;
 
+/**
+ * Side panel for the OSRS MCP plugin. Focused on what actually helps: server
+ * status, one-click connect (endpoint + client config), a live activity log so
+ * you can watch the AI work, integration health, and a data-refresh action.
+ */
 @Slf4j
 @Singleton
 public class OsrsMcpPanel extends PluginPanel
 {
-    private static final Color SECTION_BG  = ColorScheme.DARKER_GRAY_COLOR;
-    private static final Color GREEN       = new Color(0, 180, 90);
-    private static final Color STEP_DONE   = new Color(0, 180, 90);
-    private static final Color STEP_ACTIVE = ColorScheme.BRAND_ORANGE;
-    private static final Color STEP_TODO   = ColorScheme.MEDIUM_GRAY_COLOR;
+    private static final Color CARD_BG = ColorScheme.DARKER_GRAY_COLOR;
+    private static final Color GREEN   = new Color(0, 180, 90);
+    private static final Color MONO_ORANGE = ColorScheme.BRAND_ORANGE;
+    private static final int   ACTIVITY_ROWS = 6;
 
-    // ── Status ────────────────────────────────────────────────────────────────
-    private final JLabel  statusDot      = new JLabel("⬤");
-    private final JLabel  statusText     = new JLabel("Starting...");
-    private final JLabel  statusMode     = new JLabel();
-    private final JLabel  gameStateLabel = new JLabel("Not logged in");
-    private final JLabel  localUrlLabel  = new JLabel();
-    private final JButton restartButton  = new JButton("Restart server");
+    // Header / status
+    private final JLabel statusDot   = new JLabel("⬤");
+    private final JLabel statusText  = new JLabel("Starting…");
+    private final JLabel gameState   = new JLabel("⬤ Not logged in");
 
-    // ── Setup code block ──────────────────────────────────────────────────────
-    private final JTextArea setupCodeBlock = new JTextArea();
-    private final JButton   copyConfigBtn  = new JButton("Copy config");
-    private int            currentPort  = 8282;
-    private String         currentLanIp = null;
-    private ConnectionMode currentMode  = ConnectionMode.LOCAL;
+    // Connect
+    private final JTextField endpointField = new JTextField();
+    private final JButton copyUrlBtn    = new JButton("Copy URL");
+    private final JButton copyConfigBtn = new JButton("Copy client config");
+    private final JTextArea configHolder = new JTextArea();   // not shown; holds JSON for copy
+    private JPanel  tailscaleLine;
+    private final JLabel tailscaleLabel = new JLabel();
+    private final JButton installTailscaleBtn = new JButton("Copy tailscale.com");
 
-    // ── Tailscale ─────────────────────────────────────────────────────────────
-    private TailscaleService tailscaleService;
-    private final JLabel tailscaleStep1Label = new JLabel();
-    private final JLabel tailscaleStep2Label = new JLabel();
-    private final JLabel tailscaleStep3Label = new JLabel();
-    private final JButton copyTailscaleUrlBtn = new JButton("Copy tailscale.com");
+    // Activity
+    private final JLabel requestCount = new JLabel("0 requests");
+    private final JLabel[] actName = new JLabel[ACTIVITY_ROWS];
+    private final JLabel[] actAge  = new JLabel[ACTIVITY_ROWS];
+    private final JPanel[] actRow  = new JPanel[ACTIVITY_ROWS];
+    private final JLabel activityEmpty = new JLabel("No requests yet — connect a client.");
 
-    // Root panel ref for revalidation
-    private JPanel rootPanel;
+    // Integrations / data
+    private final JLabel questData = new JLabel("Quest data: —");
+    private final JButton reloadBtn = new JButton("Refresh data");
+    private final JLabel spDot  = new JLabel("⬤ Shortest Path");
+    private final JLabel tcgDot = new JLabel("⬤ OSRS TCG");
+    private final JLabel invDot = new JLabel("⬤ Inventory Setups");
 
-    // Section visibility refs
-    private JPanel tailscalePanelRef;
-    private JLabel tailscaleHeaderRef;
+    // Footer
+    private final JButton restartBtn = new JButton("Restart server");
+    private final JLabel toolsNote = new JLabel();
 
-    // ── Integrations & activity ────────────────────────────────────────────────
-    private final JLabel dataStatusLabel = new JLabel("Quest data: --");
-    private final JLabel activityLabel    = new JLabel("Requests: 0");
-    private final JLabel spDot   = new JLabel("⬤ Shortest Path");
-    private final JLabel tcgDot  = new JLabel("⬤ OSRS TCG");
-    private final JLabel invDot  = new JLabel("⬤ Inventory Setups");
-    private java.util.function.Supplier<java.util.Map<String, Object>> statusSupplier;
-    private javax.swing.Timer statusTimer;
+    // State
+    private int currentPort = 8282;
+    private String currentLanIp = null;
+    private ConnectionMode currentMode = ConnectionMode.LOCAL;
 
-    // Callbacks
-    private Runnable      restartCallback;
+    private Runnable restartCallback;
+    private Runnable reloadCallback;
     private ConfigManager configManager;
+    private TailscaleService tailscaleService;
+    private Supplier<Map<String, Object>> statusSupplier;
+    private Timer statusTimer;
 
     public OsrsMcpPanel()
     {
@@ -74,49 +83,43 @@ public class OsrsMcpPanel extends PluginPanel
         setBackground(ColorScheme.DARK_GRAY_COLOR);
 
         JPanel root = new JPanel();
-        rootPanel = root;
         root.setLayout(new BoxLayout(root, BoxLayout.Y_AXIS));
         root.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        root.setBorder(new EmptyBorder(8, 8, 8, 8));
+        root.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        root.add(buildStatusSection());
-        root.add(Box.createVerticalStrut(6));
-        root.add(buildSeparator());
-        root.add(Box.createVerticalStrut(6));
-        root.add(buildSectionHeader("Setup"));
-        root.add(Box.createVerticalStrut(4));
-        root.add(buildSetupSection());
-        root.add(Box.createVerticalStrut(6));
-        root.add(buildSeparator());
-        root.add(Box.createVerticalStrut(6));
-        tailscaleHeaderRef = buildSectionHeader("Tailscale");
-        root.add(tailscaleHeaderRef);
-        root.add(Box.createVerticalStrut(4));
-        tailscalePanelRef = buildTailscaleSection();
-        root.add(tailscalePanelRef);
-        root.add(Box.createVerticalStrut(6));
-        root.add(buildSeparator());
-        root.add(Box.createVerticalStrut(6));
-        root.add(buildSectionHeader("Integrations & activity"));
-        root.add(Box.createVerticalStrut(4));
-        root.add(buildIntegrationsSection());
-        root.add(Box.createVerticalStrut(6));
-        root.add(buildSeparator());
-        root.add(Box.createVerticalStrut(6));
-        root.add(buildSectionHeader("Available tools"));
-        root.add(Box.createVerticalStrut(4));
-        root.add(buildToolsSection());
+        root.add(buildHeader());
+        root.add(vGap(10));
+        root.add(header("Connect"));
+        root.add(vGap(4));
+        root.add(buildConnectCard());
+        root.add(vGap(10));
+        root.add(header("Activity"));
+        root.add(vGap(4));
+        root.add(buildActivityCard());
+        root.add(vGap(10));
+        root.add(header("Integrations"));
+        root.add(vGap(4));
+        root.add(buildIntegrationsCard());
+        root.add(vGap(10));
+        root.add(buildFooter());
 
         add(root, BorderLayout.NORTH);
+        refreshConfig();
     }
 
-    /** Provide a supplier of live status; the panel polls it every 2s. */
-    public void setStatusSupplier(java.util.function.Supplier<java.util.Map<String, Object>> supplier)
+    // ── wiring from the plugin ──────────────────────────────────────────────
+
+    public void setRestartCallback(Runnable cb)          { this.restartCallback = cb; }
+    public void setReloadCallback(Runnable cb)           { this.reloadCallback = cb; }
+    public void setConfigManager(ConfigManager cm)       { this.configManager = cm; }
+    public void setTailscaleService(TailscaleService ts) { this.tailscaleService = ts; }
+
+    public void setStatusSupplier(Supplier<Map<String, Object>> supplier)
     {
         this.statusSupplier = supplier;
         if (statusTimer == null)
         {
-            statusTimer = new javax.swing.Timer(2000, e -> refreshStatus());
+            statusTimer = new Timer(2000, e -> refreshStatus());
             statusTimer.start();
         }
         refreshStatus();
@@ -128,477 +131,246 @@ public class OsrsMcpPanel extends PluginPanel
         statusSupplier = null;
     }
 
-    private void refreshStatus()
+    // ── sections ────────────────────────────────────────────────────────────
+
+    private JPanel buildHeader()
     {
-        if (statusSupplier == null) return;
-        java.util.Map<String, Object> s;
-        try { s = statusSupplier.get(); } catch (Exception ex) { return; }
-        if (s == null) return;
-        dataStatusLabel.setText("Quest data: " + String.valueOf(s.getOrDefault("quest_data", "--")));
-        activityLabel.setText(String.valueOf(s.getOrDefault("activity", "Requests: 0")));
-        paintDot(spDot,  "Shortest Path",     truthy(s.get("shortestpath")));
-        paintDot(tcgDot, "OSRS TCG",          truthy(s.get("osrstcg")));
-        paintDot(invDot, "Inventory Setups",  truthy(s.get("inventorysetups")));
-    }
-
-    private static boolean truthy(Object o) { return Boolean.TRUE.equals(o); }
-
-    private void paintDot(JLabel label, String name, boolean on)
-    {
-        label.setText("⬤ " + name);
-        label.setForeground(on ? GREEN : ColorScheme.MEDIUM_GRAY_COLOR);
-        label.setToolTipText(on ? name + " is enabled -- its tools will work." : name + " is not enabled; its tools return unavailable.");
-    }
-
-    private JPanel buildIntegrationsSection()
-    {
-        JPanel p = box(true);
-        dataStatusLabel.setFont(FontManager.getRunescapeSmallFont());
-        dataStatusLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        dataStatusLabel.setAlignmentX(LEFT_ALIGNMENT);
-        activityLabel.setFont(FontManager.getRunescapeSmallFont());
-        activityLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        activityLabel.setAlignmentX(LEFT_ALIGNMENT);
-        p.add(dataStatusLabel);
-        p.add(Box.createVerticalStrut(2));
-        p.add(activityLabel);
-        p.add(Box.createVerticalStrut(4));
-        for (JLabel dot : new JLabel[]{ spDot, tcgDot, invDot })
-        {
-            dot.setFont(FontManager.getRunescapeSmallFont());
-            dot.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
-            dot.setAlignmentX(LEFT_ALIGNMENT);
-            p.add(dot);
-        }
-        return p;
-    }
-
-    public void setRestartCallback(Runnable cb)              { this.restartCallback  = cb; }
-    public void setConfigManager(ConfigManager cm)           { this.configManager = cm; }
-    public void setTailscaleService(TailscaleService ts)     { this.tailscaleService = ts; }
-
-    // ── SECTION BUILDERS ─────────────────────────────────────────────────────
-
-    private JPanel buildStatusSection()
-    {
-        JPanel p = new JPanel();
-        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        p.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
+        JPanel p = col(ColorScheme.DARK_GRAY_COLOR);
         JLabel title = new JLabel("OSRS MCP");
         title.setForeground(Color.WHITE);
         title.setFont(FontManager.getRunescapeBoldFont());
         title.setAlignmentX(LEFT_ALIGNMENT);
         p.add(title);
-        p.add(Box.createVerticalStrut(6));
+        p.add(vGap(6));
 
-        JPanel statusRow = hRow();
         statusDot.setFont(statusDot.getFont().deriveFont(9f));
         statusDot.setForeground(Color.GRAY);
         statusText.setFont(FontManager.getRunescapeSmallFont());
         statusText.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        statusRow.add(statusDot);
-        statusRow.add(Box.createHorizontalStrut(4));
-        statusRow.add(statusText);
-        p.add(statusRow);
+        JPanel sr = row();
+        sr.add(statusDot); sr.add(Box.createHorizontalStrut(5)); sr.add(statusText);
+        p.add(sr);
 
-        JPanel modeRow = hRow();
-        statusMode.setFont(FontManager.getRunescapeSmallFont());
-        statusMode.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
-        modeRow.add(statusMode);
-        p.add(modeRow);
-
-        JPanel stateRow = hRow();
-        gameStateLabel.setFont(FontManager.getRunescapeSmallFont());
-        gameStateLabel.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
-        stateRow.add(gameStateLabel);
-        p.add(stateRow);
-
-        JPanel urlRow = hRow();
-        localUrlLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
-        localUrlLabel.setForeground(ColorScheme.BRAND_ORANGE);
-        urlRow.add(localUrlLabel);
-        p.add(urlRow);
-
-        p.add(Box.createVerticalStrut(6));
-        styleButton(restartButton);
-        restartButton.setAlignmentX(LEFT_ALIGNMENT);
-        restartButton.addActionListener(e -> {
-            if (restartCallback != null)
-            {
-                restartButton.setEnabled(false);
-                restartButton.setText("Restarting...");
-                new Thread(() -> {
-                    restartCallback.run();
-                    SwingUtilities.invokeLater(() -> {
-                        restartButton.setEnabled(true);
-                        restartButton.setText("Restart server");
-                    });
-                }, "osrs-mcp-restart").start();
-            }
-        });
-        p.add(restartButton);
+        gameState.setFont(FontManager.getRunescapeSmallFont());
+        gameState.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
+        gameState.setAlignmentX(LEFT_ALIGNMENT);
+        p.add(vGap(2));
+        p.add(gameState);
         return p;
     }
 
-    private JPanel buildSetupSection()
+    private JPanel buildConnectCard()
     {
-        JPanel p = box(true);
-        p.add(smallLabel("1. Add to Claude Desktop config:"));
-        p.add(Box.createVerticalStrut(4));
-        styleCodeBlock(setupCodeBlock);
-        refreshSetupBlock();
-        p.add(setupCodeBlock);
-        p.add(Box.createVerticalStrut(4));
+        JPanel p = card();
+        endpointField.setEditable(false);
+        endpointField.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        endpointField.setForeground(MONO_ORANGE);
+        endpointField.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        endpointField.setBorder(new EmptyBorder(3, 4, 3, 4));
+        endpointField.setAlignmentX(LEFT_ALIGNMENT);
+        endpointField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+        p.add(endpointField);
+        p.add(vGap(6));
+
+        styleButton(copyUrlBtn);
+        copyUrlBtn.addActionListener(e -> copy(endpointField.getText(), copyUrlBtn, "Copy URL"));
         styleButton(copyConfigBtn);
-        copyConfigBtn.setAlignmentX(LEFT_ALIGNMENT);
-        copyConfigBtn.addActionListener(e -> {
-            String text = setupCodeBlock.getText();
-            if (text != null && !text.isEmpty())
-            {
-                Toolkit.getDefaultToolkit().getSystemClipboard()
-                    .setContents(new StringSelection(text), null);
-                flash(copyConfigBtn, "Copied!", "Copy config");
-            }
-        });
-        p.add(copyConfigBtn);
-        p.add(Box.createVerticalStrut(6));
-        p.add(smallLabel("2. Restart Claude Desktop."));
-        p.add(Box.createVerticalStrut(2));
-        p.add(smallLabel("3. Ask your AI about your stats!"));
+        copyConfigBtn.addActionListener(e -> copy(configHolder.getText(), copyConfigBtn, "Copy client config"));
+        JPanel btns = row();
+        btns.add(copyUrlBtn); btns.add(Box.createHorizontalStrut(6)); btns.add(copyConfigBtn);
+        p.add(btns);
+
+        // Tailscale line (only shown in Tailscale mode)
+        tailscaleLine = col(CARD_BG);
+        tailscaleLine.add(vGap(6));
+        tailscaleLabel.setFont(FontManager.getRunescapeSmallFont());
+        tailscaleLabel.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
+        tailscaleLabel.setAlignmentX(LEFT_ALIGNMENT);
+        tailscaleLine.add(tailscaleLabel);
+        styleButton(installTailscaleBtn);
+        installTailscaleBtn.addActionListener(e -> copy("https://tailscale.com/download", installTailscaleBtn, "Copy tailscale.com"));
+        tailscaleLine.add(vGap(4));
+        tailscaleLine.add(installTailscaleBtn);
+        tailscaleLine.setVisible(false);
+        p.add(tailscaleLine);
+
+        p.add(vGap(6));
+        JLabel hint = wrap("Add this to your AI client, then ask it about your account.");
+        p.add(hint);
         return p;
     }
 
-    private JPanel buildTailscaleSection()
+    private JPanel buildActivityCard()
     {
-        JPanel outer = new JPanel();
-        outer.setLayout(new BoxLayout(outer, BoxLayout.Y_AXIS));
-        outer.setBackground(SECTION_BG);
-        outer.setAlignmentX(LEFT_ALIGNMENT);
-        outer.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        outer.setBorder(new CompoundBorder(
-            new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
-            new EmptyBorder(6, 8, 8, 8)
-        ));
-        outer.add(buildStep("1", tailscaleStep1Label, buildTailscaleStep1Buttons()));
-        outer.add(Box.createVerticalStrut(4));
-        outer.add(buildStep("2", tailscaleStep2Label, null));
-        outer.add(Box.createVerticalStrut(4));
-        outer.add(buildStep("3", tailscaleStep3Label, null));
-        return outer;
-    }
+        JPanel p = card();
+        requestCount.setFont(FontManager.getRunescapeBoldFont());
+        requestCount.setForeground(Color.WHITE);
+        requestCount.setAlignmentX(LEFT_ALIGNMENT);
+        p.add(requestCount);
+        p.add(vGap(4));
 
-    private JPanel buildTailscaleStep1Buttons()
-    {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        p.setBackground(SECTION_BG);
-        p.setAlignmentX(LEFT_ALIGNMENT);
-        styleButton(copyTailscaleUrlBtn);
-        copyTailscaleUrlBtn.addActionListener(e -> {
-            Toolkit.getDefaultToolkit().getSystemClipboard()
-                .setContents(new StringSelection("https://tailscale.com/download"), null);
-            flash(copyTailscaleUrlBtn, "Copied!", "Copy tailscale.com");
-        });
-        p.add(copyTailscaleUrlBtn);
-        return p;
-    }
+        activityEmpty.setFont(FontManager.getRunescapeSmallFont());
+        activityEmpty.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
+        activityEmpty.setAlignmentX(LEFT_ALIGNMENT);
+        p.add(activityEmpty);
 
-    private JPanel buildStep(String number, JLabel label, JPanel buttons)
-    {
-        JPanel p = new JPanel();
-        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        p.setBackground(SECTION_BG);
-        p.setAlignmentX(LEFT_ALIGNMENT);
-        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-
-        JPanel row = new JPanel(new BorderLayout(6, 0));
-        row.setBackground(SECTION_BG);
-        row.setAlignmentX(LEFT_ALIGNMENT);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-
-        JLabel num = new JLabel(number + ".");
-        num.setFont(FontManager.getRunescapeSmallFont());
-        num.setForeground(STEP_TODO);
-        num.setPreferredSize(new Dimension(14, 20));
-        num.setVerticalAlignment(SwingConstants.TOP);
-
-        label.setFont(FontManager.getRunescapeSmallFont());
-        label.setForeground(STEP_TODO);
-        label.setVerticalAlignment(SwingConstants.TOP);
-
-        row.add(num, BorderLayout.WEST);
-        row.add(label, BorderLayout.CENTER);
-        p.add(row);
-
-        if (buttons != null)
+        for (int i = 0; i < ACTIVITY_ROWS; i++)
         {
-            p.add(Box.createVerticalStrut(3));
-            p.add(buttons);
+            actName[i] = new JLabel();
+            actName[i].setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
+            actName[i].setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+            actAge[i] = new JLabel();
+            actAge[i].setFont(FontManager.getRunescapeSmallFont());
+            actAge[i].setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
+            actAge[i].setHorizontalAlignment(SwingConstants.RIGHT);
+            JPanel r = new JPanel(new BorderLayout(6, 0));
+            r.setBackground(CARD_BG);
+            r.setBorder(new EmptyBorder(1, 0, 1, 0));
+            r.setMaximumSize(new Dimension(Integer.MAX_VALUE, 16));
+            r.setAlignmentX(LEFT_ALIGNMENT);
+            r.add(actName[i], BorderLayout.WEST);
+            r.add(actAge[i], BorderLayout.EAST);
+            r.setVisible(false);
+            actRow[i] = r;
+            p.add(r);
         }
         return p;
     }
 
-    public void refreshSectionsForMode(ConnectionMode mode)
+    private JPanel buildIntegrationsCard()
     {
-        SwingUtilities.invokeLater(() -> {
-            currentMode = mode;
-            refreshSections();
+        JPanel p = card();
+        questData.setFont(FontManager.getRunescapeSmallFont());
+        questData.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        questData.setAlignmentX(LEFT_ALIGNMENT);
+        p.add(questData);
+        p.add(vGap(4));
+        styleButton(reloadBtn);
+        reloadBtn.addActionListener(e -> {
+            if (reloadCallback == null) return;
+            reloadBtn.setEnabled(false);
+            reloadBtn.setText("Refreshing…");
+            new Thread(() -> {
+                try { reloadCallback.run(); } catch (Exception ignored) {}
+                SwingUtilities.invokeLater(() -> { reloadBtn.setEnabled(true); reloadBtn.setText("Refresh data"); refreshStatus(); });
+            }, "osrs-mcp-reload").start();
         });
+        p.add(reloadBtn);
+        p.add(vGap(6));
+        for (JLabel d : new JLabel[]{ spDot, tcgDot, invDot })
+        {
+            d.setFont(FontManager.getRunescapeSmallFont());
+            d.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
+            d.setAlignmentX(LEFT_ALIGNMENT);
+            p.add(d);
+            p.add(vGap(1));
+        }
+        return p;
     }
 
-    private void refreshSections()
+    private JPanel buildFooter()
     {
-        boolean isTailscale = currentMode == ConnectionMode.TAILSCALE;
-        if (tailscaleHeaderRef != null) tailscaleHeaderRef.setVisible(isTailscale);
-        if (tailscalePanelRef != null)  tailscalePanelRef.setVisible(isTailscale);
-        refreshTailscaleSteps();
-        if (rootPanel != null) { rootPanel.revalidate(); rootPanel.repaint(); }
+        JPanel p = col(ColorScheme.DARK_GRAY_COLOR);
+        styleButton(restartBtn);
+        restartBtn.addActionListener(e -> {
+            if (restartCallback == null) return;
+            restartBtn.setEnabled(false);
+            restartBtn.setText("Restarting…");
+            new Thread(() -> {
+                restartCallback.run();
+                SwingUtilities.invokeLater(() -> { restartBtn.setEnabled(true); restartBtn.setText("Restart server"); });
+            }, "osrs-mcp-restart").start();
+        });
+        p.add(restartBtn);
+        p.add(vGap(4));
+        toolsNote.setFont(FontManager.getRunescapeSmallFont());
+        toolsNote.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
+        toolsNote.setAlignmentX(LEFT_ALIGNMENT);
+        toolsNote.setText("Live account + wiki + planner + progress + plugin tools.");
+        p.add(toolsNote);
+        return p;
+    }
+
+    // ── live refresh ────────────────────────────────────────────────────────
+
+    private void refreshStatus()
+    {
+        if (statusSupplier == null) return;
+        Map<String, Object> s;
+        try { s = statusSupplier.get(); } catch (Exception ex) { return; }
+        if (s == null) return;
+
+        questData.setText("Quest data: " + s.getOrDefault("quest_data", "—"));
+        long n = s.get("request_count") instanceof Number ? ((Number) s.get("request_count")).longValue() : 0;
+        requestCount.setText(n + (n == 1 ? " request" : " requests"));
+
+        paintDot(spDot,  "Shortest Path",    Boolean.TRUE.equals(s.get("shortestpath")));
+        paintDot(tcgDot, "OSRS TCG",         Boolean.TRUE.equals(s.get("osrstcg")));
+        paintDot(invDot, "Inventory Setups", Boolean.TRUE.equals(s.get("inventorysetups")));
+
+        Object recent = s.get("recent");
+        int shown = 0;
+        if (recent instanceof List)
+        {
+            List<?> list = (List<?>) recent;
+            for (int i = 0; i < ACTIVITY_ROWS && i < list.size(); i++)
+            {
+                if (!(list.get(i) instanceof Map)) continue;
+                Map<?, ?> row = (Map<?, ?>) list.get(i);
+                actName[i].setText(String.valueOf(row.get("name")));
+                actAge[i].setText(fmtAge(row.get("age")));
+                actRow[i].setVisible(true);
+                shown++;
+            }
+        }
+        for (int i = shown; i < ACTIVITY_ROWS; i++) actRow[i].setVisible(false);
+        activityEmpty.setVisible(shown == 0);
+
         revalidate();
         repaint();
     }
 
-    private void refreshTailscaleSteps()
+    private static String fmtAge(Object ageObj)
     {
-        if (tailscaleService == null) return;
-        boolean running = tailscaleService.isRunning();
-        String ip = tailscaleService.getTailscaleIp();
-
-        if (running && ip != null)
-        {
-            tailscaleStep1Label.setText("<html>Tailscale running on this device</html>");
-            tailscaleStep1Label.setForeground(STEP_DONE);
-            copyTailscaleUrlBtn.setVisible(false);
-            tailscaleStep2Label.setText("<html>Sign in with the same account on your other device</html>");
-            tailscaleStep2Label.setForeground(STEP_DONE);
-            tailscaleStep3Label.setText("<html>Active! Connect using: http://" + ip + ":" + currentPort + "/mcp</html>");
-            tailscaleStep3Label.setForeground(STEP_DONE);
-        }
-        else
-        {
-            tailscaleStep1Label.setText("<html>Install Tailscale on this device (free)</html>");
-            tailscaleStep1Label.setForeground(STEP_ACTIVE);
-            copyTailscaleUrlBtn.setVisible(true);
-            tailscaleStep2Label.setText("<html>Sign in with the same Tailscale account on both devices</html>");
-            tailscaleStep2Label.setForeground(STEP_TODO);
-            tailscaleStep3Label.setText("<html>Come back here and click Restart server</html>");
-            tailscaleStep3Label.setForeground(STEP_TODO);
-        }
+        long a = ageObj instanceof Number ? ((Number) ageObj).longValue() : 0;
+        if (a < 60) return a + "s ago";
+        if (a < 3600) return (a / 60) + "m ago";
+        return (a / 3600) + "h ago";
     }
 
-    private void refreshSetupBlock()
+    private void paintDot(JLabel label, String name, boolean on)
     {
-        String url;
-        String argsLine;
-        switch (currentMode)
-        {
-            case LAN:
-                String ip = currentLanIp != null ? currentLanIp : "YOUR_LAN_IP";
-                url = "http://" + ip + ":" + currentPort + "/mcp";
-                argsLine = "      \"" + url + "\",\n      \"--allow-http\"]";
-                break;
-            case TAILSCALE:
-                String tsIp = currentLanIp != null ? currentLanIp : "YOUR_TAILSCALE_IP";
-                url = "http://" + tsIp + ":" + currentPort + "/mcp";
-                argsLine = "      \"" + url + "\",\n      \"--allow-http\"]";
-                break;
-            default:
-                url = "http://127.0.0.1:" + currentPort + "/mcp";
-                argsLine = "      \"" + url + "\"]";
-                break;
-        }
-        setupCodeBlock.setText(
-            "\"osrs\": {\n" +
-            "  \"command\": \"npx\",\n" +
-            "  \"args\": [\"mcp-remote\",\n" +
-            argsLine + "\n" +
-            "}"
-        );
+        label.setText("⬤ " + name);
+        label.setForeground(on ? GREEN : ColorScheme.MEDIUM_GRAY_COLOR);
+        label.setToolTipText(on ? name + " is enabled — its tools will work."
+                                : name + " is not enabled; its tools return unavailable.");
     }
 
-    private JPanel buildToolsSection()
-    {
-        JPanel p = box(false);
-        String[][] tools = {
-            {"get_all",               "All data in one call"},
-            {"get_player_stats",      "Skill levels & XP"},
-            {"get_equipment",         "Equipped gear by slot"},
-            {"get_inventory",         "Inventory contents"},
-            {"get_location",          "World coords & area"},
-            {"get_quest_states",      "All quest progress"},
-            {"get_diary_states",      "Achievement diary tiers"},
-            {"get_slayer_task",       "Current Slayer task"},
-            {"get_clue_scroll",       "Active clue scroll tier"},
-            {"get_ge_offers",         "GE offer slots"},
-            {"get_installed_plugins", "Installed plugins"},
-            {"get_bank_summary",      "Bank value & coins"},
-            {"get_bank_classified",   "Bank by category"},
-            {"get_bank_top_value",    "Top bank items by value"},
-            {"get_farming_patches",   "Herb patch states"},
-            {"get_seed_vault",        "Seed vault contents"},
-            {"get_drop_table",        "Monster drops + GP/kill"},
-            {"get_equipment_stats",   "Equipment bonuses & max hit"},
-            {"get_bis_comparison",    "BiS gear comparison"},
-            {"get_combat_context",    "Combat context & potions"},
-            {"get_boss_kc",           "Boss kill counts"},
-            {"get_npc_info",          "Monster stats from Wiki"},
-            {"get_flip_suggestions",  "GE flip candidates"},
-            {"get_price_trends",      "Price trend data"},
-            {"get_cache_index",       "List cache files"},
-            {"read_cache",            "Read a cache file"},
-            {"get_quest_rewards",     "Quest reqs + XP, live-checked"},
-            {"project_plan",          "Simulate quests/training exactly"},
-            {"get_training_methods",  "XP/hr per method"},
-            {"get_optimal_quest_route","Wiki quest order + your state"},
-            {"get_next_goals",        "Ranked next actions"},
-            {"wiki_search",           "Search the wiki (prose)"},
-            {"wiki_get_page",         "Read a wiki page"},
-            {"wiki_bucket_query",     "Structured wiki data"},
-            {"get_wom_profile",       "Wise Old Man overview"},
-            {"get_wom_gains",         "Recent XP/KC gains"},
-            {"get_farm_run",          "Herb-run assistant"},
-            {"path_to",               "Draw route (Shortest Path)"},
-            {"get_tcg_unlocks",       "OSRS TCG owned cards"},
-            {"get_inventory_setups",  "Your gear presets"},
-            {"export_inventory_setup","Make an importable setup"},
-            {"reload_planner_data",   "Refresh data, no restart"},
-        };
-        for (String[] t : tools) p.add(buildToolRow(t[0], t[1]));
-        return p;
-    }
-
-    // ── COMPONENT HELPERS ────────────────────────────────────────────────────
-
-    private JSeparator buildSeparator()
-    {
-        JSeparator s = new JSeparator();
-        s.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
-        s.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        s.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
-        s.setAlignmentX(LEFT_ALIGNMENT);
-        return s;
-    }
-
-    private JLabel buildSectionHeader(String text)
-    {
-        JLabel l = new JLabel(text);
-        l.setFont(FontManager.getRunescapeSmallFont());
-        l.setForeground(ColorScheme.BRAND_ORANGE);
-        l.setAlignmentX(LEFT_ALIGNMENT);
-        return l;
-    }
-
-    private JPanel buildToolRow(String name, String desc)
-    {
-        JPanel row = new JPanel(new BorderLayout(6, 0));
-        row.setBackground(SECTION_BG);
-        row.setBorder(new EmptyBorder(4, 8, 4, 8));
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
-        row.setAlignmentX(LEFT_ALIGNMENT);
-        JLabel n = new JLabel(name);
-        n.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
-        n.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        JLabel d = new JLabel(desc);
-        d.setFont(FontManager.getRunescapeSmallFont());
-        d.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
-        d.setHorizontalAlignment(SwingConstants.RIGHT);
-        row.add(n, BorderLayout.WEST);
-        row.add(d, BorderLayout.EAST);
-        return row;
-    }
-
-    private JPanel hRow()
-    {
-        JPanel p = new JPanel();
-        p.setLayout(new BoxLayout(p, BoxLayout.X_AXIS));
-        p.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        p.setAlignmentX(LEFT_ALIGNMENT);
-        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 18));
-        return p;
-    }
-
-    private JPanel box(boolean padded)
-    {
-        JPanel p = new JPanel();
-        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        p.setBackground(SECTION_BG);
-        p.setAlignmentX(LEFT_ALIGNMENT);
-        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        int pad = padded ? 8 : 4;
-        p.setBorder(new CompoundBorder(
-            new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
-            new EmptyBorder(pad, padded ? 8 : 0, pad, padded ? 8 : 0)
-        ));
-        return p;
-    }
-
-    private JLabel smallLabel(String text)
-    {
-        JLabel l = new JLabel(text);
-        l.setFont(FontManager.getRunescapeSmallFont());
-        l.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
-        l.setAlignmentX(LEFT_ALIGNMENT);
-        return l;
-    }
-
-    private void styleCodeBlock(JTextArea area)
-    {
-        area.setEditable(false);
-        area.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        area.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
-        area.setLineWrap(false);
-        area.setBorder(new EmptyBorder(2, 2, 2, 2));
-        area.setAlignmentX(LEFT_ALIGNMENT);
-        area.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
-    }
-
-    private void styleButton(JButton btn)
-    {
-        btn.setFont(FontManager.getRunescapeSmallFont());
-        btn.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        btn.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
-        btn.setBorder(new EmptyBorder(4, 8, 4, 8));
-        btn.setFocusPainted(false);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
-    }
-
-    private void flash(JButton btn, String flashText, String original)
-    {
-        btn.setText(flashText);
-        Timer t = new Timer(1500, e -> btn.setText(original));
-        t.setRepeats(false);
-        t.start();
-    }
-
-    // ── PUBLIC STATE METHODS ─────────────────────────────────────────────────
+    // ── public state (called by the plugin) ─────────────────────────────────
 
     public void setServerRunning(boolean running, int port, ConnectionMode mode, String lanIp)
     {
         SwingUtilities.invokeLater(() ->
         {
-            currentPort  = port;
-            currentMode  = mode;
+            currentPort = port;
+            currentMode = mode;
             currentLanIp = running ? lanIp : null;
             statusDot.setForeground(running ? GREEN : Color.GRAY);
-            statusText.setText(running ? "MCP server running" : "MCP server stopped");
-            statusMode.setText(running ? "Mode: " + mode : "");
-            if (running)
+            statusText.setText(running ? "Server running · port " + port + " · " + mode : "Server stopped");
+            endpointField.setText(running ? endpointUrl() : "");
+            copyUrlBtn.setEnabled(running);
+            copyConfigBtn.setEnabled(running);
+
+            boolean ts = mode == ConnectionMode.TAILSCALE;
+            tailscaleLine.setVisible(ts);
+            if (ts)
             {
-                String displayUrl;
-                if (mode == ConnectionMode.LOCAL)
-                    displayUrl = "http://127.0.0.1:" + port + "/mcp";
-                else if ((mode == ConnectionMode.LAN || mode == ConnectionMode.TAILSCALE) && lanIp != null)
-                    displayUrl = "http://" + lanIp + ":" + port + "/mcp";
-                else if (mode == ConnectionMode.TAILSCALE && lanIp == null)
-                    displayUrl = "Tailscale not detected — install tailscale.com";
-                else
-                    displayUrl = "";
-                localUrlLabel.setText(displayUrl);
+                tailscaleLabel.setText(lanIp != null ? "Tailscale IP: " + lanIp : "Tailscale not detected");
+                installTailscaleBtn.setVisible(lanIp == null);
             }
-            else localUrlLabel.setText("");
-            refreshSetupBlock();
-            refreshSections();
+            refreshConfig();
+            revalidate();
+            repaint();
         });
     }
 
@@ -617,22 +389,125 @@ public class OsrsMcpPanel extends PluginPanel
         {
             switch (state)
             {
-                case LOGGED_IN:
-                    gameStateLabel.setForeground(GREEN);
-                    gameStateLabel.setText("Logged in");
-                    break;
-                case LOGIN_SCREEN:
-                    gameStateLabel.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
-                    gameStateLabel.setText("Login screen");
-                    break;
-                case LOADING:
-                    gameStateLabel.setForeground(ColorScheme.BRAND_ORANGE);
-                    gameStateLabel.setText("Loading...");
-                    break;
-                default:
-                    gameStateLabel.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
-                    gameStateLabel.setText(state.name().toLowerCase());
+                case LOGGED_IN:    gameState.setForeground(GREEN); gameState.setText("⬤ Logged in"); break;
+                case LOGIN_SCREEN: gameState.setForeground(ColorScheme.MEDIUM_GRAY_COLOR); gameState.setText("⬤ Login screen"); break;
+                case LOADING:      gameState.setForeground(MONO_ORANGE); gameState.setText("⬤ Loading…"); break;
+                default:           gameState.setForeground(ColorScheme.MEDIUM_GRAY_COLOR); gameState.setText("⬤ " + state.name().toLowerCase());
             }
         });
+    }
+
+    public void refreshSectionsForMode(ConnectionMode mode)
+    {
+        SwingUtilities.invokeLater(() ->
+        {
+            currentMode = mode;
+            boolean ts = mode == ConnectionMode.TAILSCALE;
+            if (tailscaleLine != null) tailscaleLine.setVisible(ts);
+            endpointField.setText(endpointUrl());
+            refreshConfig();
+            revalidate();
+            repaint();
+        });
+    }
+
+    // ── helpers ─────────────────────────────────────────────────────────────
+
+    private String endpointUrl()
+    {
+        switch (currentMode)
+        {
+            case LAN:       return "http://" + (currentLanIp != null ? currentLanIp : "YOUR_LAN_IP") + ":" + currentPort + "/mcp";
+            case TAILSCALE: return "http://" + (currentLanIp != null ? currentLanIp : "YOUR_TAILSCALE_IP") + ":" + currentPort + "/mcp";
+            default:        return "http://127.0.0.1:" + currentPort + "/mcp";
+        }
+    }
+
+    private void refreshConfig()
+    {
+        String url = endpointUrl();
+        boolean local = currentMode == ConnectionMode.LOCAL;
+        String argsLine = local ? "      \"" + url + "\"]" : "      \"" + url + "\",\n      \"--allow-http\"]";
+        configHolder.setText(
+            "\"osrs\": {\n" +
+            "  \"command\": \"npx\",\n" +
+            "  \"args\": [\"mcp-remote\",\n" +
+            argsLine + "\n" +
+            "}");
+    }
+
+    private void copy(String text, JButton btn, String original)
+    {
+        if (text == null || text.isEmpty()) return;
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+        btn.setText("Copied!");
+        Timer t = new Timer(1400, e -> btn.setText(original));
+        t.setRepeats(false);
+        t.start();
+    }
+
+    private JLabel header(String text)
+    {
+        JLabel l = new JLabel(text.toUpperCase());
+        l.setFont(FontManager.getRunescapeSmallFont());
+        l.setForeground(ColorScheme.BRAND_ORANGE);
+        l.setAlignmentX(LEFT_ALIGNMENT);
+        return l;
+    }
+
+    private JLabel wrap(String text)
+    {
+        JLabel l = new JLabel("<html><body style='width:150px'>" + text + "</body></html>");
+        l.setFont(FontManager.getRunescapeSmallFont());
+        l.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
+        l.setAlignmentX(LEFT_ALIGNMENT);
+        return l;
+    }
+
+    private JPanel card()
+    {
+        JPanel p = new JPanel();
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+        p.setBackground(CARD_BG);
+        p.setAlignmentX(LEFT_ALIGNMENT);
+        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        p.setBorder(new CompoundBorder(
+            new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
+            new EmptyBorder(8, 8, 8, 8)));
+        return p;
+    }
+
+    private JPanel col(Color bg)
+    {
+        JPanel p = new JPanel();
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+        p.setBackground(bg);
+        p.setAlignmentX(LEFT_ALIGNMENT);
+        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        return p;
+    }
+
+    private JPanel row()
+    {
+        JPanel p = new JPanel();
+        p.setLayout(new BoxLayout(p, BoxLayout.X_AXIS));
+        p.setBackground(CARD_BG);
+        p.setAlignmentX(LEFT_ALIGNMENT);
+        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
+        return p;
+    }
+
+    private Component vGap(int h) { return Box.createVerticalStrut(h); }
+
+    private void styleButton(JButton btn)
+    {
+        btn.setFont(FontManager.getRunescapeSmallFont());
+        btn.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        btn.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+        btn.setBorder(new EmptyBorder(5, 10, 5, 10));
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setAlignmentX(LEFT_ALIGNMENT);
+        btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
     }
 }

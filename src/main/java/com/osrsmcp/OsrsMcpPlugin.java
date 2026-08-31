@@ -58,6 +58,7 @@ public class OsrsMcpPlugin extends Plugin
         cacheWriter.init();
         panel.setTailscaleService(tailscaleService);
         panel.setConfigManager(configManager);
+        panel.setReloadCallback(() -> questPlanService.reloadData());
         panel.setStatusSupplier(this::buildPanelStatus);
         startServer();
 
@@ -91,15 +92,17 @@ public class OsrsMcpPlugin extends Plugin
         }
         catch (Exception e) { s.put("quest_data", "--"); }
 
-        long n = mcpServer.getRequestCount();
-        String last = mcpServer.getLastToolName();
-        String act = "Requests: " + n;
-        if (last != null)
+        s.put("request_count", mcpServer.getRequestCount());
+        java.util.List<java.util.Map<String, Object>> recent = new java.util.ArrayList<>();
+        long now = System.currentTimeMillis();
+        for (Object[] c : mcpServer.getRecentCalls())
         {
-            long age = (System.currentTimeMillis() - mcpServer.getLastToolAtMs()) / 1000;
-            act += " · last " + last + " " + age + "s ago";
+            java.util.Map<String, Object> r = new java.util.LinkedHashMap<>();
+            r.put("name", c[0]);
+            r.put("age", (now - (Long) c[1]) / 1000);
+            recent.add(r);
         }
-        s.put("activity", act);
+        s.put("recent", recent);
 
         s.put("shortestpath",    isPluginEnabled("Shortest Path"));
         s.put("osrstcg",         isPluginEnabled("OSRS TCG"));

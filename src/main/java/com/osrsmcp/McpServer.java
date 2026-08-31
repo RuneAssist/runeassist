@@ -93,9 +93,21 @@ public class McpServer
     private final java.util.concurrent.atomic.AtomicLong requestCount = new java.util.concurrent.atomic.AtomicLong();
     private volatile String lastToolName = null;
     private volatile long lastToolAtMs = 0;
+    private final java.util.Deque<Object[]> recentCalls = new java.util.concurrent.ConcurrentLinkedDeque<>();
     public long getRequestCount()   { return requestCount.get(); }
     public String getLastToolName() { return lastToolName; }
     public long getLastToolAtMs()   { return lastToolAtMs; }
+    /** Recent tool calls, newest first, as {String name, Long atMs}. */
+    public java.util.List<Object[]> getRecentCalls() { return new java.util.ArrayList<>(recentCalls); }
+
+    private void recordCall(String tool)
+    {
+        requestCount.incrementAndGet();
+        lastToolName = tool;
+        lastToolAtMs = System.currentTimeMillis();
+        recentCalls.addFirst(new Object[]{ tool, lastToolAtMs });
+        while (recentCalls.size() > 8) recentCalls.removeLast();
+    }
     private final Set<SseClient> sseClients = ConcurrentHashMap.newKeySet();
 
     public void start(int port) throws IOException
@@ -178,9 +190,7 @@ public class McpServer
         String toolName = params.has("name") ? params.get("name").getAsString() : "";
         JsonObject arguments = params.has("arguments") ? params.getAsJsonObject("arguments") : new JsonObject();
 
-        requestCount.incrementAndGet();
-        lastToolName = toolName;
-        lastToolAtMs = System.currentTimeMillis();
+        recordCall(toolName);
 
         Map<String, Object> toolResult;
         if (NETWORK_TOOLS.contains(toolName))
