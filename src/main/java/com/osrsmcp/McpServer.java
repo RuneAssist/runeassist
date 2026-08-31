@@ -33,6 +33,8 @@ public class McpServer
     private static final String INSTRUCTIONS =
         "This server exposes live Old School RuneScape (OSRS) data for the connected RuneLite account. "
         + "RESPONSE STYLE (important): keep it digestible and match depth to the question. Lead with the single biggest takeaway. For 'what next', give at MOST 2 concrete next moves, each from a DIFFERENT category (skilling / combat i.e. slayer or bossing / a single quest / a diary / money-making or flipping) -- pick the 2 with the best value now, then offer the rest ('want combat, money-making or diary ideas instead?'). Be realistic about scale: never present something gated behind a huge grind (e.g. a diary needing a skill dozens of levels above the player's current) as a near-term step -- name the grind and set it aside. For any SKILLING suggestion, ALWAYS give the method, its XP/hr and the rough hours to the target (use get_training_methods + the XP gap) and where to train (path_to can draw the route). For QUESTS, suggest ONE high-value quest, not a batch. Do NOT open with a giant multi-step plan; ASK 'want the full plan?' before dumping one, and even then lead with a 2-3 line TL;DR. A few lines or a small table beats paragraphs.\n"
+        + "TIME BUDGET: if the player says how long they have ('I have 30 mins'), only suggest things that FIT -- use get_training_methods XP/hr and get_dailies times to size it, and say roughly what they'll get done. Short sessions (<30 min) suit a dailies sweep (get_dailies), a farm/bird-house run, a slayer task, or a chunk of a skilling method; save long quests/grinds for when they have time. Prefer things that fit the window over the theoretically-optimal.\n"
+        + "DAILIES: for 'what are my dailies / recurring tasks', call get_dailies (battlestaves, herb boxes, Miscellania, farm/tree/bird-house runs, etc.) and get_farm_run for live patch state; list what's available now with rough times.\n"
         + "When giving advice:\n"
         + "- Always call get_all first for a cheap overview, then drill in with specific tools.\n"
         + "- Respect account type: check is_ironman/is_uim/is_hcim in stats. Ironmen cannot buy gear on the GE (bonds only), so never suggest 'just buy X' for them; suggest how to obtain it instead.\n"
@@ -248,6 +250,7 @@ public class McpServer
             case "get_quest_rewards": return questPlanService.buildQuestRewards();
             case "project_plan":      return questPlanService.buildProjectPlan(jsonToMap(args));
             case "get_training_methods": return questPlanService.buildTrainingMethods(jsonToMap(args));
+            case "get_dailies":          return questPlanService.buildDailies();
             case "get_optimal_quest_route": return questPlanService.buildOptimalQuestRoute(jsonToMap(args));
             case "reload_planner_data": return questPlanService.reloadData();
             case "get_slayer_task":   return playerDataService.buildSlayerTask();
@@ -565,6 +568,7 @@ public class McpServer
             props.add("skill", strProp("Optional skill to filter to, e.g. 'agility'."));
             tools.add(buildToolWithSchema("get_training_methods", "Curated training methods with approximate XP/hr and start requirements, so you can reason about TIME not just XP. Optionally filter by skill. When logged in, each method is annotated with meets_requirements and your current_level. Rates are ballpark and dated -- state that when advising.", props, new String[]{}));
         }
+        tools.add(buildTool("get_dailies", "Daily / weekly / recurring tasks (battlestaves, herb boxes, Miscellania, farm/tree/bird-house runs, buckets of sand, Tears of Guthix), requirement-checked live so 'available' = doable now with rough times. Use for 'what are my dailies' and as quick fillers for short play sessions. Pair with get_farm_run for live patch state."));
         {
             JsonObject props = new JsonObject();
             JsonObject onlyRem = new JsonObject(); onlyRem.addProperty("type", "boolean"); onlyRem.addProperty("description", "If true, omit already-completed quests and return only what's left of the route.");

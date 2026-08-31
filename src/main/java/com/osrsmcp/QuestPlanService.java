@@ -114,7 +114,7 @@ public class QuestPlanService
     /** Clear caches so the next call re-reads from EXTERNAL_DIR (or bundled). Used by reload_planner_data. */
     public synchronized Map<String, Object> reloadData()
     {
-        questData = null; optimalOrder = null; trainingData = null;
+        questData = null; optimalOrder = null; trainingData = null; dailiesList = null;
         questSource = "?"; questGenerated = "?";
         data();
         Map<String, Object> td = trainingData();
@@ -393,6 +393,62 @@ public class QuestPlanService
         Map<String, Object> m = new LinkedHashMap<>();
         m.put(k1, v1); m.put(k2, v2);
         return m;
+    }
+
+    // --- get_dailies --------------------------------------------------------
+
+    private static final String DAILIES_RESOURCE = "/com/osrsmcp/dailies.json";
+    private volatile List<Object> dailiesList;
+
+    @SuppressWarnings("unchecked")
+    private List<Object> dailies()
+    {
+        List<Object> d = dailiesList;
+        if (d != null) return d;
+        synchronized (this)
+        {
+            if (dailiesList != null) return dailiesList;
+            Map<String, Object> root = readRoot("dailies.json", DAILIES_RESOURCE, s -> {});
+            Object list = root.get("dailies");
+            dailiesList = list instanceof List ? (List<Object>) list : new ArrayList<>();
+            return dailiesList;
+        }
+    }
+
+    /** Daily / weekly / recurring tasks, requirement-checked live so 'available' = doable now. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> buildDailies()
+    {
+        List<Object> all = dailies();
+        if (all.isEmpty()) return err("dailies.json missing or empty.");
+        boolean loggedIn = client.getGameState() == GameState.LOGGED_IN;
+
+        List<Object> available = new ArrayList<>();
+        List<Object> locked = new ArrayList<>();
+        for (Object o : all)
+        {
+            Map<String, Object> daily = asMap(o);
+            Map<String, Object> req = asMap(daily.get("requirements"));
+            List<String> unmet = new ArrayList<>();
+            if (loggedIn)
+            {
+                checkSkills(asMap(req.get("skills")), unmet);
+                for (String q : asList(req.get("quests")))
+                {
+                    Quest live = questNameToLive(q);
+                    if (live != null && live.getState(client) != QuestState.FINISHED) unmet.add("quest: " + q);
+                }
+            }
+            Map<String, Object> entry = new LinkedHashMap<>(daily);
+            if (loggedIn && !unmet.isEmpty()) { entry.put("blocked_by", unmet); locked.add(entry); }
+            else available.add(entry);
+        }
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("available", available);
+        if (!locked.isEmpty()) out.put("locked", locked);
+        out.put("_hint", "Short-session/reset tasks. 'available' are doable now. A quick dailies sweep (battlestaves + herb boxes + Miscellania + a farm/bird-house run) is a good ~15-20 min use of time. Farm patch live state is in get_farm_run.");
+        return out;
     }
 
     // --- get_optimal_quest_route --------------------------------------------
