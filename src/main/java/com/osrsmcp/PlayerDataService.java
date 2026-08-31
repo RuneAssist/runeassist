@@ -1258,12 +1258,48 @@ public class PlayerDataService
 
         // ── EQUIPMENT STATS (Phase 12) ───────────────────────────────────────────
 
+    // Plain snapshot of worn gear (item names + strength level) taken on the client
+    // thread, so the per-item wiki stat fetches can then run OFF the client thread.
+    public static final class EquipSnapshot
+    {
+        final String error;
+        final List<String[]> worn;   // {slotName, itemName}
+        final int strengthLevel;
+        EquipSnapshot(String error)                 { this.error = error; this.worn = null; this.strengthLevel = 0; }
+        EquipSnapshot(List<String[]> worn, int str) { this.error = null;  this.worn = worn; this.strengthLevel = str; }
+    }
+
+    /** Client thread: read worn items + strength into a plain snapshot (no HTTP). */
+    public EquipSnapshot snapshotEquipmentStats()
+    {
+        if (!isLoggedIn()) return new EquipSnapshot("Player is not logged in");
+        ItemContainer worn = client.getItemContainer(InventoryID.EQUIPMENT);
+        if (worn == null) return new EquipSnapshot("No equipment data available");
+        String[] slotNames = {"head","cape","amulet","weapon","body","shield",
+                              "legs","hands","feet","ring","ammo","","",""};
+        List<String[]> out = new ArrayList<>();
+        Item[] items = worn.getItems();
+        for (int i = 0; i < items.length && i < slotNames.length; i++)
+        {
+            Item item = items[i];
+            if (item == null || item.getId() <= 0) continue;
+            String name = itemManager.getItemComposition(item.getId()).getName();
+            if (name == null || name.equals("null") || name.isEmpty()) continue;
+            out.add(new String[]{ slotNames[i].isEmpty() ? "slot_" + i : slotNames[i], name });
+        }
+        return new EquipSnapshot(out, client.getRealSkillLevel(net.runelite.api.Skill.STRENGTH));
+    }
+
+    /** Convenience: snapshot + fetch in one call (runs the HTTP on the calling thread). */
     public Map<String, Object> buildEquipmentStats()
     {
-        if (!isLoggedIn()) return errorMap("Player is not logged in");
+        return buildEquipmentStatsOffThread(snapshotEquipmentStats());
+    }
 
-        ItemContainer worn = client.getItemContainer(InventoryID.EQUIPMENT);
-        if (worn == null) return errorMap("No equipment data available");
+    /** Off-thread: fetch per-item stats (HTTP, 24h-cached) and assemble totals. */
+    public Map<String, Object> buildEquipmentStatsOffThread(EquipSnapshot snap)
+    {
+        if (snap.error != null) return errorMap(snap.error);
 
         Map<String, Object> result      = new LinkedHashMap<>();
         Map<String, Object> bySlot      = new LinkedHashMap<>();
@@ -1274,21 +1310,15 @@ public class PlayerDataService
         int totalDstab = 0, totalDslash = 0, totalDcrush = 0, totalDmagic = 0, totalDrange = 0;
         int totalStr = 0, totalPrayer = 0;
 
-        String[] slotNames = {"head","cape","amulet","weapon","body","shield",
-                              "legs","hands","feet","ring","ammo","","",""};
-
-        Item[] items = worn.getItems();
-        for (int i = 0; i < items.length && i < slotNames.length; i++)
+        for (String[] wornItem : snap.worn)
         {
-            Item item = items[i];
-            if (item == null || item.getId() <= 0) continue;
-            String name = itemManager.getItemComposition(item.getId()).getName();
-            if (name == null || name.equals("null") || name.isEmpty()) continue;
+            String slotName = wornItem[0];
+            String name     = wornItem[1];
 
             EquipmentStatsService.EquipmentStats stats = equipmentStatsService.getStats(name);
             if (stats != null)
             {
-                bySlot.put(slotNames[i].isEmpty() ? "slot_" + i : slotNames[i], stats.toMap());
+                bySlot.put(slotName, stats.toMap());
                 totalAstab  += stats.astab;  totalAslash += stats.aslash;
                 totalAcrush += stats.acrush; totalAmagic += stats.amagic;
                 totalArange += stats.arange;
@@ -1299,7 +1329,7 @@ public class PlayerDataService
             }
             else
             {
-                missing.put(slotNames[i].isEmpty() ? "slot_" + i : slotNames[i], name);
+                missing.put(slotName, name);
             }
         }
 
@@ -1321,7 +1351,7 @@ public class PlayerDataService
         totals.put("other_bonuses",   otherTotals);
 
         // Estimated melee max hit (aggressive style, no prayer/potion)
-        int baseLvl = client.getRealSkillLevel(net.runelite.api.Skill.STRENGTH);
+        int baseLvl = snap.strengthLevel;
         int effectiveStr = baseLvl + 8 + 3; // +3 for aggressive style
         double maxHitRaw = 0.5 + effectiveStr * (totalStr + 64.0) / 640.0;
         totals.put("est_max_hit_melee_no_boost", (int) maxHitRaw);
@@ -1465,25 +1495,35 @@ public class PlayerDataService
      * Compares current gear against bank items slot-by-slot for a given combat style.
      * style: "melee", "ranged", or "magic"
      */
-    public Map<String, Object> buildBisComparison(String style)
+    // Plain snapshot for BiS comparison, taken on the client thread (worn item
+    // names/ids + bank items grouped by slot), so the per-item wiki stat fetches
+    // can then run OFF the client thread.
+    public static final class BisSnapshot
     {
-        if (!isLoggedIn()) return errorMap("Player is not logged in");
+        final String error;
+        final String style;
+        final List<Object[]> worn;                 // {String slot, String name, Integer id}
+        final boolean bankAvailable;
+        final Map<String, List<String>> bankBySlot;
+        BisSnapshot(String error) { this.error = error; this.style = null; this.worn = null; this.bankAvailable = false; this.bankBySlot = null; }
+        BisSnapshot(String style, List<Object[]> worn, boolean bankAvailable, Map<String, List<String>> bankBySlot)
+        { this.error = null; this.style = style; this.worn = worn; this.bankAvailable = bankAvailable; this.bankBySlot = bankBySlot; }
+    }
+
+    /** Client thread: snapshot worn gear + bank-by-slot (itemManager/client reads, no HTTP). */
+    public BisSnapshot snapshotBisComparison(String style)
+    {
+        if (!isLoggedIn()) return new BisSnapshot("Player is not logged in");
         if (style == null || style.trim().isEmpty()) style = "melee";
         style = style.toLowerCase().trim();
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("style", style);
-
-        // ── Current gear ──────────────────────────────────────────────────────
         ItemContainer worn = client.getItemContainer(InventoryID.EQUIPMENT);
-        if (worn == null) return errorMap("No equipment data available");
+        if (worn == null) return new BisSnapshot("No equipment data available");
 
         String[] slotNames = {"head","cape","amulet","weapon","body","shield",
                               "legs","hands","feet","ring","ammo","","",""};
         Item[] wornItems = worn.getItems();
-
-        // Build map of slot -> current item name + stats
-        Map<String, Map<String, Object>> currentGear = new LinkedHashMap<>();
+        List<Object[]> wornSnap = new ArrayList<>();
         for (int i = 0; i < wornItems.length && i < slotNames.length; i++)
         {
             if (slotNames[i].isEmpty()) continue;
@@ -1491,22 +1531,11 @@ public class PlayerDataService
             if (item == null || item.getId() <= 0) continue;
             String name = itemManager.getItemComposition(item.getId()).getName();
             if (name == null || name.equals("null")) continue;
-            EquipmentStatsService.EquipmentStats stats = equipmentStatsService.getStats(name);
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("name", name);
-            entry.put("id", item.getId());
-            if (stats != null) entry.put("stats", stats.toMap());
-            currentGear.put(slotNames[i], entry);
+            wornSnap.add(new Object[]{ slotNames[i], name, item.getId() });
         }
-        result.put("current_gear", currentGear);
 
-        // ── Bank gear ─────────────────────────────────────────────────────────
         if (cachedBankItems == null)
-        {
-            result.put("upgrades_found", false);
-            result.put("message", "Open your bank to compare with banked items.");
-            return result;
-        }
+            return new BisSnapshot(style, wornSnap, false, new LinkedHashMap<>());
 
         // Filter bank to equippable items, group by inferred slot
         Map<String, List<String>> bankBySlot = new LinkedHashMap<>();
@@ -1530,6 +1559,48 @@ public class PlayerDataService
             String slot = inferSlot(nameLower, wield);
             bankBySlot.computeIfAbsent(slot, k -> new ArrayList<>()).add(name);
         }
+
+        return new BisSnapshot(style, wornSnap, true, bankBySlot);
+    }
+
+    /** Convenience: snapshot + fetch on the calling thread. */
+    public Map<String, Object> buildBisComparison(String style)
+    {
+        return buildBisComparisonOffThread(snapshotBisComparison(style));
+    }
+
+    /** Off-thread: fetch per-item stats (HTTP) and assemble the comparison from the snapshot. */
+    public Map<String, Object> buildBisComparisonOffThread(BisSnapshot snap)
+    {
+        if (snap.error != null) return errorMap(snap.error);
+        final String style = snap.style;
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("style", style);
+
+        // ── Current gear (fetch stats off-thread) ─────────────────────────────
+        Map<String, Map<String, Object>> currentGear = new LinkedHashMap<>();
+        for (Object[] w : snap.worn)
+        {
+            String slot = (String) w[0];
+            String name = (String) w[1];
+            int id      = (Integer) w[2];
+            EquipmentStatsService.EquipmentStats stats = equipmentStatsService.getStats(name);
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("name", name);
+            entry.put("id", id);
+            if (stats != null) entry.put("stats", stats.toMap());
+            currentGear.put(slot, entry);
+        }
+        result.put("current_gear", currentGear);
+
+        if (!snap.bankAvailable)
+        {
+            result.put("upgrades_found", false);
+            result.put("message", "Open your bank to compare with banked items.");
+            return result;
+        }
+        Map<String, List<String>> bankBySlot = snap.bankBySlot;
 
         // ── Slot-by-slot comparison ───────────────────────────────────────────
         List<Map<String, Object>> upgrades = new ArrayList<>();
