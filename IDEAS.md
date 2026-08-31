@@ -35,13 +35,12 @@ AI companion with a chat in the RuneLite side panel.
 - [x] **Step 3 — `CompanionAgent`**: the tool-calling loop wiring providers to
       `ToolRegistry`; includes the **HostedProvider seam** (a one-enum switch for the
       future paid tier). _(DeepSeek; verified.)_
-- [ ] **Step 4 — Swing chat panel**: message list, input box, streaming render, per-reply
-      cost display. _(Build with Claude — pure UX judgment.)_ Also: wire
-      `CompanionAgent.shutdown()` into plugin `shutDown()`, and snapshot `history` under
-      the lock BEFORE `provider.complete()` (currently the lock is held across the network
-      call, so `reset()` from the EDT can block for seconds mid-response).
+- [x] **Step 4 — Swing chat panel** ("RuneAssist"): chat-app UI (avatars, SansSerif,
+      indigo accent), in-panel provider/key settings, light markdown, per-reply token
+      footer, grounding guardrail. `shutdown()` wired; history lock fixed. Verified live
+      end-to-end (DeepSeek). _(Built with Claude.)_
 
-Later hardening: streaming (SSE) responses; token/cost meter; per-turn cancel;
+Later hardening: streaming (SSE) responses; per-turn cancel; distinct chat icon;
 update default model IDs to current (Claude 5 family).
 
 ---
@@ -85,5 +84,10 @@ update default model IDs to current (Claude 5 family).
 ## Notes / decisions
 - 2026-08-31: Decided **all features stay in the plugin, free, BYOK**; paid = hosted
   convenience + server-side data, not feature removal.
+- 2026-09-01: Product renamed **RuneAssist** (player-facing); internal group stays `osrsmcp`.
+- 2026-09-01: **Grounding guardrail** added after the model invented a "40-50m from 99 WC"
+  GP figure. Rule: no money/time figures unless computed from get_item_prices /
+  get_training_methods, with arithmetic shown. Models still slip, so watch for
+  ungrounded numbers and tighten the prompt as needed.
 - DeepSeek is being used for mechanical steps (1–3) to conserve Claude usage; Claude does
   design, verification, and the taste-heavy UI (step 4).
