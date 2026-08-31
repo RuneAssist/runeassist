@@ -53,6 +53,7 @@ public class QuestPlanService
     @Inject private Client client;
     @Inject private Gson gson;
     @Inject private PlayerDataService playerDataService;
+    @Inject private DailyTracker dailyTracker;
 
     // Parsed resource: quest name -> { requirements{...}, xp_rewards{...}, xp_choice?, unlocks? }
     private volatile Map<String, Map<String, Object>> questData;
@@ -440,6 +441,13 @@ public class QuestPlanService
                 }
             }
             Map<String, Object> entry = new LinkedHashMap<>(daily);
+            // live status from captured login messages (only for tracked dailies)
+            Object track = daily.get("track");
+            if (track != null)
+            {
+                Map<String, Object> st = dailyTracker.status(track.toString(), String.valueOf(daily.getOrDefault("reset", "daily")));
+                if (st != null) entry.put("status", st);
+            }
             if (loggedIn && !unmet.isEmpty()) { entry.put("blocked_by", unmet); locked.add(entry); }
             else available.add(entry);
         }
@@ -447,7 +455,7 @@ public class QuestPlanService
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("available", available);
         if (!locked.isEmpty()) out.put("locked", locked);
-        out.put("_hint", "Short-session/reset tasks. 'available' are doable now. A quick dailies sweep (battlestaves + herb boxes + Miscellania + a farm/bird-house run) is a good ~15-20 min use of time. Farm patch live state is in get_farm_run.");
+        out.put("_hint", "Short-session/reset tasks. 'available' = requirements met. Some have a live 'status' captured from the game's login messages (battlestaves/herb boxes/sand/Tears of Guthix): state 'available' means it was waiting at the last login (could be claimed since -- the game gives no claim message); 'unknown' means not seen this session. A quick dailies sweep is a good ~15-20 min use of time; farm patch live state is in get_farm_run.");
         return out;
     }
 
