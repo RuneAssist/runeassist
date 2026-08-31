@@ -28,6 +28,7 @@ const unesc = s => s.replace(/\\(['"\\])/g, '$1');           // Lua \' \" \\ -> 
 const LSTR = "'((?:\\\\.|[^'\\\\])*)'";                        // a Lua single-quoted string (handles \')
 
 function parseQuestreq(lua) {
+  lua = lua.replace(/--\[\[[\s\S]*?\]\]/g, '');   // strip Lua block comments (contains the quest TEMPLATE)
   const quests = {};
   let cur = null, mode = null;
   const headerRe = new RegExp('^\\s{4}\\[' + LSTR + '\\]\\s*=\\s*\\{');
