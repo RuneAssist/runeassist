@@ -155,6 +155,65 @@ public class WikiBucketService
         return out;
     }
 
+    /** Full-text search the wiki for pages matching a term (for narrative content the buckets don't hold). */
+    public Map<String, Object> wikiSearch(String query, Integer limit)
+    {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (query == null || query.isBlank()) { out.put("error", "Provide a search term."); return out; }
+        int lim = limit == null ? 6 : Math.max(1, Math.min(20, limit));
+        try
+        {
+            String url = API + "?action=query&list=search&format=json"
+                       + "&srsearch=" + enc(query.trim()) + "&srlimit=" + lim;
+            JsonObject root = gson.fromJson(getCached(url), JsonObject.class);
+            JsonArray hits = root.getAsJsonObject("query").getAsJsonArray("search");
+            List<Object> results = new ArrayList<>();
+            for (JsonElement e : hits)
+            {
+                JsonObject h = e.getAsJsonObject();
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("title", h.get("title").getAsString());
+                r.put("snippet", stripHtml(h.has("snippet") ? h.get("snippet").getAsString() : ""));
+                if (h.has("wordcount")) r.put("wordcount", h.get("wordcount").getAsInt());
+                results.add(r);
+            }
+            out.put("query", query);
+            out.put("count", results.size());
+            out.put("results", results);
+            out.put("_hint", "Read a page's content with wiki_get_page using its exact title.");
+        }
+        catch (Exception e) { out.put("error", "Wiki search failed: " + e.getMessage()); }
+        return out;
+    }
+
+    /** Fetch the readable (plain-text) content of a wiki page by title. For prose/strategy the buckets don't cover. */
+    public Map<String, Object> wikiGetPage(String title, Integer maxChars)
+    {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (title == null || title.isBlank()) { out.put("error", "Provide a page title (get one from wiki_search)."); return out; }
+        int chars = maxChars == null ? 6000 : Math.max(200, Math.min(20000, maxChars));
+        try
+        {
+            String url = API + "?action=query&format=json&prop=extracts&explaintext=1&redirects=1"
+                       + "&exchars=" + chars + "&titles=" + enc(title.trim());
+            JsonObject root = gson.fromJson(getCapped(url), JsonObject.class);
+            JsonObject pages = root.getAsJsonObject("query").getAsJsonObject("pages");
+            if (pages.entrySet().isEmpty() || pages.has("-1"))
+            { out.put("error", "No page titled '" + title + "'. Try wiki_search for the exact title."); return out; }
+            JsonObject page = pages.entrySet().iterator().next().getValue().getAsJsonObject();
+            if (page.has("missing"))
+            { out.put("error", "No page titled '" + title + "'. Try wiki_search for the exact title."); return out; }
+            String extract = page.has("extract") ? page.get("extract").getAsString() : "";
+            out.put("title", page.get("title").getAsString());
+            out.put("url", WIKI + enc(page.get("title").getAsString().replace(' ', '_')));
+            out.put("content", extract);
+            if (extract.length() >= chars) out.put("_note", "Truncated to " + chars + " chars; raise maxChars (max 20000) for more.");
+            out.put("_hint", "Plain text only (tables/infoboxes stripped). For structured stats use the wiki_bucket_* tools.");
+        }
+        catch (Exception e) { out.put("error", "Failed to fetch page '" + title + "': " + e.getMessage()); }
+        return out;
+    }
+
     /** Convenience wrapper: combat achievements, optionally filtered by tier and/or monster. */
     public Map<String, Object> combatAchievements(String tier, String monster)
     {
@@ -223,6 +282,9 @@ public class WikiBucketService
     private static String normalizeBucket(String s) { return s == null ? "" : s.trim().toLowerCase().replace(' ', '_'); }
 
     private static String enc(String s) { return URLEncoder.encode(s, StandardCharsets.UTF_8); }
+
+    /** Strip HTML tags and collapse whitespace (search snippets come back with <span> markup). */
+    private static String stripHtml(String s) { return s.replaceAll("<[^>]*>", "").replaceAll("&quot;", "\"").replaceAll("\\s+", " ").trim(); }
 
     /** Escape single quotes / backslashes so a value can't break out of the Lua string literal. */
     private static String luaEsc(String s) { return s.replace("\\", "\\\\").replace("'", "\\'"); }
