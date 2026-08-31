@@ -336,6 +336,71 @@ public class QuestPlanService
         return m;
     }
 
+    // --- get_training_methods (Layer 3) -------------------------------------
+
+    private static final String TRAINING_RESOURCE = "/com/osrsmcp/training_methods.json";
+    private volatile Map<String, Object> trainingData;
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> trainingData()
+    {
+        Map<String, Object> t = trainingData;
+        if (t != null) return t;
+        synchronized (this)
+        {
+            if (trainingData != null) return trainingData;
+            try (InputStream in = QuestPlanService.class.getResourceAsStream(TRAINING_RESOURCE))
+            {
+                if (in == null) { trainingData = new LinkedHashMap<>(); return trainingData; }
+                Type ty = new TypeToken<Map<String, Object>>(){}.getType();
+                trainingData = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), ty);
+                if (trainingData == null) trainingData = new LinkedHashMap<>();
+            }
+            catch (Exception e) { log.warn("Failed to load training_methods.json: {}", e.getMessage()); trainingData = new LinkedHashMap<>(); }
+            return trainingData;
+        }
+    }
+
+    /** Curated training methods with rough XP/hr, annotated live with whether the account meets each method's requirements. args: skill (optional filter). */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> buildTrainingMethods(Map<String, Object> args)
+    {
+        Map<String, Object> td = trainingData();
+        Object methodsObj = td.get("methods");
+        if (!(methodsObj instanceof List)) return err("training_methods.json missing or empty.");
+
+        boolean loggedIn = client.getGameState() == GameState.LOGGED_IN;
+        String filter = args != null && args.get("skill") != null ? args.get("skill").toString().trim().toLowerCase() : null;
+
+        List<Object> out = new ArrayList<>();
+        for (Object mo : (List<Object>) methodsObj)
+        {
+            Map<String, Object> m = asMap(mo);
+            String skill = String.valueOf(m.get("skill")).toLowerCase();
+            if (filter != null && !skill.equals(filter)) continue;
+
+            Map<String, Object> entry = new LinkedHashMap<>(m);
+            if (loggedIn)
+            {
+                List<String> unmet = new ArrayList<>();
+                checkSkills(asMap(asMap(m.get("requirements")).get("skills")), unmet);
+                entry.put("meets_requirements", unmet.isEmpty());
+                if (!unmet.isEmpty()) entry.put("blocked_by", unmet);
+                Skill sk = skillByName(skill);
+                if (sk != null) entry.put("current_level", client.getRealSkillLevel(sk));
+            }
+            out.add(entry);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("dated", td.get("_dated"));
+        result.put("disclaimer", "Approximate XP/hr; varies with gear, efficiency and game updates. meets_requirements/current_level are live when logged in.");
+        if (filter != null) result.put("skill", filter);
+        result.put("count", out.size());
+        result.put("methods", out);
+        return result;
+    }
+
     // --- shared XP helpers (used by project_plan too) -----------------------
 
     /** Cumulative XP required to reach a given level (1..99). */
