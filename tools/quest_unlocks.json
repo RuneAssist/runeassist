@@ -1,0 +1,32 @@
+{
+  "_comment": "Hand-maintained: marquee quest unlocks and skill-choice XP rewards not cleanly parseable from the wiki tables. Keyed by exact Questreq quest name.",
+  "Dragon Slayer II": {
+    "unlocks": ["Myths' Guild access", "Adamant/Rune gauntlets upgrades path", "Ava's assembler (with Western hard diary)"],
+    "xp_choice": [{ "amount": 25000, "constraint": "any skill 50+", "count": 2 }]
+  },
+  "Recipe for Disaster": {
+    "unlocks": ["Barrows gloves", "Culinaromancer's chest", "Cooking gauntlets path"],
+    "xp_choice": [{ "amount": 20000, "constraint": "any skill 50+", "count": 1 }]
+  },
+  "Monkey Madness II": {
+    "unlocks": ["Heroic gloves", "Demonic gorilla access", "Zenyte / Ballista path"],
+    "xp_choice": [{ "amount": 100000, "constraint": "any combat skill 55+", "count": 2 }]
+  },
+  "Recruitment Drive": {
+    "xp_choice": [{ "amount": 1000, "constraint": "Agility/Herblore/Prayer (fixed set)", "count": 3 }]
+  },
+  "The Fremennik Trials": {
+    "unlocks": ["Fremennik lands access", "Rellekka", "Lunar/other regional access path"]
+  },
+  "Lunar Diplomacy": {
+    "unlocks": ["Lunar spellbook", "Baba Yaga / Moonclan"],
+    "xp_choice": [{ "amount": 5000, "constraint": "Magic (fixed)", "count": 1 }]
+  },
+  "Desert Treasure I": {
+    "unlocks": ["Ancient Magicks spellbook", "Ancient teleports"]
+  },
+  "Desert Treasure II - The Fallen Empire": {
+    "unlocks": ["Ancient Rings", "Vardorvis/Duke/Leviathan/Whisperer access", "Awakened bosses"],
+    "xp_choice": [{ "amount": 100000, "constraint": "any skill 70+", "count": 3 }]
+  }
+}
