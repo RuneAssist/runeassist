@@ -269,10 +269,10 @@ player's live state and goal.
    machine-readable source), live-annotated. **Needs live verification.**
 5. Optional `get_optimal_quest_route` — not built.
 
-**Live verification still owed** (require a logged-in dev client): `get_quest_rewards`,
-`project_plan`, `get_training_methods`. The 4 gateway tools + tools/list registration
-are already verified live. Restart the dev client logged in, then confirm each returns
-correct account-accurate data.
+**All verified live (2026-08-31):** the 4 gateway tools plus `get_quest_rewards`,
+`project_plan` (agility→70 → Song of the Elves eligible; XP arithmetic exact) and
+`get_training_methods` all return correct account-accurate data. Only remaining
+change is the `Name_of_quest` generator fix, which loads on the next client restart.
 
 After each layer: register in `McpServer` (`dispatchTool` + `buildToolsList`),
 extend the `INSTRUCTIONS` planning rubric, rebuild (`gradlew jar`), copy to
