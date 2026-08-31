@@ -78,6 +78,14 @@ public class PlayerDataService
         return client.getGameState() == GameState.LOGGED_IN;
     }
 
+    /** The logged-in player's RSN, or null. Reads the client -- call on the client thread. */
+    public String currentUsername()
+    {
+        if (!isLoggedIn()) return null;
+        net.runelite.api.Player p = client.getLocalPlayer();
+        return p != null ? p.getName() : null;
+    }
+
     /**
      * get_all -- lightweight snapshot of essential context only.
      * Heavy tools (bank contents, drop tables, BiS comparison etc.)

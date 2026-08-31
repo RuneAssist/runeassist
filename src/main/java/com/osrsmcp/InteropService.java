@@ -8,6 +8,7 @@ import net.runelite.client.events.PluginMessage;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -116,6 +117,59 @@ public class InteropService
         out.put("path_requested", true);
         out.put("target", t);
         out.put("note", "Route drawn in-game via Shortest Path (requires that plugin installed + enabled). It only draws a path -- it does not move your character.");
+        return out;
+    }
+
+    // --- Inventory Setups (namespace "inventory-setups") --------------------
+    // "get-setups" fills a mutable collection synchronously during post(); "view"
+    // opens/equips a setup and filters the bank; "clear" clears the active setup.
+
+    public Map<String, Object> getInventorySetups()
+    {
+        Map<String, Object> out = new LinkedHashMap<>();
+        java.util.Set<String> names = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        java.util.concurrent.CompletableFuture<Void> done = new java.util.concurrent.CompletableFuture<>();
+        clientThread.invokeLater(() ->
+        {
+            try
+            {
+                Map<String, Object> data = new HashMap<>();
+                data.put("setups", names);                 // handler fills this in-place
+                eventBus.post(new PluginMessage("inventory-setups", "get-setups", data));
+            }
+            catch (Exception e) { log.warn("get-setups failed: {}", e.getMessage()); }
+            finally { done.complete(null); }
+        });
+        try { done.get(2, java.util.concurrent.TimeUnit.SECONDS); } catch (Exception ignored) {}
+
+        List<String> list = new ArrayList<>(names);
+        java.util.Collections.sort(list);
+        out.put("setups_available", true);
+        out.put("count", list.size());
+        out.put("setups", list);
+        if (list.isEmpty())
+            out.put("note", "No setups returned. Ensure the Inventory Setups plugin is installed/enabled (and that you have created some).");
+        out.put("_hint", "These are the player's saved gear/inventory presets. Use view_inventory_setup to open one in-game.");
+        return out;
+    }
+
+    public Map<String, Object> viewInventorySetup(String name, boolean clear)
+    {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (clear)
+        {
+            Map<String, Object> data = new HashMap<>();
+            if (name != null && !name.isBlank()) data.put("setup", name);
+            post(new PluginMessage("inventory-setups", "clear", data));
+            out.put("cleared", true);
+            return out;
+        }
+        if (name == null || name.isBlank()) { out.put("error", "Provide the setup name (from get_inventory_setups)."); return out; }
+        Map<String, Object> data = new HashMap<>();
+        data.put("setup", name);
+        post(new PluginMessage("inventory-setups", "view", data));
+        out.put("viewing", name);
+        out.put("note", "Opened the setup in-game and filtered the bank (Inventory Setups plugin required). Does not move or equip items automatically.");
         return out;
     }
 
