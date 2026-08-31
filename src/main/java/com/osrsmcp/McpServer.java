@@ -52,6 +52,7 @@ public class McpServer
 
     @Inject private PlayerDataService playerDataService;
     @Inject private WikiBucketService wikiBucketService;
+    @Inject private QuestPlanService questPlanService;
     @Inject private ClientThread clientThread;
     @Inject private OsrsMcpConfig config;
 
@@ -189,6 +190,7 @@ public class McpServer
             case "get_diary_states":  return playerDataService.buildDiaryStates();
             case "get_diary_requirements": return playerDataService.buildDiaryRequirements();
             case "get_next_goals":    return playerDataService.buildNextGoals();
+            case "get_quest_rewards": return questPlanService.buildQuestRewards();
             case "get_slayer_task":   return playerDataService.buildSlayerTask();
             case "get_clue_scroll":   return playerDataService.buildClueScroll();
             case "get_nearby_npcs":       return playerDataService.buildNearbyNpcs();
@@ -379,6 +381,7 @@ public class McpServer
         tools.add(buildTool("get_diary_states",  "Get completion status of all Achievement Diaries across all regions and tiers (easy/medium/hard/elite)."));
         tools.add(buildTool("get_diary_requirements", "Get task-level Achievement Diary requirements for every region, each live-checked against the account. For each task, shows the skill/quest requirements and whether they are met, including how many levels short you are. Use this to find diary tasks you already qualify for and exactly what is blocking the rest."));
         tools.add(buildTool("get_next_goals",    "Get a ranked list of the most actionable next goals derived from live data: skills closest to a level-up and to 99, quests already in progress, and diary regions where you already meet the most task requirements (nearest to a full clear, with blocking skills)."));
+        tools.add(buildTool("get_quest_rewards", "For every quest: its requirements (prerequisite quests, skill levels, quest points), XP rewards, skill-choice lamps, notable unlocks, and a live meets_requirements flag checked against the account (with blocked_by reasons). Use for quest planning -- which quests you can start now, and what each is worth. account_type and eligible_now_count summarise the set."));
         tools.add(buildTool("get_slayer_task",   "Get current Slayer task: creature name, remaining count, location, points and streak."));
         tools.add(buildTool("get_clue_scroll",   "Check if the player has an active clue scroll in their inventory and which tier it is."));
         tools.add(buildTool("get_nearby_npcs",     "Get a list of NPCs currently visible to the player, sorted by combat level. Includes name, combat level, and approximate health."));
