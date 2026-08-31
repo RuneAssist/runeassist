@@ -65,7 +65,15 @@ public class McpServer
     // client thread so a slow fetch never freezes the game (and isn't bound by
     // the 5s client-thread budget).
     private static final Set<String> NETWORK_TOOLS = new HashSet<>(Arrays.asList(
-        "wiki_list_buckets", "wiki_bucket_schema", "wiki_bucket_query", "get_combat_achievements"));
+        "wiki_list_buckets", "wiki_bucket_schema", "wiki_bucket_query", "get_combat_achievements",
+        // pure wiki-scrape tools: no live game state, so a slow page fetch must not
+        // hold the client thread (they only take a name argument and hit HTTP).
+        "get_drop_table", "get_npc_info"));
+
+    // Hybrid tools: read live game state, THEN do per-item HTTP. Handled in two
+    // phases -- a quick client-thread snapshot, then the fetch off the client thread.
+    private static final Set<String> HYBRID_TOOLS = new HashSet<>(Arrays.asList(
+        "get_equipment_stats", "get_bis_comparison"));
 
     private HttpServer server;
     @Inject private Gson gson;
@@ -157,6 +165,14 @@ public class McpServer
             // Runs on this HTTP handler thread (pool of 20); no game state needed.
             try { toolResult = dispatchNetworkTool(toolName, arguments); }
             catch (Exception e) { sendJsonRpcError(exchange, id, -32603, "Internal error: " + e.getMessage()); return; }
+        }
+        else if (HYBRID_TOOLS.contains(toolName))
+        {
+            // Phase 1: snapshot live state on the client thread (fast, no HTTP).
+            // Phase 2: fetch per-item wiki data here, off the client thread.
+            try { toolResult = dispatchHybridTool(toolName, arguments); }
+            catch (TimeoutException e) { sendJsonRpcError(exchange, id, -32603, "Timed out waiting for game thread"); return; }
+            catch (Exception e)        { sendJsonRpcError(exchange, id, -32603, "Internal error: " + e.getMessage()); return; }
         }
         else
         {
@@ -255,6 +271,38 @@ public class McpServer
         }
     }
 
+    /** Run a supplier on the client thread, blocking (with the standard 5s budget) for its result. */
+    private <T> T onClientThread(java.util.function.Supplier<T> supplier) throws Exception
+    {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        clientThread.invokeLater(() ->
+        {
+            try   { future.complete(supplier.get()); }
+            catch (Exception e) { future.completeExceptionally(e); }
+        });
+        return future.get(5, TimeUnit.SECONDS);
+    }
+
+    private Map<String, Object> dispatchHybridTool(String toolName, JsonObject args) throws Exception
+    {
+        switch (toolName)
+        {
+            case "get_equipment_stats":
+            {
+                PlayerDataService.EquipSnapshot snap = onClientThread(playerDataService::snapshotEquipmentStats);
+                return playerDataService.buildEquipmentStatsOffThread(snap);
+            }
+            case "get_bis_comparison":
+            {
+                String style = strArg(args, "style", "melee");
+                PlayerDataService.BisSnapshot snap = onClientThread(() -> playerDataService.snapshotBisComparison(style));
+                return playerDataService.buildBisComparisonOffThread(snap);
+            }
+            default:
+                Map<String, Object> err = new LinkedHashMap<>(); err.put("error", "Unknown hybrid tool: " + toolName); return err;
+        }
+    }
+
     private Map<String, Object> dispatchNetworkTool(String toolName, JsonObject args)
     {
         switch (toolName)
@@ -279,6 +327,10 @@ public class McpServer
             }
             case "get_combat_achievements":
                 return wikiBucketService.combatAchievements(strArg(args, "tier", null), strArg(args, "monster", null));
+            case "get_drop_table":
+                return playerDataService.buildDropTable(strArg(args, "name", ""));
+            case "get_npc_info":
+                return playerDataService.buildNpcInfo(strArg(args, "name", ""));
             default:
                 Map<String, Object> err = new LinkedHashMap<>(); err.put("error", "Unknown network tool: " + toolName); return err;
         }
