@@ -1991,8 +1991,6 @@ public class PlayerDataService
         final int    MIN_VOLUME = minVolume > 0 ? minVolume : 500; // 1h units traded
         final int    MIN_MARGIN = minMargin > 0 ? minMargin : 20;  // gp after tax
         final int    TOP        = top > 0 ? top : 20;
-        final double TAX_RATE   = 0.02;        // GE tax 2% of sell, capped 5M (matches game)
-        final long   TAX_CAP    = 5_000_000L;
 
         Map<String, Object> result = new LinkedHashMap<>();
         Map<Integer, WikiPriceService.ItemMeta> allMeta = wikiPriceService.getAllMeta();
@@ -2013,7 +2011,7 @@ public class PlayerDataService
             int vol = v.totalVol();
             if (vol < MIN_VOLUME) continue;
 
-            long tax = sell < 50 ? 0 : Math.min(TAX_CAP, (long) (sell * TAX_RATE));
+            long tax = GeTax.taxAmount(m.id, sell);
             int margin = (int) (sell - buy - tax);
             if (margin < MIN_MARGIN) continue;
             double marginPct = margin * 100.0 / buy;
@@ -2100,7 +2098,7 @@ public class PlayerDataService
             q.put("verdict", "no margin");
             return q;
         }
-        long tax    = sell < 50 ? 0 : Math.min(5_000_000L, (long) (sell * 0.02));
+        long tax    = GeTax.taxAmount(itemId, sell);
         int  margin = (int) (sell - buy - tax);
         double marginPct = margin * 100.0 / buy;
         q.put("margin_post_tax", margin);
