@@ -80,6 +80,13 @@ public interface OsrsMcpConfig extends Config
         description = "Optional Bearer token sent with uploads, if your endpoint requires one.")
     default String telemetryToken() { return ""; }
 
+    @ConfigItem(keyName = "syncFlips", name = "Sync flip history across devices",
+        section = privacySection, position = 8,
+        description = "Off by default. When on AND a Contribution endpoint + token are set, your " +
+            "completed-flip history is synced to that server (keyed by your hashed RSN) so it " +
+            "survives reinstalls and merges across machines. Only your flip log is sent.")
+    default boolean syncFlips() { return false; }
+
     // ── AI CHAT ──────────────────────────────────────────────────────────────
 
     @ConfigSection(name = "AI Chat", description = "LLM provider settings for in-game chat", position = 2)

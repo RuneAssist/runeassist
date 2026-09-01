@@ -8,11 +8,17 @@ import net.runelite.client.config.ConfigManager;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -42,6 +48,12 @@ public class FlipTrackerService
     @Inject private ConfigManager configManager;
     @Inject private Gson gson;
     @Inject private WikiPriceService wikiPriceService;
+    @Inject private OsrsMcpConfig config;
+
+    // Cross-device sync (phase 2): the account's hashed rsn, and a debounce clock.
+    private volatile String accountHash = null;
+    private volatile long lastSyncMs = 0;
+    private static final long SYNC_MIN_GAP_MS = 15_000;
 
     /** An open buy lot awaiting a matching sell (FIFO cost basis). */
     private static final class Lot { int qty; long unit; long time;
@@ -227,6 +239,7 @@ public class FlipTrackerService
             f.put("time", now());
             flips.add(f);
             while (flips.size() > MAX_FLIPS) flips.remove(0);
+            syncAsync(); // push the new flip to the cross-device store (no-op if disabled)
         }
         // Unmatched sell units (sold something bought outside the tracker): no cost basis,
         // so we don't invent a profit for them — they're simply not booked.
@@ -295,6 +308,123 @@ public class FlipTrackerService
         positions.clear(); limitBuys.clear(); slots.clear(); flips.clear();
         allTimeProfit = 0;
         save();
+    }
+
+    // ── cross-device sync (phase 2) ───────────────────────────────────────────────
+
+    /** Set the current account (raw rsn); hashed for the sync key and to trigger a login pull. */
+    public void setAccount(String rsn)
+    {
+        String h = hashRsn(rsn);
+        boolean changed = h != null && !h.equals(accountHash);
+        accountHash = h;
+        if (changed) syncAsync(); // pull this account's history on login / account switch
+    }
+
+    private boolean syncEnabled()
+    {
+        return config != null && config.syncFlips()
+            && accountHash != null
+            && config.telemetryEndpoint() != null && !config.telemetryEndpoint().trim().isEmpty();
+    }
+
+    /** Fire a background sync if enabled and not rate-limited. Safe to call from any thread. */
+    public void syncAsync()
+    {
+        if (!syncEnabled()) return;
+        long now = System.currentTimeMillis();
+        synchronized (this)
+        {
+            if (now - lastSyncMs < SYNC_MIN_GAP_MS) return;
+            lastSyncMs = now;
+        }
+        new Thread(this::syncNow, "runeassist-flip-sync").start();
+    }
+
+    /** POST local flips, adopt the merged history the server returns. Never throws. */
+    @SuppressWarnings("unchecked")
+    private void syncNow()
+    {
+        if (!syncEnabled()) return;
+        String url = syncUrl(config.telemetryEndpoint().trim());
+        if (url == null) return;
+
+        List<Map<String, Object>> localFlips;
+        synchronized (this) { ensureLoaded(); localFlips = new ArrayList<>(flips); }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("account", accountHash);
+        payload.put("flips", localFlips);
+
+        try
+        {
+            byte[] body = gson.toJson(payload).getBytes(StandardCharsets.UTF_8);
+            HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(8000);
+            c.setReadTimeout(12000);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            String token = config.telemetryToken();
+            if (token != null && !token.trim().isEmpty())
+                c.setRequestProperty("Authorization", "Bearer " + token.trim());
+            try (OutputStream os = c.getOutputStream()) { os.write(body); }
+            int code = c.getResponseCode();
+            if (code < 200 || code >= 300) { log.warn("Flip sync HTTP {}", code); c.disconnect(); return; }
+
+            Map<String, Object> resp = gson.fromJson(
+                new java.io.InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8),
+                new TypeToken<Map<String, Object>>(){}.getType());
+            c.disconnect();
+            if (resp != null && resp.get("flips") instanceof List)
+                adoptMerged((List<Map<String, Object>>) resp.get("flips"));
+        }
+        catch (Exception e) { log.warn("Flip sync error: {}", e.getMessage()); }
+    }
+
+    /** Replace the local completed-flip log with the merged server copy; recompute all-time. */
+    private synchronized void adoptMerged(List<Map<String, Object>> merged)
+    {
+        if (merged == null) return;
+        flips.clear();
+        flips.addAll(merged);
+        while (flips.size() > MAX_FLIPS) flips.remove(0);
+        long total = 0;
+        for (Map<String, Object> f : flips)
+        {
+            Object p = f.get("profit");
+            if (p instanceof Number) total += ((Number) p).longValue();
+        }
+        allTimeProfit = total;
+        save();
+    }
+
+    /** Derive the sync URL from the ingest endpoint's origin (…/v1/ingest -> …/v1/flips/sync). */
+    private static String syncUrl(String endpoint)
+    {
+        try
+        {
+            URL u = new URL(endpoint);
+            String base = u.getProtocol() + "://" + u.getHost()
+                + (u.getPort() > 0 ? ":" + u.getPort() : "");
+            return base + "/v1/flips/sync";
+        }
+        catch (Exception e) { return null; }
+    }
+
+    private static String hashRsn(String rsn)
+    {
+        if (rsn == null || rsn.trim().isEmpty()) return null;
+        try
+        {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] d = md.digest(rsn.toLowerCase(Locale.ROOT).trim().getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(d.length * 2);
+            for (byte b : d)
+                sb.append(Character.forDigit((b >> 4) & 0xf, 16)).append(Character.forDigit(b & 0xf, 16));
+            return sb.toString();
+        }
+        catch (Exception e) { return null; }
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────────
