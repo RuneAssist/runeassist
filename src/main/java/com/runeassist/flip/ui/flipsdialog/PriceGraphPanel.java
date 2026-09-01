@@ -155,17 +155,14 @@ public class PriceGraphPanel extends JPanel {
         currentItemId = itemId;
         log.debug("Loading price graph for item: {}", itemId);
         contentCardLayout.show(contentPanel, Cards.LOADING_CARD.name());
-        Consumer<ItemPrice> consumer = (ItemPrice itemPrice) -> {
-            SwingUtilities.invokeLater(() -> {
-                String errorMessage = firstNonNull(itemPrice.getMessage(), "");
-                if (!errorMessage.isEmpty()) {
-                    showErrorCard(errorMessage);
-                } else {
-                    showGraphCard(new DataManager(itemPrice.getGraphData(), null), offerPriceLine);
-                }
-            });
-        };
-        apiRequestHandler.asyncGetItemPriceWithGraphData(itemId, "FlipCopilot", consumer, true);
+        // RuneAssist fork: load the graph from our own backend instead of FC's server.
+        final PriceLine priceLine = offerPriceLine;
+        apiRequestHandler.asyncGetRuneAssistGraph(itemId,
+            (Data d) -> SwingUtilities.invokeLater(() -> {
+                if (d == null || d.high1hTimes == null) showErrorCard("No price history for this item.");
+                else showGraphCard(new DataManager(d, null), priceLine);
+            }),
+            (Throwable e) -> SwingUtilities.invokeLater(() -> showErrorCard("Price graph unavailable.")));
     }
 
     public void setLoadingCard() {
