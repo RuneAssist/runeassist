@@ -53,6 +53,7 @@ public class OsrsMcpChatPanel extends PluginPanel
     @Inject private TaskService taskService;
     @Inject private PlayerDataService playerDataService;
     @Inject private FlipTrackerService flipTracker;
+    @Inject private SharedFlipState sharedFlip;
 
     private final JPanel      messages   = new JPanel();
     private final JScrollPane scroll;
@@ -513,10 +514,12 @@ public class OsrsMcpChatPanel extends PluginPanel
         java.util.Map<String, Object> pick = choosePick();
         if (pick == null)
         {
+            sharedFlip.clear();
             flipTopCard.setVisible(false);
             flipTopCard.revalidate(); flipTopCard.repaint();
             return;
         }
+        publishPick(pick);
         flipTopCard.add(buildActionCard(pick));
         flipTopCard.setVisible(true);
         flipTopCard.revalidate(); flipTopCard.repaint();
@@ -673,6 +676,18 @@ public class OsrsMcpChatPanel extends PluginPanel
         card.add(Box.createVerticalStrut(4));
         card.add(skip);
         return card;
+    }
+
+    /** Publish the chosen pick to the on-GE overlay so it can draw on top of the GE window. */
+    private void publishPick(java.util.Map<String, Object> pick)
+    {
+        int id  = (int) num(pick.get("id"));
+        int lim = (int) num(pick.get("ge_limit"));
+        double pct = pick.get("margin_pct") instanceof Number
+            ? ((Number) pick.get("margin_pct")).doubleValue() : 0;
+        sharedFlip.set(id, String.valueOf(pick.get("name")),
+            num(pick.get("buy_at")), num(pick.get("sell_at")), num(pick.get("suggested_qty")),
+            num(pick.get("projected_profit")), pct, lim, flipTracker.limitRemaining(id, lim));
     }
 
     /** Open buy quantity for an item from the tracker (stock you hold, ready to sell). */
