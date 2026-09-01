@@ -59,7 +59,6 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private NudgeService nudgeService;
     @Inject private RuneAssistOverlay runeAssistOverlay;
     @Inject private GeOffersOverlay geOffersOverlay;
-    @Inject private GeOfferSetupOverlay geOfferSetupOverlay;
     @Inject private FlipTrackerService flipTracker;
     @Inject private TaskService taskService;
     @Inject private net.runelite.client.ui.overlay.OverlayManager overlayManager;
@@ -106,7 +105,6 @@ public class OsrsMcpPlugin extends Plugin
 
         overlayManager.add(runeAssistOverlay);
         overlayManager.add(geOffersOverlay);
-        overlayManager.add(geOfferSetupOverlay);
     }
 
     @Override
@@ -117,7 +115,6 @@ public class OsrsMcpPlugin extends Plugin
         telemetry.shutdown();
         overlayManager.remove(runeAssistOverlay);
         overlayManager.remove(geOffersOverlay);
-        overlayManager.remove(geOfferSetupOverlay);
         stopServer();
         clientToolbar.removeNavigation(navButton);
         clientToolbar.removeNavigation(chatNavButton);
@@ -264,6 +261,9 @@ public class OsrsMcpPlugin extends Plugin
         // Keep the coin cache warm so the Flips panel can auto-size its budget off-thread.
         playerDataService.refreshCoinsCache();
 
+        // Refresh the Flips action card's live offer state a few times a minute.
+        if (gameTickCounter % 10 == 0) pushGeOffers();
+
         // Every ~3000 ticks (~30 min) capture a periodic account snapshot.
         if (++gameTickCounter < SNAPSHOT_INTERVAL_TICKS) return;
         gameTickCounter = 0;
@@ -387,6 +387,32 @@ public class OsrsMcpPlugin extends Plugin
             o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
         flipTracker.onOffer(e.getSlot(), o.getState(), o.getItemId(),
             o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
+        pushGeOffers();
+    }
+
+    /** Snapshot active GE offers (client thread) and hand them to the Flips action card. */
+    private void pushGeOffers()
+    {
+        net.runelite.api.GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
+        java.util.Map<Integer, long[]> m = new java.util.HashMap<>();
+        if (offers != null)
+        {
+            for (net.runelite.api.GrandExchangeOffer o : offers)
+            {
+                if (o == null) continue;
+                net.runelite.api.GrandExchangeOfferState st = o.getState();
+                if (st == null || st == net.runelite.api.GrandExchangeOfferState.EMPTY) continue;
+                boolean buy = st == net.runelite.api.GrandExchangeOfferState.BUYING
+                    || st == net.runelite.api.GrandExchangeOfferState.BOUGHT
+                    || st == net.runelite.api.GrandExchangeOfferState.CANCELLED_BUY;
+                boolean filling = st == net.runelite.api.GrandExchangeOfferState.BUYING
+                    || st == net.runelite.api.GrandExchangeOfferState.SELLING;
+                // {buy?1:0, price, quantitySold, totalQuantity, filling?1:0}
+                m.put(o.getItemId(), new long[]{ buy ? 1 : 0, o.getPrice(),
+                    o.getQuantitySold(), o.getTotalQuantity(), filling ? 1 : 0 });
+            }
+        }
+        chatPanel.setGeOffers(m);
     }
 
     @Subscribe

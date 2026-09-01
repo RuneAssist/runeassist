@@ -37,6 +37,9 @@ public class OsrsMcpChatPanel extends PluginPanel
     private static final Color PANEL_BG     = ColorScheme.DARK_GRAY_COLOR;
     private static final Color FIELD_BG     = ColorScheme.DARKER_GRAY_COLOR;
     private static final Color META_COLOR   = ColorScheme.MEDIUM_GRAY_COLOR;
+    private static final Color WARN         = ColorScheme.BRAND_ORANGE;   // modify / abort
+    private static final Color GOOD_C       = new Color(0, 200, 100);     // profit / done
+    private static final Color SELL_C       = new Color(0, 160, 190);     // sell action
     private static final int    BODY_WIDTH  = 158; // px; sized to the panel viewport so text never clips
 
     private static final Font NAME_FONT = new Font("SansSerif", Font.BOLD, 11);
@@ -68,6 +71,11 @@ public class OsrsMcpChatPanel extends PluginPanel
     private final JButton     findFlipsBtn = new JButton("Suggest next flip");
     private final JPanel      flipTopCard  = new JPanel();
     private final JLabel      flipStatus   = new JLabel(" ");
+    // Action-card state: the last fetched suggestions, items the user skipped this session,
+    // and a live snapshot of GE offers (fed by the plugin) so the card can say BUY/WAIT/MODIFY.
+    private java.util.List<java.util.Map<String, Object>> lastSuggestions = null;
+    private final java.util.Set<Integer> skipped = new java.util.HashSet<>();
+    private volatile java.util.Map<Integer, long[]> geOffers = new java.util.HashMap<>();
     private final JLabel      profitLbl    = new JLabel(" ");
     private final JPanel      flipLog      = new JPanel();
     private boolean           flipsOpen    = false;
@@ -447,6 +455,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         long coins = playerDataService.cachedCoins();
         // Fall back to a sensible default budget if coins aren't cached yet (e.g. logged out).
         final long capital = coins > 0 ? coins : 1_000_000L;
+        skipped.clear(); // a fresh fetch starts the candidate list over
         findFlipsBtn.setEnabled(false);
         flipStatus.setText(coins > 0 ? "Budget " + fmt(capital) + " · finding…" : "Finding…");
         new Thread(() ->
@@ -480,77 +489,206 @@ public class OsrsMcpChatPanel extends PluginPanel
         revalidate(); repaint();
     }
 
-    /** Build the prominent "next flip" card from the best suggestion that still has limit left. */
+    /** Live GE offers pushed from the plugin (client thread) so the card can show state. */
+    public void setGeOffers(java.util.Map<Integer, long[]> offers)
+    {
+        SwingUtilities.invokeLater(() ->
+        {
+            geOffers = offers != null ? offers : new java.util.HashMap<>();
+            if (flipsOpen && lastSuggestions != null) rerenderCard();
+        });
+    }
+
+    /** Store the fetched suggestions and (re)draw the single action card. */
     private void renderTopPick(java.util.List<java.util.Map<String, Object>> list)
     {
-        flipTopCard.removeAll();
-        if (list == null || list.isEmpty()) { flipTopCard.setVisible(false); return; }
+        lastSuggestions = list;
+        rerenderCard();
+    }
 
-        // Prefer the highest-ranked item you haven't already maxed the 4h buy limit on.
-        java.util.Map<String, Object> pick = null;
-        for (java.util.Map<String, Object> s : list)
+    /** Choose the best suggestion not skipped and not buy-limit-maxed, then render the card. */
+    private void rerenderCard()
+    {
+        flipTopCard.removeAll();
+        java.util.Map<String, Object> pick = choosePick();
+        if (pick == null)
+        {
+            flipTopCard.setVisible(false);
+            flipTopCard.revalidate(); flipTopCard.repaint();
+            return;
+        }
+        flipTopCard.add(buildActionCard(pick));
+        flipTopCard.setVisible(true);
+        flipTopCard.revalidate(); flipTopCard.repaint();
+    }
+
+    private java.util.Map<String, Object> choosePick()
+    {
+        if (lastSuggestions == null || lastSuggestions.isEmpty()) return null;
+        java.util.Map<String, Object> firstEligible = null;
+        for (java.util.Map<String, Object> s : lastSuggestions)
         {
             int id = (int) num(s.get("id"));
+            if (skipped.contains(id)) continue;
+            if (firstEligible == null) firstEligible = s;
             int lim = (int) num(s.get("ge_limit"));
-            if (flipTracker.limitRemaining(id, lim) != 0) { pick = s; break; }
+            if (flipTracker.limitRemaining(id, lim) != 0) return s; // not maxed — best choice
         }
-        if (pick == null) pick = list.get(0); // all maxed — still show the top one
+        return firstEligible; // everything left is limit-maxed; still show the top non-skipped
+    }
+
+    /** Flipping-Copilot-style card: an action badge (BUY/WAIT/MODIFY/SELL) + what to do now. */
+    private JPanel buildActionCard(java.util.Map<String, Object> pick)
+    {
+        int id       = (int) num(pick.get("id"));
+        long buyAt   = num(pick.get("buy_at"));
+        long sellAt  = num(pick.get("sell_at"));
+        long qty     = num(pick.get("suggested_qty"));
+        long profit  = num(pick.get("projected_profit"));
+        long marginEa= num(pick.get("margin_post_tax"));
+        Object pct   = pick.get("margin_pct");
+        int lim      = (int) num(pick.get("ge_limit"));
+        long[] off   = geOffers.get(id);
+        long openQty = openPosition(id);
+
+        // Decide the action + instruction from live offer / holdings.
+        String badge; Color badgeColor; String line1; Color line1Color = ColorScheme.LIGHT_GRAY_COLOR;
+        boolean showProfit = false;
+        if (off != null)
+        {
+            boolean buy = off[0] == 1; long price = off[1], sold = off[2], total = off[3];
+            boolean filling = off[4] == 1;
+            if (buy && filling)
+            {
+                if (price < buyAt) { badge = "MODIFY"; badgeColor = WARN;
+                    line1 = "Raise buy to " + fmt(buyAt) + " (bid " + fmt(price) + " is low)"; line1Color = WARN; }
+                else { badge = "WAIT"; badgeColor = META_COLOR;
+                    line1 = "Buying " + fmt(sold) + "/" + fmt(total) + " @ " + fmt(price); }
+            }
+            else if (buy) // buy done / cancelled -> time to sell
+            {
+                badge = "SELL"; badgeColor = SELL_C;
+                line1 = "Collect, then sell @ " + fmt(sellAt); line1Color = Color.WHITE;
+            }
+            else if (filling) // selling
+            {
+                if (price > sellAt) { badge = "MODIFY"; badgeColor = WARN;
+                    line1 = "Lower sell to " + fmt(sellAt) + " (ask " + fmt(price) + " is high)"; line1Color = WARN; }
+                else { badge = "WAIT"; badgeColor = META_COLOR;
+                    line1 = "Selling " + fmt(sold) + "/" + fmt(total) + " @ " + fmt(price); }
+            }
+            else { badge = "DONE"; badgeColor = GOOD_C; line1 = "Sold — pick the next flip"; }
+        }
+        else if (openQty > 0) // hold stock, no active offer -> sell it
+        {
+            badge = "SELL"; badgeColor = SELL_C;
+            line1 = "Sell " + fmt(openQty) + " @ " + fmt(sellAt); line1Color = Color.WHITE;
+        }
+        else // nothing placed, don't hold -> buy
+        {
+            badge = "BUY"; badgeColor = ACCENT;
+            line1 = "Buy " + fmt(qty) + " @ " + fmt(buyAt); line1Color = Color.WHITE;
+            showProfit = true;
+        }
 
         JPanel card = new JPanel();
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setBackground(FIELD_BG);
         card.setAlignmentX(LEFT_ALIGNMENT);
         card.setBorder(new CompoundBorder(
-            new MatteBorder(2, 2, 2, 2, ACCENT), new EmptyBorder(6, 8, 6, 8)));
-        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 118));
+            new MatteBorder(2, 2, 2, 2, badgeColor), new EmptyBorder(6, 8, 6, 8)));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 168));
 
-        JLabel tag = new JLabel("NEXT FLIP");
-        tag.setFont(META_FONT);
-        tag.setForeground(ACCENT);
-        tag.setAlignmentX(LEFT_ALIGNMENT);
-        card.add(tag);
+        // Badge + item name on one row.
+        JPanel head = new JPanel();
+        head.setLayout(new BoxLayout(head, BoxLayout.X_AXIS));
+        head.setBackground(FIELD_BG);
+        head.setAlignmentX(LEFT_ALIGNMENT);
+        head.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
+        JLabel badgeLbl = new JLabel(" " + badge + " ");
+        badgeLbl.setFont(new Font("SansSerif", Font.BOLD, 11));
+        badgeLbl.setForeground(Color.BLACK);
+        badgeLbl.setOpaque(true);
+        badgeLbl.setBackground(badgeColor);
+        head.add(badgeLbl);
+        head.add(Box.createHorizontalStrut(6));
+        JLabel nameLbl = new JLabel(String.valueOf(pick.get("name")));
+        nameLbl.setFont(new Font("SansSerif", Font.BOLD, 13));
+        nameLbl.setForeground(Color.WHITE);
+        head.add(nameLbl);
+        head.add(Box.createHorizontalGlue());
+        card.add(head);
+        card.add(Box.createVerticalStrut(4));
 
-        JLabel name = new JLabel(String.valueOf(pick.get("name")));
-        name.setFont(new Font("SansSerif", Font.BOLD, 13));
-        name.setForeground(Color.WHITE);
-        name.setAlignmentX(LEFT_ALIGNMENT);
-        card.add(name);
+        JLabel l1 = new JLabel(line1);
+        l1.setFont(new Font("SansSerif", Font.BOLD, 12));
+        l1.setForeground(line1Color);
+        l1.setAlignmentX(LEFT_ALIGNMENT);
+        card.add(l1);
 
-        JLabel buy = new JLabel("Buy " + fmt(pick.get("suggested_qty")) + " @ " + fmt(pick.get("buy_at")));
-        buy.setFont(BODY_FONT);
-        buy.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        buy.setAlignmentX(LEFT_ALIGNMENT);
-        card.add(buy);
+        // Always show the target buy→sell so the numbers are to hand.
+        JLabel prices = new JLabel("Buy " + fmt(buyAt) + "  →  Sell " + fmt(sellAt)
+            + "   (+" + fmt(marginEa) + " ea, " + pct + "%)");
+        prices.setFont(META_FONT);
+        prices.setForeground(META_COLOR);
+        prices.setAlignmentX(LEFT_ALIGNMENT);
+        card.add(prices);
 
-        JLabel sell = new JLabel("Sell @ " + fmt(pick.get("sell_at"))
-            + "  (+" + fmt(pick.get("margin_post_tax")) + " ea, " + pick.get("margin_pct") + "%)");
-        sell.setFont(BODY_FONT);
-        sell.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        sell.setAlignmentX(LEFT_ALIGNMENT);
-        card.add(sell);
+        if (showProfit)
+        {
+            JLabel p = new JLabel("≈ " + signed(profit) + " profit");
+            p.setFont(NAME_FONT);
+            p.setForeground(GOOD_C);
+            p.setAlignmentX(LEFT_ALIGNMENT);
+            card.add(p);
+        }
 
-        JLabel profit = new JLabel("≈ " + signed(num(pick.get("projected_profit"))) + " profit");
-        profit.setFont(NAME_FONT);
-        profit.setForeground(new Color(0, 200, 100));
-        profit.setAlignmentX(LEFT_ALIGNMENT);
-        card.add(profit);
-
-        int id = (int) num(pick.get("id"));
-        int lim = (int) num(pick.get("ge_limit"));
         int left = flipTracker.limitRemaining(id, lim);
         if (lim > 0)
         {
-            JLabel ll = new JLabel("limit " + fmt(left) + "/" + fmt(lim) + " left (4h)");
+            JLabel ll = new JLabel("4h limit " + fmt(left) + "/" + fmt(lim) + " left");
             ll.setFont(META_FONT);
-            ll.setForeground(left == 0 ? ColorScheme.BRAND_ORANGE : META_COLOR);
+            ll.setForeground(left == 0 ? WARN : META_COLOR);
             ll.setAlignmentX(LEFT_ALIGNMENT);
             card.add(ll);
         }
 
-        flipTopCard.add(card);
-        flipTopCard.setVisible(true);
-        flipTopCard.revalidate();
-        flipTopCard.repaint();
+        Object flags = pick.get("flags");
+        boolean risky = flags instanceof java.util.List && !((java.util.List<?>) flags).isEmpty();
+        if (risky)
+        {
+            @SuppressWarnings("unchecked")
+            String fstr = String.join(", ", (java.util.List<String>) flags);
+            JLabel fl = new JLabel("⚠ " + fstr);
+            fl.setFont(META_FONT);
+            fl.setForeground(WARN);
+            fl.setAlignmentX(LEFT_ALIGNMENT);
+            card.add(fl);
+        }
+
+        // Skip / Abort -> drop this item and surface the next candidate.
+        JButton skip = new JButton(risky ? "Abort — next flip" : "Skip");
+        styleButton(skip, false);
+        skip.addActionListener(e -> { skipped.add(id); rerenderCard(); });
+        card.add(Box.createVerticalStrut(4));
+        card.add(skip);
+        return card;
+    }
+
+    /** Open buy quantity for an item from the tracker (stock you hold, ready to sell). */
+    private long openPosition(int itemId)
+    {
+        try
+        {
+            java.util.Map<String, Object> snap = flipTracker.snapshot();
+            @SuppressWarnings("unchecked")
+            java.util.List<java.util.Map<String, Object>> open =
+                (java.util.List<java.util.Map<String, Object>>) snap.get("open_positions");
+            if (open != null) for (java.util.Map<String, Object> p : open)
+                if ((int) num(p.get("item_id")) == itemId) return num(p.get("qty"));
+        }
+        catch (Exception ignored) {}
+        return 0;
     }
 
     private static String fmt(Object o)
