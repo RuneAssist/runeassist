@@ -98,8 +98,14 @@ public class OfferHandler {
             }, "runeassist-item-quote").start();
 
         } else {
-            offerManager.setViewedSlotItemPrice(-1);
-            offerManager.setViewedSlotItemId(-1);
+            // RuneAssist fork: do NOT clear viewedSlotItemId/Price here. TRADINGPOST_SEARCH
+            // (isViewingSlot's source) goes back to -1 as soon as an item is picked from
+            // search -- i.e. BEFORE the user reaches the quantity/price screen -- so clearing
+            // here wiped out the just-fetched custom-item quote before the quick-set keybind
+            // could ever use it (the on-screen hint text is a separate game widget that FC
+            // set once and stays displayed, so it kept showing the stale price while the
+            // keybind silently set nothing). The cached quote is naturally replaced the next
+            // time isViewingSlot is true for a different item, so nothing goes stale here.
             viewedSlotPriceErrorText = null;
         }
         highlightController.redraw();
