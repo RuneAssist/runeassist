@@ -91,6 +91,7 @@ public class OsrsMcpChatPanel extends PluginPanel
     private final JPanel      flipLog      = new JPanel();
     private PortfolioWindow   portfolioWindow; // lazily created popup
     private FlipsHistoryWindow historyWindow; // lazily created popup
+    private ProfitGraphWindow profitGraphWindow; // lazily created popup
 
     // Settings controls
     private final JPanel                     settingsPanel = new JPanel();
@@ -388,15 +389,19 @@ public class OsrsMcpChatPanel extends PluginPanel
         JButton historyBtn = new JButton("History");
         styleButton(historyBtn, false);
         historyBtn.addActionListener(e -> openHistory());
+        JButton profitGraphBtn = new JButton("Profit graph");
+        styleButton(profitGraphBtn, false);
+        profitGraphBtn.addActionListener(e -> openProfitGraph());
         JButton resetBtn = new JButton("Reset flips");
         styleButton(resetBtn, false);
         resetBtn.addActionListener(e -> { flipTracker.reset(); refreshFlipLog(); });
-        JPanel btnRow = new JPanel(new GridLayout(0, 3, 6, 0));
+        JPanel btnRow = new JPanel(new GridLayout(0, 2, 6, 6));
         btnRow.setBackground(FIELD_BG);
         btnRow.setAlignmentX(LEFT_ALIGNMENT);
-        btnRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        btnRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 62));
         btnRow.add(portfolioBtn);
         btnRow.add(historyBtn);
+        btnRow.add(profitGraphBtn);
         btnRow.add(resetBtn);
         flipsPanel.add(Box.createVerticalStrut(4));
         flipsPanel.add(btnRow);
@@ -462,6 +467,14 @@ public class OsrsMcpChatPanel extends PluginPanel
         if (historyWindow == null)
             historyWindow = new FlipsHistoryWindow(flipTracker);
         historyWindow.open();
+    }
+
+    /** Open (creating on first use) the Profit-over-time popup — cumulative-profit line chart. */
+    private void openProfitGraph()
+    {
+        if (profitGraphWindow == null)
+            profitGraphWindow = new ProfitGraphWindow(flipTracker);
+        profitGraphWindow.open();
     }
 
     /** Refresh the profit header + recent-flip log from the tracker (client-free snapshot). */
