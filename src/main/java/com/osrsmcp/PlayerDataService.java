@@ -1971,80 +1971,86 @@ public class PlayerDataService
         return result;
     }
 
+    /**
+     * Market-wide flip candidates — v1 rules model (docs/flip-model-goal.md). Ranks items
+     * by margin-after-tax x liquidity, penalised for risk (thin/one-sided/wide-spread),
+     * from the public price+volume API. Client-free, so it runs off the client thread as a
+     * NETWORK tool. Ported from tools/flip-model.mjs (validated on live prices).
+     */
     public Map<String, Object> buildFlipSuggestions()
     {
+        final int    MIN_VOLUME = 500;         // 1h units traded
+        final int    MIN_MARGIN = 20;          // gp after tax
+        final int    TOP        = 20;
+        final double TAX_RATE   = 0.02;        // GE tax 2% of sell, capped 5M (matches game)
+        final long   TAX_CAP    = 5_000_000L;
+
         Map<String, Object> result = new LinkedHashMap<>();
-        // UIM cannot use GE at all
-        net.runelite.api.vars.AccountType at = client.getAccountType();
-        if (at == net.runelite.api.vars.AccountType.ULTIMATE_IRONMAN)
+        Map<Integer, WikiPriceService.ItemMeta> allMeta = wikiPriceService.getAllMeta();
+        if (allMeta == null || allMeta.isEmpty())
         {
-            result.put("not_applicable", true);
-            result.put("reason", "Ultimate Ironman accounts cannot use the Grand Exchange.");
-            return result;
-        }
-        if (at != net.runelite.api.vars.AccountType.NORMAL)
-            result.put("ironman_note", "Ironman accounts can only use the GE to buy bonds. All other items must be self-obtained. Flip suggestions are not applicable.");
-        if (cachedBankItems == null)
-        {
-            result.put("error", "Bank not yet opened this session. Open your bank first.");
+            result.put("error", "Price mapping unavailable; try again shortly.");
             return result;
         }
 
-        long coins = getCoins();
-        result.put("coins_available", coins);
-
-        List<Map<String, Object>> suggestions = new ArrayList<>();
-        for (Item item : cachedBankItems)
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (WikiPriceService.ItemMeta m : allMeta.values())
         {
-            if (item.getId() <= 0 || item.getQuantity() <= 0) continue;
-            WikiPriceService.PriceData pd   = wikiPriceService.getPrice(item.getId());
-            WikiPriceService.ItemMeta  meta = wikiPriceService.getMeta(item.getId());
-            WikiPriceService.VolumeData vol = wikiPriceService.getVolume5m(item.getId());
-            if (pd == null || pd.high <= 0 || pd.low <= 0) continue;
-            int margin = pd.margin();
-            if (margin <= 0) continue;
+            WikiPriceService.PriceData  pd = wikiPriceService.getPrice(m.id);
+            WikiPriceService.VolumeData v  = wikiPriceService.getVolume1h(m.id);
+            if (pd == null || v == null) continue;
+            int buy = pd.low, sell = pd.high;
+            if (buy <= 0 || sell <= 0 || sell <= buy) continue;
+            int vol = v.totalVol();
+            if (vol < MIN_VOLUME) continue;
 
-            boolean canAfford = coins >= pd.high;
-            int totalVol5m = vol != null ? vol.totalVol() : 0;
+            long tax = sell < 50 ? 0 : Math.min(TAX_CAP, (long) (sell * TAX_RATE));
+            int margin = (int) (sell - buy - tax);
+            if (margin < MIN_MARGIN) continue;
+            double marginPct = margin * 100.0 / buy;
+
+            int limit   = m.limit;
+            int perHour = Math.max(1, Math.min(v.highVol, v.lowVol)); // bottleneck side
+            int qtyCap  = limit > 0 ? limit : Math.max(1, perHour);
+            double fillHrs = (double) qtyCap / perHour;
+
+            double imbalance  = Math.abs(v.highVol - v.lowVol) / (double) vol;
+            double spreadRisk = marginPct > 25 ? 0.5 : 0;
+            double liqRisk    = vol < MIN_VOLUME * 4 ? 0.4 : 0;
+            double risk       = Math.min(0.9, imbalance * 0.6 + spreadRisk + liqRisk);
+            double turnover   = 1.0 / Math.max(0.25, fillHrs);
+            double score      = (double) margin * qtyCap * turnover * (1 - risk);
+
+            List<String> flags = new ArrayList<>();
+            if (imbalance > 0.5) flags.add("one-sided");
+            if (spreadRisk > 0)  flags.add("wide-spread");
+            if (liqRisk > 0)     flags.add("thin");
 
             Map<String, Object> s = new LinkedHashMap<>();
-            s.put("name",           meta != null ? meta.name : itemManager.getItemComposition(item.getId()).getName());
-            s.put("id",             item.getId());
-            s.put("buy_at",         pd.high);
-            s.put("sell_at",        pd.low);
-            // GE tax: 2% on sell side, capped at 5M per item
-            long taxAmount = Math.min((long)(pd.high * 0.02), 5_000_000L);
-            int postTaxMargin = margin - (int) taxAmount;
-            double postTaxMarginPct = pd.low > 0 ? (postTaxMargin * 100.0 / pd.low) : 0;
-            s.put("margin_pre_tax",      margin);
-            s.put("margin_post_tax",     postTaxMargin);
-            s.put("margin_pct_post_tax", Math.round(postTaxMarginPct * 10) / 10.0);
-            s.put("volume_5m",           totalVol5m);
-            s.put("volume_hourly_est",   totalVol5m * 12);
-            s.put("can_afford",          canAfford);
-            if (meta != null)
-            {
-                s.put("ge_limit",       meta.limit);
-                s.put("max_profit_post_tax", (long) postTaxMargin * meta.limit);
-                s.put("cost_full_flip", (long) pd.high * meta.limit);
-                s.put("highalch",       meta.highalch);
-            }
-            suggestions.add(s);
+            s.put("name", m.name);
+            s.put("id", m.id);
+            s.put("buy_at", buy);
+            s.put("sell_at", sell);
+            s.put("margin_post_tax", margin);
+            s.put("margin_pct", Math.round(marginPct * 10) / 10.0);
+            s.put("volume_1h", vol);
+            s.put("ge_limit", limit);
+            s.put("est_fill_hours", Math.round(fillHrs * 100) / 100.0);
+            s.put("flags", flags);
+            s.put("score", Math.round(score));
+            rows.add(s);
         }
 
-        // Sort: score = margin_pct * log(volume+1), deprioritise unaffordable
-        suggestions.sort((a, b) -> {
-            boolean aAfford = (boolean) a.get("can_afford");
-            boolean bAfford = (boolean) b.get("can_afford");
-            if (aAfford != bAfford) return bAfford ? 1 : -1;
-            double aScore = (double) a.get("margin_pct_post_tax") * Math.log1p((int) a.get("volume_5m"));
-            double bScore = (double) b.get("margin_pct_post_tax") * Math.log1p((int) b.get("volume_5m"));
-            return Double.compare(bScore, aScore);
-        });
+        rows.sort((a, b) -> Long.compare(((Number) b.get("score")).longValue(),
+                                         ((Number) a.get("score")).longValue()));
 
         result.put("prices_age_seconds", wikiPriceService.getPricesAgeSeconds());
-        result.put("suggestion_count", suggestions.size());
-        result.put("suggestions",      suggestions.subList(0, Math.min(20, suggestions.size())));
+        result.put("count", rows.size());
+        result.put("suggestions", rows.size() > TOP ? new ArrayList<>(rows.subList(0, TOP)) : rows);
+        result.put("note", "Market-wide flip candidates ranked by margin-after-tax x liquidity, "
+            + "penalised for risk (thin / one-sided / wide-spread). GE tax 2% (cap 5M). "
+            + "Ironman can only buy bonds on the GE; UIM cannot use the GE at all. Fill time "
+            + "is a volume estimate, not a guarantee.");
         return result;
     }
 
