@@ -64,43 +64,61 @@ public class GeSuggestionOverlay extends Overlay
 
         panel.getChildren().clear();
         panel.setPreferredSize(new Dimension(210, 0));
-        boolean sell = flip.sell;
+
+        // Mirror the panel card's resolved action so the two never contradict.
+        String action = flip.action != null && !flip.action.isEmpty()
+            ? flip.action : (flip.sell ? "SELL" : "BUY");
+        boolean sell = "SELL".equals(action);
+        boolean setup = "BUY".equals(action) || "SELL".equals(action); // a new offer to place
+        Color badge = "MODIFY".equals(action) ? WARN : ACCENT;
+
         panel.getChildren().add(TitleComponent.builder()
             .text("RuneAssist — next flip").color(ACCENT).build());
         panel.getChildren().add(LineComponent.builder()
-            .left(sell ? "SELL" : "BUY").right(flip.name).leftColor(ACCENT).rightColor(Color.WHITE).build());
-        panel.getChildren().add(LineComponent.builder()
-            .left("Price").right(fmt(sell ? flip.sellAt : flip.buyAt)).rightColor(Color.WHITE).build());
-        panel.getChildren().add(LineComponent.builder()
-            .left("Quantity").right(fmt(flip.qty)).rightColor(Color.WHITE).build());
-        if (!sell)
-            panel.getChildren().add(LineComponent.builder()
-                .left("Then sell").right(fmt(flip.sellAt)).rightColor(Color.WHITE).build());
-        panel.getChildren().add(LineComponent.builder()
-            .left("Profit").right("+" + fmt(flip.profit) + " (" + fmt(flip.marginPct) + "%)")
-            .rightColor(GOOD).build());
-        if (flip.geLimit > 0)
-            panel.getChildren().add(LineComponent.builder()
-                .left("4h limit left").right(fmt(flip.limitLeft) + "/" + fmt(flip.geLimit))
-                .rightColor(flip.limitLeft == 0 ? WARN : Color.LIGHT_GRAY).build());
+            .left(action).right(flip.name).leftColor(badge).rightColor(Color.WHITE).build());
 
-        // If the player is setting up an offer for THIS item, grade the price they've typed.
-        try
+        if (setup)
         {
-            int setupItem = client.getVarpValue(VarPlayerID.TRADINGPOST_SEARCH);
-            int entered   = client.getVarbitValue(VarbitID.GE_NEWOFFER_PRICE);
-            boolean buying = client.getVarbitValue(VarbitID.GE_NEWOFFER_TYPE) == 0;
-            if (setupItem == flip.itemId && entered > 0)
-            {
-                long target = buying ? flip.buyAt : flip.sellAt;
-                boolean ok = buying ? entered <= target + Math.max(1, target / 100)
-                                    : entered >= target - Math.max(1, target / 100);
+            panel.getChildren().add(LineComponent.builder()
+                .left("Price").right(fmt(sell ? flip.sellAt : flip.buyAt)).rightColor(Color.WHITE).build());
+            panel.getChildren().add(LineComponent.builder()
+                .left("Quantity").right(fmt(flip.qty)).rightColor(Color.WHITE).build());
+            if (!sell)
                 panel.getChildren().add(LineComponent.builder()
-                    .left("Your price").right(fmt(entered) + (ok ? "  ok" : buying ? "  high" : "  low"))
-                    .rightColor(ok ? GOOD : WARN).build());
+                    .left("Then sell").right(fmt(flip.sellAt)).rightColor(Color.WHITE).build());
+            panel.getChildren().add(LineComponent.builder()
+                .left("Profit").right("+" + fmt(flip.profit) + " (" + fmt(flip.marginPct) + "%)")
+                .rightColor(GOOD).build());
+            if (!sell && flip.geLimit > 0)
+                panel.getChildren().add(LineComponent.builder()
+                    .left("4h limit left").right(fmt(flip.limitLeft) + "/" + fmt(flip.geLimit))
+                    .rightColor(flip.limitLeft == 0 ? WARN : Color.LIGHT_GRAY).build());
+
+            // Grade the price the player has typed for this item.
+            try
+            {
+                int setupItem = client.getVarpValue(VarPlayerID.TRADINGPOST_SEARCH);
+                int entered   = client.getVarbitValue(VarbitID.GE_NEWOFFER_PRICE);
+                boolean buying = client.getVarbitValue(VarbitID.GE_NEWOFFER_TYPE) == 0;
+                if (setupItem == flip.itemId && entered > 0)
+                {
+                    long target = buying ? flip.buyAt : flip.sellAt;
+                    boolean ok = buying ? entered <= target + Math.max(1, target / 100)
+                                        : entered >= target - Math.max(1, target / 100);
+                    panel.getChildren().add(LineComponent.builder()
+                        .left("Your price").right(fmt(entered) + (ok ? "  ok" : buying ? "  high" : "  low"))
+                        .rightColor(ok ? GOOD : WARN).build());
+                }
             }
+            catch (Exception ignored) {}
         }
-        catch (Exception ignored) {}
+        else // WAIT / MODIFY / DONE — show the card's one-line instruction, no setup numbers
+        {
+            String line = flip.actionLine != null ? flip.actionLine : "";
+            if (!line.isEmpty())
+                panel.getChildren().add(LineComponent.builder()
+                    .left(line).leftColor("MODIFY".equals(action) ? WARN : Color.LIGHT_GRAY).build());
+        }
 
         // Anchor to the right of the GE window (flip to the left if it would run off-canvas).
         int gap = 6;

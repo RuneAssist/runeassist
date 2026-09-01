@@ -665,6 +665,10 @@ public class OsrsMcpChatPanel extends PluginPanel
             showProfit = true;
         }
 
+        // Publish the resolved action so the on-GE overlay mirrors the card (no contradiction).
+        sharedFlip.action = badge;
+        sharedFlip.actionLine = line1;
+
         JPanel card = new JPanel();
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setBackground(FIELD_BG);
