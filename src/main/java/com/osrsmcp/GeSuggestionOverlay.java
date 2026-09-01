@@ -64,16 +64,18 @@ public class GeSuggestionOverlay extends Overlay
 
         panel.getChildren().clear();
         panel.setPreferredSize(new Dimension(210, 0));
+        boolean sell = flip.sell;
         panel.getChildren().add(TitleComponent.builder()
             .text("RuneAssist — next flip").color(ACCENT).build());
         panel.getChildren().add(LineComponent.builder()
-            .left("BUY").right(flip.name).leftColor(ACCENT).rightColor(Color.WHITE).build());
+            .left(sell ? "SELL" : "BUY").right(flip.name).leftColor(ACCENT).rightColor(Color.WHITE).build());
         panel.getChildren().add(LineComponent.builder()
-            .left("Price").right(fmt(flip.buyAt)).rightColor(Color.WHITE).build());
+            .left("Price").right(fmt(sell ? flip.sellAt : flip.buyAt)).rightColor(Color.WHITE).build());
         panel.getChildren().add(LineComponent.builder()
             .left("Quantity").right(fmt(flip.qty)).rightColor(Color.WHITE).build());
-        panel.getChildren().add(LineComponent.builder()
-            .left("Then sell").right(fmt(flip.sellAt)).rightColor(Color.WHITE).build());
+        if (!sell)
+            panel.getChildren().add(LineComponent.builder()
+                .left("Then sell").right(fmt(flip.sellAt)).rightColor(Color.WHITE).build());
         panel.getChildren().add(LineComponent.builder()
             .left("Profit").right("+" + fmt(flip.profit) + " (" + fmt(flip.marginPct) + "%)")
             .rightColor(GOOD).build());

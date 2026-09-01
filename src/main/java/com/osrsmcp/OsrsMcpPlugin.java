@@ -403,6 +403,13 @@ public class OsrsMcpPlugin extends Plugin
         flipTracker.onOffer(e.getSlot(), o.getState(), o.getItemId(),
             o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
         pushGeOffers();
+
+        // A freshly-placed offer (nothing filled yet) for the suggested item -> advance the card.
+        net.runelite.api.GrandExchangeOfferState st = o.getState();
+        boolean fresh = (st == net.runelite.api.GrandExchangeOfferState.BUYING
+            || st == net.runelite.api.GrandExchangeOfferState.SELLING)
+            && o.getQuantitySold() == 0 && o.getTotalQuantity() > 0;
+        if (fresh) chatPanel.onOfferPlaced(o.getItemId());
     }
 
     /** Snapshot active GE offers (client thread) and hand them to the Flips action card. */
