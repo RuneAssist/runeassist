@@ -231,6 +231,11 @@ public class ToolRegistry
         tools.add(buildTool("get_money_making_context", "Get location, stats, coins and slayer task for money making method recommendations."));
         tools.add(buildTool("get_installed_plugins", "Get all installed RuneLite plugins (both built-in and Plugin Hub) with their enabled state. Use this to suggest relevant Plugin Hub plugins."));
         tools.add(buildTool("get_ge_offers",          "Get all active Grand Exchange offers including item, quantity, price and state."));
+        tools.add(buildTool("get_session_summary",
+            "What the player has done since logging in this session: XP gained per skill "
+            + "(sorted), total XP gained, levels gained, and minutes played. Great for a "
+            + "'what did I get done' recap. Returns an error until the session baseline is "
+            + "captured (first tick after login)."));
 
         // --- Wiki Bucket gateway (structured game data; runs off the game thread) ---
         tools.add(buildTool("wiki_list_buckets", "List the OSRS Wiki's structured-data tables (buckets) -- e.g. combat_achievement, infobox_monster, infobox_item, money_making_guide, dropsline, recipe. Start here to discover what game data is queryable, then use wiki_bucket_schema and wiki_bucket_query."));
@@ -330,6 +335,7 @@ public class ToolRegistry
             case "get_money_making_context":return playerDataService.buildMoneyMakingContext();
             case "get_installed_plugins": return playerDataService.buildInstalledPlugins();
             case "get_ge_offers":          { Map<String,Object> ge = new LinkedHashMap<>(); ge.put("offers", playerDataService.buildGeOffers()); return ge; }
+            case "get_session_summary":    return playerDataService.buildSessionSummary();
             default: Map<String,Object> err = new LinkedHashMap<>(); err.put("error", "Unknown tool: " + toolName); return err;
         }
     }

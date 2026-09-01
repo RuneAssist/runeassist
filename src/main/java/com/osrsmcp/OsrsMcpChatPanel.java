@@ -46,6 +46,7 @@ public class OsrsMcpChatPanel extends PluginPanel
     @Inject private CompanionAgent agent;
     @Inject private OsrsMcpConfig config;
     @Inject private ConfigManager configManager;
+    @Inject private TelemetryService telemetry;
 
     private final JPanel      messages   = new JPanel();
     private final JScrollPane scroll;
@@ -69,6 +70,8 @@ public class OsrsMcpChatPanel extends PluginPanel
     private boolean settingsOpen = false;
     private List<String> turnTools = new ArrayList<>();
     private JPanel lastMsg = null; // most recent message block, so the meta line tucks under it
+    private String currentQuestion = "";  // for the advice->outcome telemetry record
+    private int answerChars = 0;
 
     public OsrsMcpChatPanel()
     {
@@ -377,6 +380,8 @@ public class OsrsMcpChatPanel extends PluginPanel
         input.setText("");
         setBusy(true);
         turnTools = new ArrayList<>();
+        currentQuestion = text;
+        answerChars = 0;
         setStatus("Thinking...");
         agent.sendUserMessage(text, new UiListener());
     }
@@ -403,7 +408,11 @@ public class OsrsMcpChatPanel extends PluginPanel
     {
         @Override public void onAssistantText(String text)
         {
-            SwingUtilities.invokeLater(() -> addMessage("RuneAssist", ACCENT, "R", text, ACCENT));
+            SwingUtilities.invokeLater(() ->
+            {
+                if (text != null) answerChars += text.length();
+                addMessage("RuneAssist", ACCENT, "R", text, ACCENT);
+            });
         }
 
         @Override public void onToolCall(String toolName)
@@ -422,6 +431,12 @@ public class OsrsMcpChatPanel extends PluginPanel
             SwingUtilities.invokeLater(() ->
             {
                 addMeta(inputTokens, outputTokens, turnTools);
+                try
+                {
+                    telemetry.logAdvice(currentQuestion, turnTools,
+                        config.llmProvider().name(), inputTokens, outputTokens, answerChars);
+                }
+                catch (Exception ignored) {}
                 setStatus(" ");
                 setBusy(false);
                 input.requestFocusInWindow();

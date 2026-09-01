@@ -67,6 +67,7 @@ public class PlayerDataService
     @Inject private CacheWriter cacheWriter;
     @Inject private ConfigManager configManager;
     @Inject private WikiPriceService wikiPriceService;
+    @Inject private SessionTracker sessionTracker;
 
     // Bank cache -- populated when player opens their bank
     private volatile Item[] cachedBankItems = null;
@@ -114,6 +115,48 @@ public class PlayerDataService
         // World context
         data.put("world",         buildWorldInfo());
         return data;
+    }
+
+    /**
+     * get_session_summary -- what the player has done since logging in this session:
+     * XP gained per skill (sorted), total XP gained, levels gained, and minutes played.
+     * Runs on the client thread.
+     */
+    public Map<String, Object> buildSessionSummary()
+    {
+        if (!isLoggedIn()) return errorMap("Player is not logged in");
+        if (!sessionTracker.isCaptured()) return errorMap("Session baseline not captured yet; try again in a moment");
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        long minutes = (System.currentTimeMillis() - sessionTracker.startTimeMs()) / 60000;
+        result.put("session_minutes", minutes);
+
+        long totalGained = 0;
+        List<Map<String, Object>> perSkill = new ArrayList<>();
+        for (Skill s : Skill.values())
+        {
+            if (s == Skill.OVERALL) continue;
+            Integer start = sessionTracker.startXp(s);
+            if (start == null) continue;
+            int now = client.getSkillExperience(s);
+            int gained = now - start;
+            if (gained <= 0) continue;
+            int startLvl = net.runelite.api.Experience.getLevelForXp(start);
+            int nowLvl   = net.runelite.api.Experience.getLevelForXp(now);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("skill", s.getName());
+            row.put("xp_gained", gained);
+            row.put("levels_gained", nowLvl - startLvl);
+            perSkill.add(row);
+            totalGained += gained;
+        }
+        // Sort by xp_gained descending so the biggest gains are first.
+        perSkill.sort((a, b) -> Long.compare(((Number) b.get("xp_gained")).longValue(),
+                                             ((Number) a.get("xp_gained")).longValue()));
+        result.put("total_xp_gained", totalGained);
+        result.put("skills", perSkill);
+        if (perSkill.isEmpty()) result.put("note", "No XP gained yet this session.");
+        return result;
     }
 
     public Map<String, Object> buildStats()

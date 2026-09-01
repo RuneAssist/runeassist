@@ -56,6 +56,7 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private OsrsMcpChatPanel chatPanel;
     @Inject private CompanionAgent companionAgent;
     @Inject private TelemetryService telemetry;
+    @Inject private SessionTracker sessionTracker;
 
     private NavigationButton navButton;
     private NavigationButton chatNavButton;
@@ -200,6 +201,8 @@ public class OsrsMcpPlugin extends Plugin
             // immediately capture a baseline snapshot on the client thread.
             lastXp.clear();
             captureAccountSnapshot();
+            // Start a fresh session baseline for get_session_summary.
+            sessionTracker.onLogin();
         }
         else
         {
@@ -232,6 +235,9 @@ public class OsrsMcpPlugin extends Plugin
     @Subscribe
     public void onGameTick(GameTick event)
     {
+        // Capture the per-session baseline once skills are reliable (first tick after login).
+        sessionTracker.captureIfNeeded(client);
+
         // Every ~3000 ticks (~30 min) capture a periodic account snapshot.
         if (++gameTickCounter < SNAPSHOT_INTERVAL_TICKS) return;
         gameTickCounter = 0;
