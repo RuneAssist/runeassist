@@ -174,7 +174,11 @@ function reshape(itemId, hourly, fiveMin) {
   const dailyVolume = v1.lo.slice(-24).reduce((a, b) => a + b, 0)
                     + v1.hi.slice(-24).reduce((a, b) => a + b, 0);
 
-  return {
+  // Forward forecast (buy/low and sell/high), sharing one prediction time axis.
+  const fLow  = forecastSeries(l1.t, l1.p);
+  const fHigh = forecastSeries(h1.t, h1.p);
+
+  const out = {
     itemId,
     dailyVolume,
     buyPrice: lastLow,
@@ -185,6 +189,51 @@ function reshape(itemId, hourly, fiveMin) {
     volume1hTimes: v1.t, volume1hLows: v1.lo, volume1hHighs: v1.hi,
     volume5mTimes: v5.t, volume5mLows: v5.lo, volume5mHighs: v5.hi,
   };
+  if (fLow && fHigh) {
+    out.predictionTimes         = fLow.t;
+    out.predictionLowMeans      = fLow.m;
+    out.predictionLowIQRUpper   = fLow.up;
+    out.predictionLowIQRLower   = fLow.lo;
+    out.predictionHighMeans     = fHigh.m;
+    out.predictionHighIQRUpper  = fHigh.up;
+    out.predictionHighIQRLower  = fHigh.lo;
+    out.forecastModel = 'v1-volcone';
+  }
+  return out;
+}
+
+// v1 price forecast: a random-walk-with-damped-drift mean and a volatility cone for the
+// interquartile band, estimated from recent log-returns. Honest for near-random-walk GE
+// prices; widening bands reflect growing uncertainty. Not a learned model — that's the
+// job of the model-dev spec (docs/forecast-model-spec.md) handed to the VPS harness.
+function forecastSeries(times, prices, horizon = 24, step = 3600) {
+  const n = prices ? prices.length : 0;
+  if (n < 8) return null;
+  const w = Math.min(n, 168); // up to 7 days of hourly points
+  const rets = [];
+  for (let i = n - w + 1; i < n; i++) {
+    const a = prices[i - 1], b = prices[i];
+    if (a > 0 && b > 0) rets.push(Math.log(b / a));
+  }
+  if (rets.length < 4) return null;
+  const mean = rets.reduce((s, x) => s + x, 0) / rets.length;
+  const varr = rets.reduce((s, x) => s + (x - mean) ** 2, 0) / rets.length;
+  let sigma = Math.sqrt(varr);
+  if (!(sigma > 0)) sigma = 0.001;
+  // Damp drift so a noisy recent trend doesn't run away over the horizon.
+  const drift = Math.max(-0.01, Math.min(0.01, mean * 0.5));
+  const last = prices[n - 1], lastT = times[n - 1];
+  const Q = 0.6745; // z for the interquartile range of a normal
+  const t = [], m = [], up = [], lo = [];
+  for (let k = 1; k <= horizon; k++) {
+    const mk = last * Math.exp(drift * k);
+    const sk = sigma * Math.sqrt(k);
+    t.push(lastT + k * step);
+    m.push(Math.round(mk));
+    up.push(Math.round(mk * Math.exp(Q * sk)));
+    lo.push(Math.round(mk * Math.exp(-Q * sk)));
+  }
+  return { t, m, up, lo };
 }
 
 async function buildGraph(itemId) {
