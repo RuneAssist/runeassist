@@ -65,9 +65,7 @@ public class OsrsMcpChatPanel extends PluginPanel
     // Flips section (the flip model as a collapsible tab, like Goals/Settings)
     private final JButton     flipsBtn     = new JButton("Flips");
     private final JPanel      flipsPanel   = new JPanel();
-    private final JTextField  capitalField = new JTextField("10m");
-    private final JButton     findFlipsBtn = new JButton("Find flips");
-    private final JPanel      flipResults  = new JPanel();
+    private final JButton     findFlipsBtn = new JButton("Suggest next flip");
     private final JPanel      flipTopCard  = new JPanel();
     private final JLabel      flipStatus   = new JLabel(" ");
     private final JLabel      profitLbl    = new JLabel(" ");
@@ -349,20 +347,8 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipsPanel.add(sep);
         flipsPanel.add(Box.createVerticalStrut(8));
 
-        flipsPanel.add(fieldLabel("Capital"));
-        capitalField.setAlignmentX(LEFT_ALIGNMENT);
-        capitalField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
-        capitalField.setFont(BODY_FONT);
-        capitalField.setForeground(Color.WHITE);
-        capitalField.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        capitalField.setCaretColor(Color.WHITE);
-        capitalField.setBorder(new CompoundBorder(
-            new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
-            new EmptyBorder(3, 5, 3, 5)));
-        capitalField.addActionListener(e -> refreshFlips());
-        flipsPanel.add(capitalField);
-        flipsPanel.add(Box.createVerticalStrut(6));
-
+        // One button: find the single best flip sized to your current coins (auto).
+        findFlipsBtn.setText("Suggest next flip");
         styleButton(findFlipsBtn, true);
         findFlipsBtn.addActionListener(e -> refreshFlips());
         flipsPanel.add(findFlipsBtn);
@@ -373,7 +359,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipsPanel.add(Box.createVerticalStrut(4));
         flipsPanel.add(flipStatus);
 
-        // Prominent "recommended next flip" card (FC leads with one pick, not a list).
+        // The single recommended next flip (no long list).
         flipTopCard.setLayout(new BoxLayout(flipTopCard, BoxLayout.Y_AXIS));
         flipTopCard.setBackground(ColorScheme.DARK_GRAY_COLOR);
         flipTopCard.setAlignmentX(LEFT_ALIGNMENT);
@@ -381,14 +367,8 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipsPanel.add(Box.createVerticalStrut(4));
         flipsPanel.add(flipTopCard);
 
-        flipResults.setLayout(new BoxLayout(flipResults, BoxLayout.Y_AXIS));
-        flipResults.setBackground(FIELD_BG);
-        flipResults.setAlignmentX(LEFT_ALIGNMENT);
-        flipsPanel.add(Box.createVerticalStrut(4));
-        flipsPanel.add(flipResults);
-
         JLabel hint = new JLabel("<html><body style='width:" + BODY_WIDTH + "px'>"
-            + "Display-only market flips ranked for your capital. Advice, not automation.</body></html>");
+            + "Display-only. Budget is your coins; advice, not automation.</body></html>");
         hint.setFont(META_FONT);
         hint.setForeground(META_COLOR);
         hint.setAlignmentX(LEFT_ALIGNMENT);
@@ -404,7 +384,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipsOpen = open;
         flipsBtn.setText(open ? "Hide flips" : "Flips");
         flipsPanel.setVisible(open);
-        if (open) refreshFlipLog();
+        if (open) { refreshFlipLog(); refreshFlips(); } // auto-suggest on open
         revalidate();
         repaint();
     }
@@ -464,13 +444,16 @@ public class OsrsMcpChatPanel extends PluginPanel
 
     private void refreshFlips()
     {
-        final long capital = parseCapital(capitalField.getText());
+        long coins = playerDataService.cachedCoins();
+        // Fall back to a sensible default budget if coins aren't cached yet (e.g. logged out).
+        final long capital = coins > 0 ? coins : 1_000_000L;
         findFlipsBtn.setEnabled(false);
-        flipStatus.setText("Finding flips...");
+        flipStatus.setText(coins > 0 ? "Budget " + fmt(capital) + " · finding…" : "Finding…");
         new Thread(() ->
         {
             java.util.Map<String, Object> res;
-            try { res = playerDataService.buildFlipSuggestions(capital, 0, 0, 12); }
+            // Ask for a handful so we can skip items whose 4h buy limit you've maxed.
+            try { res = playerDataService.buildFlipSuggestions(capital, 0, 0, 8); }
             catch (Exception ex) { res = null; }
             final java.util.Map<String, Object> r = res;
             SwingUtilities.invokeLater(() -> renderFlips(r));
@@ -480,23 +463,19 @@ public class OsrsMcpChatPanel extends PluginPanel
     @SuppressWarnings("unchecked")
     private void renderFlips(java.util.Map<String, Object> r)
     {
-        flipResults.removeAll();
         findFlipsBtn.setEnabled(true);
         if (r == null || r.get("error") != null)
         {
             flipStatus.setText(r != null ? String.valueOf(r.get("error")) : "Failed to load prices.");
             flipTopCard.setVisible(false);
-            flipResults.revalidate(); flipResults.repaint();
+            revalidate(); repaint();
             return;
         }
         java.util.List<java.util.Map<String, Object>> list =
             (java.util.List<java.util.Map<String, Object>>) r.get("suggestions");
-        int count = r.get("count") instanceof Number ? ((Number) r.get("count")).intValue()
-            : (list == null ? 0 : list.size());
-        flipStatus.setText(count + " candidates · top " + (list == null ? 0 : list.size()));
-        renderTopPick(list);
-        if (list != null) for (java.util.Map<String, Object> s : list) flipResults.add(flipRow(s));
-        flipResults.revalidate(); flipResults.repaint();
+        long coins = playerDataService.cachedCoins();
+        flipStatus.setText(coins > 0 ? "Budget " + fmt(coins) : "Suggested flip");
+        renderTopPick(list); // single best pick, no list
         refreshFlipLog();
         revalidate(); repaint();
     }
@@ -574,70 +553,6 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipTopCard.repaint();
     }
 
-    @SuppressWarnings("unchecked")
-    private JComponent flipRow(java.util.Map<String, Object> s)
-    {
-        JPanel p = new JPanel();
-        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        p.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        p.setAlignmentX(LEFT_ALIGNMENT);
-        p.setBorder(new CompoundBorder(
-            new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
-            new EmptyBorder(5, 7, 5, 7)));
-        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 108));
-
-        JLabel name = new JLabel(String.valueOf(s.get("name")));
-        name.setFont(NAME_FONT);
-        name.setForeground(Color.WHITE);
-        name.setAlignmentX(LEFT_ALIGNMENT);
-        p.add(name);
-
-        JLabel d1 = new JLabel(fmt(s.get("buy_at")) + " → " + fmt(s.get("sell_at"))
-            + "  +" + fmt(s.get("margin_post_tax")) + " (" + s.get("margin_pct") + "%)");
-        d1.setFont(META_FONT);
-        d1.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        d1.setAlignmentX(LEFT_ALIGNMENT);
-        p.add(d1);
-
-        JLabel d2 = new JLabel("x" + s.get("suggested_qty") + "  =  "
-            + fmt(s.get("projected_profit")) + " profit");
-        d2.setFont(META_FONT);
-        d2.setForeground(new Color(0, 180, 90));
-        d2.setAlignmentX(LEFT_ALIGNMENT);
-        p.add(d2);
-
-        // Buy-limit remaining in the 4h window (from what you've actually bought).
-        int id = (int) num(s.get("id"));
-        int geLimit = (int) num(s.get("ge_limit"));
-        int left = flipTracker.limitRemaining(id, geLimit);
-        if (geLimit > 0)
-        {
-            JLabel lim = new JLabel("limit " + fmt(left) + "/" + fmt(geLimit) + " left (4h)");
-            lim.setFont(META_FONT);
-            lim.setForeground(left == 0 ? ColorScheme.BRAND_ORANGE : META_COLOR);
-            lim.setAlignmentX(LEFT_ALIGNMENT);
-            p.add(lim);
-        }
-
-        Object flags = s.get("flags");
-        if (flags instanceof java.util.List && !((java.util.List<?>) flags).isEmpty())
-        {
-            JLabel fl = new JLabel(String.join(", ", (java.util.List<String>) flags));
-            fl.setFont(META_FONT);
-            fl.setForeground(ColorScheme.BRAND_ORANGE);
-            fl.setAlignmentX(LEFT_ALIGNMENT);
-            p.add(fl);
-        }
-
-        JPanel wrap = new JPanel(new BorderLayout());
-        wrap.setBackground(FIELD_BG);
-        wrap.setBorder(new EmptyBorder(0, 0, 6, 0));
-        wrap.add(p, BorderLayout.NORTH);
-        wrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, 116));
-        wrap.setAlignmentX(LEFT_ALIGNMENT);
-        return wrap;
-    }
-
     private static String fmt(Object o)
     {
         long n = o instanceof Number ? ((Number) o).longValue() : 0;
@@ -645,18 +560,6 @@ public class OsrsMcpChatPanel extends PluginPanel
         if (a >= 1_000_000) return (Math.round(n / 100000.0) / 10.0) + "M";
         if (a >= 1_000) return (Math.round(n / 100.0) / 10.0) + "k";
         return String.valueOf(n);
-    }
-
-    private static long parseCapital(String s)
-    {
-        if (s == null) return 0;
-        s = s.trim().toLowerCase().replace(",", "");
-        if (s.isEmpty()) return 0;
-        double mul = 1;
-        if (s.endsWith("m")) { mul = 1_000_000; s = s.substring(0, s.length() - 1); }
-        else if (s.endsWith("k")) { mul = 1_000; s = s.substring(0, s.length() - 1); }
-        try { return (long) (Double.parseDouble(s) * mul); }
-        catch (NumberFormatException e) { return 0; }
     }
 
     private JPanel buildComposer()
