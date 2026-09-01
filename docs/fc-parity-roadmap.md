@@ -28,11 +28,10 @@ Owner: **CW**=Claude worktree agent · **DS**=DeepSeek harness on Ares · **me**
 - ☐ **Sell-from-bank suggestions** (CW) — suggest selling items already in the bank/inventory,
   not just tracker-recorded positions. FC: `AccountStatus.shouldSellFromBank`,
   `HighlightController.drawSellFromBankHighlight`. Needs bank-contents read.
-- ☐ **Slot profit colorizer** (CW) — tint each GE slot by its running profit/loss. FC:
-  `SlotProfitColorizer`, `controller/SlotProfitColorizer.java`.
-- ☐ **Flips / Transactions history window** (CW) — full sortable list of completed flips and
-  raw buy/sell transactions (we only show a compact recent log). FC: `ui/FlipPanel`,
-  Transactions tab.
+- ☑ **Slot profit colorizer** (CW) — `GeSlotProfitOverlay` draws per-slot running P/L
+  green/red on active GE offers.
+- ☑ **Flips / Transactions history window** (CW) — `FlipsHistoryWindow`, sortable table of
+  all completed flips + totals, opened from the Flips-tab History button.
 - ☐ **Profit-over-time graph** (CW) — cumulative profit chart from local flip history. FC:
   Profit graph tab.
 
