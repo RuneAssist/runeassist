@@ -54,6 +54,7 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private PluginManager pluginManager;
     @Inject private DailyTracker dailyTracker;
     @Inject private OsrsMcpChatPanel chatPanel;
+    @Inject private OsrsMcpFlipPanel flipPanel;
     @Inject private CompanionAgent companionAgent;
     @Inject private TelemetryService telemetry;
     @Inject private NudgeService nudgeService;
@@ -65,6 +66,7 @@ public class OsrsMcpPlugin extends Plugin
 
     private NavigationButton navButton;
     private NavigationButton chatNavButton;
+    private NavigationButton flipNavButton;
 
     // Telemetry: last seen XP per skill (for XP-gain deltas) and tick counter for periodic snapshots.
     private final java.util.Map<Skill, Long> lastXp = new java.util.HashMap<>();
@@ -101,6 +103,15 @@ public class OsrsMcpPlugin extends Plugin
             .build();
         clientToolbar.addNavigation(chatNavButton);
         chatPanel.refresh();
+
+        flipNavButton = NavigationButton.builder()
+            .tooltip("RuneAssist Flips")
+            .icon(icon)
+            .priority(12)
+            .panel(flipPanel)
+            .build();
+        clientToolbar.addNavigation(flipNavButton);
+
         overlayManager.add(runeAssistOverlay);
         overlayManager.add(geOffersOverlay);
     }
@@ -116,6 +127,7 @@ public class OsrsMcpPlugin extends Plugin
         stopServer();
         clientToolbar.removeNavigation(navButton);
         clientToolbar.removeNavigation(chatNavButton);
+        clientToolbar.removeNavigation(flipNavButton);
     }
 
     /** Live status for the panel: quest-data source, request activity, interop-plugin availability. */
