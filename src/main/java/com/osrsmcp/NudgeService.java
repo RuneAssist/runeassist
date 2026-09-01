@@ -68,6 +68,13 @@ public class NudgeService
                 true); // dailies happen at login, so bypass the grace window
     }
 
+    /** A goal auto-completed — surface it (achievement, so it bypasses the login grace). */
+    public void onGoalComplete(String text)
+    {
+        if (!enabled() || text == null) return;
+        fire("goal-done:" + text, "Goal complete: " + text, true);
+    }
+
     private void fire(String key, String text, boolean bypassGrace)
     {
         if (!enabled() || firedKeys.contains(key)) return;

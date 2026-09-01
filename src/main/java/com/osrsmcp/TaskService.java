@@ -112,12 +112,13 @@ public class TaskService
 
     // ── auto-completion ─────────────────────────────────────────────────────────
 
-    /** Tick any AUTO task whose live metric has reached its target. Client thread only. */
-    public void evaluate()
+    /** Tick any AUTO task whose live metric has reached its target; returns newly-completed
+     *  task texts (for a completion nudge). Client thread only. */
+    public List<String> evaluate()
     {
         ensureLoaded();
-        if (client.getGameState() != GameState.LOGGED_IN) return;
-        boolean changed = false;
+        List<String> completed = new ArrayList<>();
+        if (client.getGameState() != GameState.LOGGED_IN) return completed;
         synchronized (tasks)
         {
             for (Map<String, Object> t : tasks)
@@ -126,10 +127,23 @@ public class TaskService
                 int cur = liveMetric((String) t.get("metric"));
                 int target = ((Number) t.get("target")).intValue();
                 if (cur >= 0 && cur >= target)
-                { t.put("done", true); t.put("doneAt", System.currentTimeMillis()); changed = true; }
+                {
+                    t.put("done", true); t.put("doneAt", System.currentTimeMillis());
+                    completed.add((String) t.get("text"));
+                }
             }
         }
-        if (changed) save();
+        if (!completed.isEmpty()) save();
+        return completed;
+    }
+
+    /** Client-free copy of all tasks (for the panel/EDT — no live re-evaluation). */
+    public List<Map<String, Object>> snapshot()
+    {
+        ensureLoaded();
+        List<Map<String, Object>> copy = new ArrayList<>();
+        synchronized (tasks) { for (Map<String, Object> t : tasks) copy.add(new LinkedHashMap<>(t)); }
+        return copy;
     }
 
     private int liveMetric(String m)
