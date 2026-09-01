@@ -15,7 +15,7 @@ import java.util.*;
 @Slf4j
 public class Persistance {
     public static Gson gson;
-    public static final File COPILOT_DIR = new File(RuneLite.RUNELITE_DIR, "flipping-copilot");
+    public static final File COPILOT_DIR = new File(RuneLite.RUNELITE_DIR, "runeassist-flip");
     public static final String UN_ACKED_TRANSACTIONS_FILE_TEMPLATE = "%s_un_acked.jsonl";
     public static final String LOGIN_RESPONSE_JSON_FILE = "login-response.json";
     public static File directory;

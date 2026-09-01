@@ -10,7 +10,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 
-@ConfigGroup("flippingcopilot")
+@ConfigGroup("runeassistflip")
 public interface FlippingCopilotConfig extends Config
 {
     public enum PriceGraphWebsite

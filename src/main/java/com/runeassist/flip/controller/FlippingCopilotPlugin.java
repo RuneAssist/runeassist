@@ -161,9 +161,9 @@ public class FlippingCopilotPlugin extends Plugin {
 		Persistance.setUp(gson);
 		// seems we need to delay instantiating the UI till here as otherwise the panels look different
 		mainPanel = injector.getInstance(MainPanel.class);
-		final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/icon-small.png");
+		final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/runeassist-flip.png");
 		navButton = NavigationButton.builder()
-				.tooltip("Flipping Copilot")
+				.tooltip("RuneAssist Flipping")
 				.icon(icon)
 				.priority(3)
 				.panel(mainPanel)
@@ -384,7 +384,7 @@ public class FlippingCopilotPlugin extends Plugin {
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event) {
-		if (event.getGroup().equals("flippingcopilot")) {
+		if (event.getGroup().equals("runeassistflip")) {
 			log.debug("copilot config changed event received");
 			configRS.forceSet(config);
 			if (event.getKey().equals("profitAmountColor") || event.getKey().equals("lossAmountColor")) {
