@@ -1,7 +1,7 @@
 package com.osrsmcp;
 
-import com.flippingcopilot.model.Suggestion;
-import com.flippingcopilot.model.SuggestionType;
+import com.runeassist.flip.model.Suggestion;
+import com.runeassist.flip.model.SuggestionType;
 
 import java.util.List;
 import java.util.Map;

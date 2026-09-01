@@ -1,6 +1,6 @@
 package com.osrsmcp;
 
-import com.flippingcopilot.model.Suggestion;
+import com.runeassist.flip.model.Suggestion;
 import net.runelite.api.Client;
 import net.runelite.api.GrandExchangeOffer;
 import net.runelite.api.GrandExchangeOfferState;
