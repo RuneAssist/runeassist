@@ -18,6 +18,8 @@ Parts of this plugin are adapted from the Flipping Copilot RuneLite plugin
   item (from their `GePreviousSearch`).
 - `GeKeybindHandler.java` — the keybind that fills a suggested price/quantity into the
   open GE input (from their `OfferHandler.setChatboxValue` / `KeybindHandler`).
+- `GeSlotProfitOverlay.java` — per-slot running profit/loss shown green/red on active GE
+  offers (from their `SlotProfitColorizer`), drawn as an overlay rather than mutating widgets.
 
 The original copyright notice and license text are reproduced below as required.
 
