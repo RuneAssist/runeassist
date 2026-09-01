@@ -86,6 +86,7 @@ public class OsrsMcpChatPanel extends PluginPanel
     private final java.util.Set<Integer> skipped = new java.util.HashSet<>();
     private volatile java.util.Map<Integer, long[]> geOffers = new java.util.HashMap<>();
     private volatile int currentPickId = -1; // item id of the shown suggestion
+    private volatile long lastAutoRefresh = 0; // debounce auto-refresh on holdings changes
     private final JLabel      profitLbl    = new JLabel(" ");
     private final JPanel      flipLog      = new JPanel();
 
@@ -481,12 +482,14 @@ public class OsrsMcpChatPanel extends PluginPanel
 
     private static String signed(long n) { return (n >= 0 ? "+" : "-") + fmt(Math.abs(n)) + " gp"; }
 
-    private void refreshFlips()
+    private void refreshFlips() { refreshFlips(true); }
+
+    private void refreshFlips(boolean resetSkips)
     {
         long coins = playerDataService.cachedCoins();
-        // Fall back to a sensible default budget if coins aren't cached yet (e.g. logged out).
+        // Fall back to a sensible budget if coins aren't cached yet (e.g. logged out).
         final long capital = coins > 0 ? coins : 1_000_000L;
-        skipped.clear(); // a fresh fetch starts the candidate list over
+        if (resetSkips) skipped.clear(); // a manual fetch starts the candidate list over
         findFlipsBtn.setEnabled(false);
         flipStatus.setText(coins > 0 ? "Budget " + fmt(capital) + " · finding…" : "Finding…");
         // Held positions to consider selling (client-free snapshot, safe off-thread).
@@ -565,6 +568,22 @@ public class OsrsMcpChatPanel extends PluginPanel
             if (itemId <= 0 || itemId != currentPickId || lastSuggestions == null) return;
             skipped.add(itemId);
             rerenderCard();
+        });
+    }
+
+    /**
+     * Holdings changed (a buy or sell completed), so newly-held stock may now be worth
+     * selling. Recompute the suggestion, keeping the user's skips. Debounced; EDT-safe.
+     */
+    public void onHoldingsChanged()
+    {
+        SwingUtilities.invokeLater(() ->
+        {
+            if (lastSuggestions == null) return; // Flips not used yet
+            long now = System.currentTimeMillis();
+            if (now - lastAutoRefresh < 8000) return;
+            lastAutoRefresh = now;
+            refreshFlips(false);
         });
     }
 
