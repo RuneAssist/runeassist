@@ -20,6 +20,8 @@ Parts of this plugin are adapted from the Flipping Copilot RuneLite plugin
   open GE input (from their `OfferHandler.setChatboxValue` / `KeybindHandler`).
 - `GeSlotProfitOverlay.java` — per-slot running profit/loss shown green/red on active GE
   offers (from their `SlotProfitColorizer`), drawn as an overlay rather than mutating widgets.
+- `GeInventoryCostOverlay.java` — average buy price labelled on held inventory items while the
+  GE is open (from their `InventorySlotTooltipOverlay`), display-only over the GE inventory.
 
 The original copyright notice and license text are reproduced below as required.
 
