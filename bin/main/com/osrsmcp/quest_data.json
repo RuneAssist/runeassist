@@ -1,0 +1,3893 @@
+{
+ "_generated": "2026-08-31T09:12:30.106Z",
+ "_source": "oldschool.runescape.wiki",
+ "optimal_order": [
+  "Learning the Ropes",
+  "Cook's Assistant",
+  "Sheep Shearer",
+  "Misthalin Mystery",
+  "Prince Ali Rescue",
+  "The Restless Ghost",
+  "Rune Mysteries",
+  "Stronghold of Security",
+  "Imp Catcher",
+  "Witch's Potion",
+  "Gertrude's Cat",
+  "Children of the Sun",
+  "Natural history quiz",
+  "Daddy's Home",
+  "Dwarf Cannon",
+  "Waterfall Quest",
+  "Tree Gnome Village",
+  "Doric's Quest",
+  "Witch's House",
+  "The Knight's Sword",
+  "The Tourist Trap",
+  "Black Knights' Fortress",
+  "Druidic Ritual",
+  "Recruitment Drive",
+  "Goblin Diplomacy",
+  "Sleeping Giants",
+  "Fight Arena",
+  "Plague City",
+  "Monk's Friend",
+  "Hazeel Cult",
+  "Sheep Herder",
+  "Biohazard",
+  "Tower of Life",
+  "Tribal Totem",
+  "Death Plateau",
+  "Merlin's Crystal",
+  "Holy Grail",
+  "Murder Mystery",
+  "The Grand Tree",
+  "Ardougne Diary",
+  "Rag and Bone Man I",
+  "Priest in Peril",
+  "Nature Spirit",
+  "Ghosts Ahoy",
+  "Making History",
+  "The Ides of Milk",
+  "The Lost Tribe",
+  "Death to the Dorgeshuun",
+  "Elemental Workshop I",
+  "Icthlarin's Little Helper",
+  "The Golem",
+  "The Ribbiting Tale of a Lily Pad Labour Dispute",
+  "Lost City",
+  "Fairytale I - Growing Pains",
+  "Recipe for Disaster/Another Cook's Quest",
+  "Recipe for Disaster/Freeing the Goblin generals",
+  "Sea Slug",
+  "Pandemonium",
+  "Prying Times",
+  "Current Affairs",
+  "Fishing Contest",
+  "Recipe for Disaster/Freeing the Mountain Dwarf",
+  "Mountain Daughter",
+  "Ratcatchers",
+  "The Feud",
+  "Death on the Isle",
+  "Alfred Grimhand's Barcrawl",
+  "Scorpion Catcher",
+  "The Dig Site",
+  "Elemental Workshop II",
+  "A Soul's Bane",
+  "Enter the Abyss",
+  "X Marks the Spot",
+  "Pirate's Treasure",
+  "Client of Kourend",
+  "The Queen of Thieves",
+  "The Depths of Despair",
+  "A Porcine of Interest",
+  "Wanted!",
+  "Shield of Arrav",
+  "Varrock Museum",
+  "Bone Voyage",
+  "Watchtower",
+  "The Giant Dwarf",
+  "Forgettable Tale...",
+  "Another Slice of H.A.M.",
+  "Vampyre Slayer",
+  "Ernest the Chicken",
+  "Demon Slayer",
+  "Shadow of the Storm",
+  "Horror from the Deep",
+  "Animal Magnetism",
+  "Creature of Fenkenstrain",
+  "Big Chompy Bird Hunting",
+  "Jungle Potion",
+  "Shilo Village",
+  "Karamja Diary",
+  "Zogre Flesh Eaters",
+  "Observatory Quest",
+  "Spirits of the Elid",
+  "Garden of Tranquillity",
+  "Enlightened Journey",
+  "Balloon transport system",
+  "Balloon transport system",
+  "Romeo & Juliet",
+  "Tears of Guthix",
+  "In Search of the Myreque",
+  "Shades of Mort'ton",
+  "In Aid of the Myreque",
+  "Skippy and the Mogres",
+  "Troll Stronghold",
+  "Troll Romance",
+  "Darkness of Hallowvale",
+  "Underground Pass",
+  "Regicide",
+  "Dragon Slayer I",
+  "The Fremennik Trials",
+  "The Fremennik Isles",
+  "Recipe for Disaster/Freeing Evil Dave",
+  "Recipe for Disaster/Freeing Pirate Pete",
+  "Tai Bwo Wannai Trio",
+  "Kandarin Diary",
+  "Contact!",
+  "Temple of Ikov",
+  "The Eyes of Glouphrie",
+  "Temple of the Eye",
+  "One Small Favour",
+  "The Ascent of Arceuus",
+  "Tale of the Righteous",
+  "The Forsaken Tower",
+  "Desert Diary#Easy",
+  "Fremennik Diary#Easy",
+  "Falador Diary#Easy",
+  "Kourend & Kebos Diary#Easy",
+  "Lumbridge & Draynor Diary#Easy",
+  "Morytania Diary#Easy",
+  "Varrock Diary#Easy",
+  "Western Provinces Diary#Easy",
+  "Wilderness Diary#Easy",
+  "Between a Rock...",
+  "The Slug Menace",
+  "Getting Ahead",
+  "Museum Camp",
+  "Cold War",
+  "The Hand in the Sand",
+  "Enakhra's Lament",
+  "Eadgar's Ruse",
+  "My Arm's Big Adventure",
+  "The Garden of Death",
+  "Rag and Bone Man II",
+  "Rum Deal",
+  "Cabin Fever",
+  "Meat and Greet",
+  "Recipe for Disaster/Freeing the Lumbridge Guide",
+  "Recipe for Disaster/Freeing Skrach Uglogwee",
+  "Heroes' Quest",
+  "Throne of Miscellania",
+  "Royal Trouble",
+  "Haunted Mine",
+  "Lair of Tarn Razorlor",
+  "Monkey Madness I",
+  "Ethically Acquired Antiquities",
+  "Twilight's Promise",
+  "Roving Elves",
+  "Mourning's End Part I",
+  "Mourning's End Part II",
+  "Desert Treasure I",
+  "Family Crest",
+  "What Lies Below",
+  "Eagles' Peak",
+  "A Tail of Two Cats",
+  "Legends' Quest",
+  "Land of the Goblins",
+  "Recipe for Disaster/Freeing Sir Amik Varze",
+  "Olaf's Quest",
+  "A Kingdom Divided",
+  "A Taste of Hope",
+  "At First Light",
+  "Balloon transport system",
+  "Ardougne Diary#Medium",
+  "Desert Diary#Medium",
+  "Falador Diary#Medium",
+  "Fremennik Diary#Medium",
+  "Kandarin Diary#Medium",
+  "Kourend & Kebos Diary#Medium",
+  "Lumbridge & Draynor Diary#Medium",
+  "Morytania Diary#Medium",
+  "Varrock Diary#Medium",
+  "Western Provinces Diary#Medium",
+  "Curse of the Empty Lord",
+  "The General's Shadow",
+  "Varrock Museum",
+  "His Faithful Servants",
+  "The Great Brain Robbery",
+  "Scrambled!",
+  "Fairytale II - Cure a Queen",
+  "Recipe for Disaster/Freeing King Awowogei",
+  "Recipe for Disaster/Defeating the Culinaromancer",
+  "Perilous Moons",
+  "The Path of Glouphrie",
+  "The Heart of Darkness",
+  "Lunar Diplomacy",
+  "King's Ransom",
+  "Knight Waves Training Grounds",
+  "Swan Song",
+  "Below Ice Mountain",
+  "Defender of Varrock",
+  "Devious Minds",
+  "Grim Tales",
+  "Dream Mentor",
+  "Karamja Diary#Medium",
+  "Wilderness Diary#Medium",
+  "The Fremennik Exiles",
+  "Sins of the Father",
+  "Balloon transport system",
+  "In Search of Knowledge",
+  "Hopespear's Will",
+  "Beneath Cursed Sands",
+  "Shadows of Custodia",
+  "Troubled Tortugans",
+  "The Red Reef",
+  "Fallen From Grace",
+  "Monkey Madness II",
+  "Into the Tombs",
+  "A Night at the Theatre",
+  "Dragon Slayer II",
+  "The Curse of Arrav",
+  "Making Friends with My Arm",
+  "Secrets of the North",
+  "The Final Dawn",
+  "While Guthix Sleeps",
+  "Desert Treasure II - The Fallen Empire",
+  "Song of the Elves",
+  "The Blood Moon Rises",
+  "Clock Tower",
+  "The Corsair Curse"
+ ],
+ "quests": {
+  "A Kingdom Divided": {
+   "requirements": {
+    "quests": [
+     "Architectural Alliance",
+     "The Ascent of Arceuus",
+     "The Depths of Despair",
+     "Druidic Ritual",
+     "The Forsaken Tower",
+     "The Queen of Thieves",
+     "Tale of the Righteous"
+    ],
+    "skills": {
+     "agility": 54,
+     "crafting": 38,
+     "herblore": 50,
+     "magic": 35,
+     "mining": 42,
+     "thieving": 52,
+     "woodcutting": 52
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "A Night at the Theatre": {
+   "requirements": {
+    "quests": [
+     "A Taste of Hope"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "A Porcine of Interest": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "slayer": 3000
+   }
+  },
+  "A Soul's Bane": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "defence": 500,
+    "hitpoints": 500
+   }
+  },
+  "A Tail of Two Cats": {
+   "requirements": {
+    "quests": [
+     "Icthlarin's Little Helper"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "A Taste of Hope": {
+   "requirements": {
+    "quests": [
+     "Darkness of Hallowvale",
+     "Druidic Ritual"
+    ],
+    "skills": {
+     "agility": 45,
+     "attack": 40,
+     "crafting": 48,
+     "herblore": 40,
+     "slayer": 38
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Alfred Grimhand's Barcrawl": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Animal Magnetism": {
+   "requirements": {
+    "quests": [
+     "Ernest the Chicken",
+     "Priest in Peril",
+     "The Restless Ghost"
+    ],
+    "skills": {
+     "crafting": 19,
+     "ranged": 30,
+     "slayer": 18,
+     "woodcutting": 35
+    },
+    "skills_ironman": {
+     "prayer": 31
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 1000,
+    "fletching": 1000,
+    "slayer": 1000,
+    "woodcutting": 2500
+   }
+  },
+  "Another Slice of H.A.M.": {
+   "requirements": {
+    "quests": [
+     "Death to the Dorgeshuun",
+     "The Dig Site",
+     "The Giant Dwarf"
+    ],
+    "skills": {
+     "attack": 15,
+     "prayer": 25
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "mining": 3000,
+    "prayer": 3000
+   }
+  },
+  "At First Light": {
+   "requirements": {
+    "quests": [
+     "Children of the Sun",
+     "Eagles' Peak"
+    ],
+    "skills": {
+     "hunter": 46,
+     "herblore": 30,
+     "construction": 27
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "construction": 800,
+    "herblore": 500,
+    "hunter": 4500
+   }
+  },
+  "Barbarian Farming": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "farming": 15
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Barbarian Firemaking": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "crafting": 11,
+     "firemaking": 35
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Barbarian Fishing": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "agility": 15,
+     "fishing": 55,
+     "strength": 35
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Barbarian Herblore": {
+   "requirements": {
+    "quests": [
+     "Druidic Ritual"
+    ],
+    "skills": {
+     "herblore": 4
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Barbarian Smithing": {
+   "requirements": {
+    "quests": [
+     "Tai Bwo Wannai Trio",
+     "Barbarian Firemaking",
+     "Barbarian Fishing"
+    ],
+    "skills": {
+     "smithing": 5
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Barbarian Training": {
+   "requirements": {
+    "quests": [
+     "Barbarian Firemaking",
+     "Barbarian Fishing",
+     "Barbarian Herblore",
+     "Barbarian Smithing",
+     "Barbarian Farming"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Bear Your Soul": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Below Ice Mountain": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 16
+   },
+   "xp_rewards": {}
+  },
+  "Beneath Cursed Sands": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 50000
+   }
+  },
+  "Between a Rock...": {
+   "requirements": {
+    "quests": [
+     "Dwarf Cannon",
+     "Fishing Contest"
+    ],
+    "skills": {
+     "defence": 30,
+     "mining": 40,
+     "smithing": 50
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "defence": 5000,
+    "mining": 5000,
+    "smithing": 5000
+   }
+  },
+  "Big Chompy Bird Hunting": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "cooking": 30,
+     "fletching": 5,
+     "ranged": 30
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 1470,
+    "fletching": 262,
+    "ranged": 735
+   }
+  },
+  "Biohazard": {
+   "requirements": {
+    "quests": [
+     "Plague City"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "thieving": 1250
+   }
+  },
+  "Black Knights' Fortress": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 12
+   },
+   "xp_rewards": {}
+  },
+  "Bone Voyage": {
+   "requirements": {
+    "quests": [
+     "The Dig Site"
+    ],
+    "skills": {
+     "kudos": 100
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Cabin Fever": {
+   "requirements": {
+    "quests": [
+     "Pirate's Treasure",
+     "Rum Deal"
+    ],
+    "skills": {
+     "agility": 42,
+     "crafting": 45,
+     "smithing": 50,
+     "ranged": 40
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 7000,
+    "crafting": 7000,
+    "smithing": 7000
+   }
+  },
+  "Children of the Sun": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Client of Kourend": {
+   "requirements": {
+    "quests": [
+     "X Marks the Spot"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Clock Tower": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Cold War": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "agility": 30,
+     "construction": 34,
+     "crafting": 30,
+     "hunter": 10,
+     "thieving": 15
+    },
+    "skills_ironman": {
+     "woodcutting": 50
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 5000,
+    "construction": 1500,
+    "crafting": 2000
+   }
+  },
+  "Contact!": {
+   "requirements": {
+    "quests": [
+     "Prince Ali Rescue",
+     "Icthlarin's Little Helper"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "thieving": 7000
+   }
+  },
+  "Cook's Assistant": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 300
+   }
+  },
+  "Creature of Fenkenstrain": {
+   "requirements": {
+    "quests": [
+     "Priest in Peril",
+     "The Restless Ghost"
+    ],
+    "skills": {
+     "crafting": 20,
+     "thieving": 25
+    },
+    "skills_ironman": {
+     "smithing": 4
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "thieving": 1000
+   }
+  },
+  "Current Affairs": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "fishing": 1000,
+    "sailing": 1400
+   }
+  },
+  "Curse of the Empty Lord": {
+   "requirements": {
+    "quests": [
+     "Desert Treasure I",
+     "The Restless Ghost"
+    ],
+    "skills": {
+     "prayer": 31,
+     "thieving": 53
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Daddy's Home": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Darkness of Hallowvale": {
+   "requirements": {
+    "quests": [
+     "In Aid of the Myreque"
+    ],
+    "skills": {
+     "agility": 26,
+     "construction": 5,
+     "crafting": 32,
+     "magic": 33,
+     "mining": 20,
+     "strength": 40,
+     "thieving": 22
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 7000,
+    "construction": 2000,
+    "thieving": 6000
+   }
+  },
+  "Death Plateau": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "attack": 3000
+   }
+  },
+  "Death on the Isle": {
+   "requirements": {
+    "quests": [
+     "Children of the Sun"
+    ],
+    "skills": {
+     "agility": 32,
+     "thieving": 34
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 7500,
+    "crafting": 5000,
+    "thieving": 10000
+   }
+  },
+  "Death to the Dorgeshuun": {
+   "requirements": {
+    "quests": [
+     "The Lost Tribe"
+    ],
+    "skills": {
+     "agility": 23,
+     "thieving": 23
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "ranged": 2000,
+    "thieving": 2000
+   }
+  },
+  "Defender of Varrock": {
+   "requirements": {
+    "quests": [
+     "Shield of Arrav",
+     "Temple of Ikov",
+     "Below Ice Mountain",
+     "Family Crest",
+     "Garden of Tranquillity",
+     "What Lies Below",
+     "Romeo & Juliet",
+     "Demon Slayer"
+    ],
+    "skills": {
+     "smithing": 55,
+     "hunter": 52
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "hunter": 15000,
+    "smithing": 15000
+   }
+  },
+  "Demon Slayer": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Desert Treasure I": {
+   "requirements": {
+    "quests": [
+     "The Dig Site",
+     "Temple of Ikov",
+     "The Tourist Trap",
+     "Troll Stronghold",
+     "Priest in Peril",
+     "Waterfall Quest"
+    ],
+    "skills": {
+     "firemaking": 50,
+     "magic": 50,
+     "slayer": 10,
+     "thieving": 53
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "magic": 20000
+   },
+   "unlocks": [
+    "Ancient Magicks spellbook",
+    "Ancient teleports"
+   ]
+  },
+  "Desert Treasure II - The Fallen Empire": {
+   "requirements": {
+    "quests": [
+     "Desert Treasure I",
+     "Secrets of the North",
+     "Enakhra's Lament",
+     "Temple of the Eye",
+     "The Garden of Death",
+     "Below Ice Mountain",
+     "His Faithful Servants"
+    ],
+    "skills": {
+     "firemaking": 75,
+     "magic": 75,
+     "herblore": 62,
+     "thieving": 70,
+     "runecraft": 60,
+     "construction": 60
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {},
+   "xp_choice": [
+    {
+     "amount": 100000,
+     "constraint": "any skill 70+",
+     "count": 3
+    }
+   ],
+   "unlocks": [
+    "Ancient Rings",
+    "Vardorvis/Duke/Leviathan/Whisperer access",
+    "Awakened bosses"
+   ]
+  },
+  "Devious Minds": {
+   "requirements": {
+    "quests": [
+     "Doric's Quest",
+     "Enter the Abyss",
+     "Troll Stronghold",
+     "Wanted!"
+    ],
+    "skills": {
+     "fletching": 50,
+     "runecraft": 50,
+     "smithing": 65
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "fletching": 5000,
+    "runecraft": 5000,
+    "smithing": 6500
+   }
+  },
+  "Doric's Quest": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {
+     "mining": 15
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "mining": 1300
+   }
+  },
+  "Dragon Slayer I": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {
+     "crafting": 8
+    },
+    "quest_points": 32
+   },
+   "xp_rewards": {
+    "defence": 38650,
+    "strength": 38650
+   }
+  },
+  "Dragon Slayer II": {
+   "requirements": {
+    "quests": [
+     "Animal Magnetism",
+     "Barbarian Firemaking",
+     "Bone Voyage",
+     "Client of Kourend",
+     "Dream Mentor",
+     "Ghosts Ahoy",
+     "Legends' Quest",
+     "A Tail of Two Cats"
+    ],
+    "skills": {
+     "agility": 60,
+     "construction": 50,
+     "crafting": 62,
+     "hitpoints": 50,
+     "magic": 75,
+     "mining": 68,
+     "smithing": 70,
+     "thieving": 60
+    },
+    "skills_ironman": {},
+    "quest_points": 200
+   },
+   "xp_rewards": {
+    "agility": 50000,
+    "mining": 60000,
+    "smithing": 80000,
+    "thieving": 50000
+   },
+   "xp_choice": [
+    {
+     "amount": 25000,
+     "constraint": "any skill 50+",
+     "count": 2
+    }
+   ],
+   "unlocks": [
+    "Myths' Guild access",
+    "Adamant/Rune gauntlets upgrades path",
+    "Ava's assembler (with Western hard diary)"
+   ]
+  },
+  "Dream Mentor": {
+   "requirements": {
+    "quests": [
+     "Eadgar's Ruse",
+     "Lunar Diplomacy"
+    ],
+    "skills": {
+     "combat": 85
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "hitpoints": 35000,
+    "magic": 10000
+   }
+  },
+  "Druidic Ritual": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "herblore": 250
+   }
+  },
+  "Dwarf Cannon": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 750
+   }
+  },
+  "Eadgar's Ruse": {
+   "requirements": {
+    "quests": [
+     "Druidic Ritual",
+     "Troll Stronghold"
+    ],
+    "skills": {
+     "herblore": 31
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "herblore": 11000
+   }
+  },
+  "Eagles' Peak": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "hunter": 27
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "hunter": 2500
+   }
+  },
+  "Easy Ardougne Diary": {
+   "requirements": {
+    "quests": [
+     "Biohazard",
+     "Rune Mysteries"
+    ],
+    "skills": {
+     "thieving": 5
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Easy Kandarin Diary": {
+   "requirements": {
+    "quests": [
+     "Started:Elemental Workshop I"
+    ],
+    "skills": {
+     "agility": 20,
+     "farming": 13,
+     "fishing": 16
+    },
+    "skills_ironman": {
+     "crafting": 42
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Elemental Workshop I": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "crafting": 20,
+     "mining": 20,
+     "smithing": 20
+    },
+    "skills_ironman": {
+     "mining": 30
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 5000,
+    "smithing": 5000
+   }
+  },
+  "Elemental Workshop II": {
+   "requirements": {
+    "quests": [
+     "Elemental Workshop I"
+    ],
+    "skills": {
+     "magic": 20,
+     "smithing": 30
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 7500,
+    "smithing": 7500
+   }
+  },
+  "Elite Ardougne Diary": {
+   "requirements": {
+    "quests": [
+     "Desert Treasure I",
+     "Haunted Mine"
+    ],
+    "skills": {
+     "ranged": 40,
+     "magic": 94,
+     "agility": 90,
+     "thieving": 82,
+     "crafting": 35,
+     "fletching": 69,
+     "smithing": 91,
+     "fishing": 81,
+     "cooking": 91,
+     "firemaking": 50,
+     "farming": 85
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Elite Kandarin Diary": {
+   "requirements": {
+    "quests": [
+     "Hard Kandarin Diary",
+     "Barbarian Training",
+     "Family Crest",
+     "Lunar Diplomacy",
+     "Tai Bwo Wannai Trio"
+    ],
+    "skills": {
+     "agility": 60,
+     "cooking": 80,
+     "crafting": 85,
+     "farming": 79,
+     "firemaking": 85,
+     "fishing": 76,
+     "herblore": 86,
+     "magic": 87,
+     "smithing": 90,
+     "barbarian assault: attacker": 5,
+     "barbarian assault: collector": 5,
+     "barbarian assault: defender": 5,
+     "barbarian assault: healer": 5
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Enakhra's Lament": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "crafting": 50,
+     "firemaking": 45,
+     "magic": 39,
+     "prayer": 43
+    },
+    "skills_ironman": {
+     "mining": 45
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 7000,
+    "firemaking": 7000,
+    "magic": 7000,
+    "mining": 7000
+   }
+  },
+  "Enlightened Journey": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "firemaking": 20,
+     "farming": 30,
+     "crafting": 36
+    },
+    "skills_ironman": {},
+    "quest_points": 20
+   },
+   "xp_rewards": {
+    "crafting": 2000,
+    "farming": 3000,
+    "firemaking": 4000,
+    "woodcutting": 3000
+   }
+  },
+  "Enter the Abyss": {
+   "requirements": {
+    "quests": [
+     "Rune Mysteries"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "runecraft": 1000
+   }
+  },
+  "Ernest the Chicken": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Ethically Acquired Antiquities": {
+   "requirements": {
+    "quests": [
+     "Children of the Sun",
+     "Shield of Arrav"
+    ],
+    "skills": {
+     "thieving": 25
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "thieving": 6000
+   }
+  },
+  "Fairytale I - Growing Pains": {
+   "requirements": {
+    "quests": [
+     "Lost City",
+     "Nature Spirit"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "attack": 2000,
+    "farming": 3500,
+    "magic": 1000
+   }
+  },
+  "Fairytale II - Cure a Queen": {
+   "requirements": {
+    "quests": [
+     "Druidic Ritual",
+     "Fairytale I - Growing Pains"
+    ],
+    "skills": {
+     "farming": 49,
+     "herblore": 57,
+     "thieving": 40
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "herblore": 3500,
+    "thieving": 2500
+   }
+  },
+  "Fallen From Grace": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 10000,
+    "mining": 5000,
+    "runecraft": 5000,
+    "sailing": 12500,
+    "slayer": 1000
+   }
+  },
+  "Family Crest": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "crafting": 40,
+     "magic": 59,
+     "mining": 40,
+     "smithing": 40
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Family Pest": {
+   "requirements": {
+    "quests": [
+     "Family Crest"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Fight Arena": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "attack": 12175,
+    "thieving": 2175
+   }
+  },
+  "Fishing Contest": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "fishing": 10
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "fishing": 2437
+   }
+  },
+  "Forgettable Tale...": {
+   "requirements": {
+    "quests": [
+     "The Giant Dwarf",
+     "Fishing Contest"
+    ],
+    "skills": {
+     "cooking": 22,
+     "farming": 17
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 5000,
+    "farming": 5000
+   }
+  },
+  "Garden of Tranquillity": {
+   "requirements": {
+    "quests": [
+     "Creature of Fenkenstrain"
+    ],
+    "skills": {
+     "farming": 25
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "farming": 5000
+   }
+  },
+  "Gertrude's Cat": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 1525
+   }
+  },
+  "Getting Ahead": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "construction": 26,
+     "crafting": 30
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "construction": 3200,
+    "crafting": 4000
+   }
+  },
+  "Ghosts Ahoy": {
+   "requirements": {
+    "quests": [
+     "Priest in Peril",
+     "The Restless Ghost"
+    ],
+    "skills": {
+     "agility": 25,
+     "cooking": 20
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "prayer": 2400
+   }
+  },
+  "Goblin Diplomacy": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 200
+   }
+  },
+  "Grim Tales": {
+   "requirements": {
+    "quests": [
+     "Druidic Ritual",
+     "Witch's House"
+    ],
+    "skills": {
+     "agility": 59,
+     "farming": 45,
+     "herblore": 52,
+     "thieving": 58,
+     "woodcutting": 71
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 25000,
+    "farming": 10000,
+    "herblore": 15000,
+    "hitpoints": 5000,
+    "thieving": 25000,
+    "woodcutting": 60000
+   }
+  },
+  "Hard Ardougne Diary": {
+   "requirements": {
+    "quests": [
+     "Legends' Quest",
+     "Monkey Madness I",
+     "Mourning's End Part II",
+     "Watchtower "
+    ],
+    "skills": {
+     "strength": 50,
+     "ranged": 60,
+     "prayer": 42,
+     "magic": 66,
+     "runecraft": 65,
+     "construction": 50,
+     "agility": 56,
+     "herblore": 45,
+     "thieving": 72,
+     "crafting": 50,
+     "fletching": 5,
+     "hunter": 59,
+     "mining": 52,
+     "smithing": 68,
+     "fishing": 53,
+     "cooking": 53,
+     "woodcutting": 50,
+     "farming": 70
+    },
+    "skills_ironman": {},
+    "quest_points": 107
+   },
+   "xp_rewards": {}
+  },
+  "Hard Kandarin Diary": {
+   "requirements": {
+    "quests": [
+     "Medium Kandarin Diary",
+     "Barbarian Firemaking",
+     "Barbarian Fishing",
+     "Barbarian Smithing",
+     "Knight Waves Training Grounds",
+     "Tai Bwo Wannai Trio",
+     "Started:Desert Treasure I"
+    ],
+    "skills": {
+     "agility": 60,
+     "construction": 50,
+     "crafting": 10,
+     "defence": 70,
+     "firemaking": 65,
+     "fishing": 70,
+     "fletching": 70,
+     "magic": 56,
+     "prayer": 70,
+     "smithing": 75,
+     "strength": 50,
+     "thieving": 53,
+     "woodcutting": 60
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Haunted Mine": {
+   "requirements": {
+    "quests": [
+     "Priest in Peril"
+    ],
+    "skills": {
+     "crafting": 35
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "strength": 22000
+   }
+  },
+  "Hazeel Cult": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "thieving": 1500
+   }
+  },
+  "Heroes' Quest": {
+   "requirements": {
+    "quests": [
+     "Dragon Slayer I",
+     "Druidic Ritual",
+     "Lost City",
+     "Merlin's Crystal",
+     "Shield of Arrav"
+    ],
+    "skills": {
+     "cooking": 53,
+     "fishing": 53,
+     "herblore": 25,
+     "mining": 50
+    },
+    "skills_ironman": {},
+    "quest_points": 55
+   },
+   "xp_rewards": {
+    "attack": 3075,
+    "cooking": 2825,
+    "defence": 3075,
+    "firemaking": 1575,
+    "fishing": 2725,
+    "herblore": 1325,
+    "hitpoints": 3075,
+    "mining": 2575,
+    "ranged": 2075,
+    "smithing": 2275,
+    "strength": 3075,
+    "woodcutting": 1575
+   }
+  },
+  "His Faithful Servants": {
+   "requirements": {
+    "quests": [
+     "Priest in Peril"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Holy Grail": {
+   "requirements": {
+    "quests": [
+     "Merlin's Crystal"
+    ],
+    "skills": {
+     "attack": 20
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "defence": 15300,
+    "prayer": 69750
+   }
+  },
+  "Hopespear's Will": {
+   "requirements": {
+    "quests": [
+     "Started:The Restless Ghost",
+     "Desert Treasure I",
+     "Fairytale II - Cure a Queen",
+     "Land of the Goblins"
+    ],
+    "skills": {
+     "prayer": 50
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Horror from the Deep": {
+   "requirements": {
+    "quests": [
+     "Alfred Grimhand's Barcrawl"
+    ],
+    "skills": {
+     "agility": 35
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "magic": 4662.5,
+    "ranged": 4662.5,
+    "strength": 4662.5
+   }
+  },
+  "Icthlarin's Little Helper": {
+   "requirements": {
+    "quests": [
+     "Gertrude's Cat"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 4000,
+    "thieving": 4500,
+    "woodcutting": 4000
+   }
+  },
+  "Imp Catcher": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "magic": 875
+   }
+  },
+  "In Aid of the Myreque": {
+   "requirements": {
+    "quests": [
+     "In Search of the Myreque"
+    ],
+    "skills": {
+     "agility": 25,
+     "crafting": 25,
+     "magic": 7,
+     "mining": 15
+    },
+    "skills_ironman": {
+     "fishing": 16,
+     "smithing": 50
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "attack": 2000,
+    "crafting": 2000,
+    "defence": 2000,
+    "strength": 2000
+   }
+  },
+  "In Search of Knowledge": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "In Search of the Myreque": {
+   "requirements": {
+    "quests": [
+     "Nature Spirit"
+    ],
+    "skills": {
+     "agility": 25
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "attack": 600,
+    "crafting": 600,
+    "defence": 600,
+    "hitpoints": 600,
+    "strength": 600
+   }
+  },
+  "Into the Tombs": {
+   "requirements": {
+    "quests": [
+     "Beneath Cursed Sands"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Jungle Potion": {
+   "requirements": {
+    "quests": [
+     "Druidic Ritual"
+    ],
+    "skills": {
+     "herblore": 3
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "herblore": 775
+   }
+  },
+  "King's Ransom": {
+   "requirements": {
+    "quests": [
+     "Black Knights' Fortress",
+     "Holy Grail",
+     "Murder Mystery",
+     "One Small Favour"
+    ],
+    "skills": {
+     "defence": 65,
+     "magic": 45
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "defence": 33000,
+    "magic": 5000
+   }
+  },
+  "Knight Waves": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "attack": 20000
+   }
+  },
+  "Knight Waves Training Grounds": {
+   "requirements": {
+    "quests": [
+     "King's Ransom"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Lair of Tarn Razorlor": {
+   "requirements": {
+    "quests": [
+     "Haunted Mine"
+    ],
+    "skills": {
+     "slayer": 40
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Land of the Goblins": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 8000,
+    "fishing": 8000,
+    "herblore": 8000,
+    "thieving": 8000
+   }
+  },
+  "Legends' Quest": {
+   "requirements": {
+    "quests": [
+     "Family Crest",
+     "Heroes' Quest",
+     "Shilo Village",
+     "Underground Pass",
+     "Waterfall Quest"
+    ],
+    "skills": {
+     "agility": 50,
+     "crafting": 50,
+     "herblore": 45,
+     "magic": 56,
+     "mining": 52,
+     "prayer": 42,
+     "smithing": 50,
+     "strength": 50,
+     "thieving": 50,
+     "woodcutting": 50
+    },
+    "skills_ironman": {},
+    "quest_points": 107
+   },
+   "xp_rewards": {}
+  },
+  "Lost City": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "crafting": 31,
+     "woodcutting": 36
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Lunar Diplomacy": {
+   "requirements": {
+    "quests": [
+     "The Fremennik Trials",
+     "Lost City",
+     "Rune Mysteries",
+     "Shilo Village"
+    ],
+    "skills": {
+     "crafting": 61,
+     "defence": 40,
+     "firemaking": 49,
+     "herblore": 5,
+     "magic": 65,
+     "mining": 60,
+     "woodcutting": 55
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "magic": 5000,
+    "runecraft": 5000
+   },
+   "xp_choice": [
+    {
+     "amount": 5000,
+     "constraint": "Magic (fixed)",
+     "count": 1
+    }
+   ],
+   "unlocks": [
+    "Lunar spellbook",
+    "Baba Yaga / Moonclan"
+   ]
+  },
+  "Mage Arena I": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "magic": 60
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Mage Arena II": {
+   "requirements": {
+    "quests": [
+     "Mage Arena I"
+    ],
+    "skills": {
+     "magic": 75
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Making Friends with My Arm": {
+   "requirements": {
+    "quests": [
+     "Cold War",
+     "My Arm's Big Adventure",
+     "Romeo & Juliet",
+     "Swan Song"
+    ],
+    "skills": {
+     "agility": 68,
+     "construction": 35,
+     "firemaking": 66,
+     "mining": 72
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 50000,
+    "construction": 10000,
+    "firemaking": 40000,
+    "mining": 50000
+   }
+  },
+  "Making History": {
+   "requirements": {
+    "quests": [
+     "Priest in Peril",
+     "The Restless Ghost"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 1000,
+    "prayer": 1000
+   }
+  },
+  "Meat and Greet": {
+   "requirements": {
+    "quests": [
+     "Children of the Sun"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 8000
+   }
+  },
+  "Medium Ardougne Diary": {
+   "requirements": {
+    "quests": [
+     "Enlightened Journey",
+     "The Hand in the Sand",
+     "Tower of Life",
+     "Underground Pass",
+     "Started:Fairytale II - Cure a Queen",
+     "Started:Sea Slug",
+     "Started:Watchtower"
+    ],
+    "skills": {
+     "strength": 38,
+     "ranged": 21,
+     "magic": 51,
+     "agility": 39,
+     "thieving": 38,
+     "firemaking": 50,
+     "woodcutting": 36,
+     "farming": 31
+    },
+    "skills_ironman": {
+     "crafting": 36,
+     "fletching": 59,
+     "smithing": 59
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Medium Kandarin Diary": {
+   "requirements": {
+    "quests": [
+     "Easy Kandarin Diary",
+     "Alfred Grimhand's Barcrawl",
+     "Elemental Workshop II",
+     "Started:Fairytale II - Cure a Queen",
+     "Started:Waterfall Quest"
+    ],
+    "skills": {
+     "agility": 36,
+     "cooking": 43,
+     "farming": 26,
+     "fishing": 46,
+     "fletching": 50,
+     "herblore": 48,
+     "magic": 45,
+     "mining": 30,
+     "ranged": 40,
+     "strength": 22,
+     "thieving": 47
+    },
+    "skills_ironman": {
+     "fletching": 59,
+     "smithing": 59
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Merlin's Crystal": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Misthalin Mystery": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 600
+   }
+  },
+  "Monk's Friend": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "woodcutting": 2000
+   }
+  },
+  "Monkey Madness I": {
+   "requirements": {
+    "quests": [
+     "The Grand Tree",
+     "Tree Gnome Village"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Monkey Madness II": {
+   "requirements": {
+    "quests": [
+     "Enlightened Journey",
+     "The Eyes of Glouphrie",
+     "Recipe for Disaster/Freeing King Awowogei",
+     "Troll Stronghold",
+     "Watchtower"
+    ],
+    "skills": {
+     "agility": 55,
+     "crafting": 70,
+     "firemaking": 60,
+     "hunter": 60,
+     "slayer": 69,
+     "thieving": 55
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 60000,
+    "hunter": 50000,
+    "slayer": 80000,
+    "thieving": 50000
+   },
+   "xp_choice": [
+    {
+     "amount": 100000,
+     "constraint": "any combat skill 55+",
+     "count": 2
+    }
+   ],
+   "unlocks": [
+    "Heroic gloves",
+    "Demonic gorilla access",
+    "Zenyte / Ballista path"
+   ]
+  },
+  "Mountain Daughter": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "agility": 20
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "attack": 1000,
+    "prayer": 2000
+   }
+  },
+  "Mourning's End Part I": {
+   "requirements": {
+    "quests": [
+     "Big Chompy Bird Hunting",
+     "Roving Elves",
+     "Sheep Herder"
+    ],
+    "skills": {
+     "ranged": 60,
+     "thieving": 50
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "hitpoints": 25000,
+    "hunter": 1000,
+    "thieving": 40000
+   }
+  },
+  "Mourning's End Part II": {
+   "requirements": {
+    "quests": [
+     "Mourning's End Part I"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 60000
+   }
+  },
+  "Murder Mystery": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 1406
+   }
+  },
+  "My Arm's Big Adventure": {
+   "requirements": {
+    "quests": [
+     "Eadgar's Ruse",
+     "The Feud",
+     "Jungle Potion"
+    ],
+    "skills": {
+     "farming": 29,
+     "woodcutting": 10
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "farming": 5000,
+    "herblore": 10000
+   }
+  },
+  "Natural History Quiz": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Nature Spirit": {
+   "requirements": {
+    "quests": [
+     "Priest in Peril",
+     "The Restless Ghost"
+    ],
+    "skills": {},
+    "skills_ironman": {
+     "crafting": 18
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 3000,
+    "defence": 2000,
+    "hitpoints": 2000
+   }
+  },
+  "Observatory Quest": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 2250
+   }
+  },
+  "Olaf's Quest": {
+   "requirements": {
+    "quests": [
+     "The Fremennik Trials"
+    ],
+    "skills": {
+     "firemaking": 40,
+     "woodcutting": 50
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "defence": 12000
+   }
+  },
+  "One Small Favour": {
+   "requirements": {
+    "quests": [
+     "Rune Mysteries",
+     "Shilo Village"
+    ],
+    "skills": {
+     "agility": 36,
+     "crafting": 25,
+     "herblore": 18,
+     "smithing": 30
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Pandemonium": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "sailing": 300
+   }
+  },
+  "Perilous Moons": {
+   "requirements": {
+    "quests": [
+     "Twilight's Promise"
+    ],
+    "skills": {
+     "slayer": 48,
+     "hunter": 20,
+     "fishing": 20,
+     "runecraft": 20,
+     "construction": 10
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "fishing": 5000,
+    "hunter": 5000,
+    "runecraft": 5000,
+    "slayer": 40000
+   }
+  },
+  "Pirate's Treasure": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Plague City": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "mining": 2425
+   }
+  },
+  "Priest in Peril": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "prayer": 1406
+   }
+  },
+  "Prince Ali Rescue": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Prying Times": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "sailing": 800,
+    "smithing": 1000
+   }
+  },
+  "Rag and Bone Man I": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 500,
+    "prayer": 500
+   }
+  },
+  "Rag and Bone Man II": {
+   "requirements": {
+    "quests": [
+     "The Fremennik Trials",
+     "Horror from the Deep",
+     "Rag and Bone Man I",
+     "Skippy and the Mogres",
+     "Started:Creature of Fenkenstrain",
+     "Started:Waterfall Quest",
+     "Started:Zogre Flesh Eaters"
+    ],
+    "skills": {
+     "defence": 20,
+     "slayer": 40
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "prayer": 5000
+   }
+  },
+  "Ratcatchers": {
+   "requirements": {
+    "quests": [
+     "Icthlarin's Little Helper",
+     "Started:The Giant Dwarf"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "thieving": 4500
+   }
+  },
+  "Recipe for Disaster": {
+   "requirements": {
+    "quests": [
+     "Recipe for Disaster/Defeating the Culinaromancer"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {},
+   "xp_choice": [
+    {
+     "amount": 20000,
+     "constraint": "any skill 50+",
+     "count": 1
+    }
+   ],
+   "unlocks": [
+    "Barrows gloves",
+    "Culinaromancer's chest",
+    "Cooking gauntlets path"
+   ]
+  },
+  "Recipe for Disaster/Another Cook's Quest": {
+   "requirements": {
+    "quests": [
+     "Cook's Assistant"
+    ],
+    "skills": {
+     "cooking": 10
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Recipe for Disaster/Defeating the Culinaromancer": {
+   "requirements": {
+    "quests": [
+     "Desert Treasure I",
+     "Horror from the Deep",
+     "Recipe for Disaster/Freeing the Mountain Dwarf",
+     "Recipe for Disaster/Freeing the Goblin generals",
+     "Recipe for Disaster/Freeing Pirate Pete",
+     "Recipe for Disaster/Freeing the Lumbridge Guide",
+     "Recipe for Disaster/Freeing Evil Dave",
+     "Recipe for Disaster/Freeing Skrach Uglogwee",
+     "Recipe for Disaster/Freeing Sir Amik Varze",
+     "Recipe for Disaster/Freeing King Awowogei"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 175
+   },
+   "xp_rewards": {}
+  },
+  "Recipe for Disaster/Freeing Evil Dave": {
+   "requirements": {
+    "quests": [
+     "Gertrude's Cat",
+     "Recipe for Disaster/Another Cook's Quest",
+     "Shadow of the Storm"
+    ],
+    "skills": {
+     "cooking": 25
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 7000
+   }
+  },
+  "Recipe for Disaster/Freeing King Awowogei": {
+   "requirements": {
+    "quests": [
+     "Monkey Madness I",
+     "Recipe for Disaster/Another Cook's Quest"
+    ],
+    "skills": {
+     "agility": 48,
+     "cooking": 70
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 10000,
+    "cooking": 10000
+   }
+  },
+  "Recipe for Disaster/Freeing Pirate Pete": {
+   "requirements": {
+    "quests": [
+     "Recipe for Disaster/Another Cook's Quest"
+    ],
+    "skills": {
+     "cooking": 31
+    },
+    "skills_ironman": {
+     "crafting": 42,
+     "smithing": 31
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 1000,
+    "crafting": 1000,
+    "fishing": 1000,
+    "smithing": 1000
+   }
+  },
+  "Recipe for Disaster/Freeing Sir Amik Varze": {
+   "requirements": {
+    "quests": [
+     "Recipe for Disaster/Another Cook's Quest",
+     "Started:Legends' Quest"
+    ],
+    "skills": {},
+    "skills_ironman": {
+     "farming": 20
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 4000,
+    "hitpoints": 4000
+   }
+  },
+  "Recipe for Disaster/Freeing Skrach Uglogwee": {
+   "requirements": {
+    "quests": [
+     "Big Chompy Bird Hunting",
+     "Recipe for Disaster/Another Cook's Quest"
+    ],
+    "skills": {
+     "cooking": 41,
+     "firemaking": 20
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 1500,
+    "crafting": 1500,
+    "ranged": 1500
+   }
+  },
+  "Recipe for Disaster/Freeing the Goblin generals": {
+   "requirements": {
+    "quests": [
+     "Goblin Diplomacy",
+     "Recipe for Disaster/Another Cook's Quest"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 1000,
+    "crafting": 1000,
+    "farming": 1000
+   }
+  },
+  "Recipe for Disaster/Freeing the Lumbridge Guide": {
+   "requirements": {
+    "quests": [
+     "Big Chompy Bird Hunting",
+     "Biohazard",
+     "Demon Slayer",
+     "Murder Mystery",
+     "Nature Spirit",
+     "Recipe for Disaster/Another Cook's Quest",
+     "Witch's House"
+    ],
+    "skills": {
+     "cooking": 40
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 2500,
+    "magic": 2500
+   }
+  },
+  "Recipe for Disaster/Freeing the Mountain Dwarf": {
+   "requirements": {
+    "quests": [
+     "Fishing Contest",
+     "Recipe for Disaster/Another Cook's Quest"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "cooking": 1000,
+    "slayer": 1000
+   }
+  },
+  "Recruitment Drive": {
+   "requirements": {
+    "quests": [
+     "Black Knights' Fortress",
+     "Druidic Ritual"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 1000.5,
+    "herblore": 1000.5,
+    "prayer": 1000.5
+   },
+   "xp_choice": [
+    {
+     "amount": 1000,
+     "constraint": "Agility/Herblore/Prayer (fixed set)",
+     "count": 3
+    }
+   ]
+  },
+  "Regicide": {
+   "requirements": {
+    "quests": [
+     "Underground Pass"
+    ],
+    "skills": {
+     "agility": 56,
+     "crafting": 10
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 13750
+   }
+  },
+  "Rogue Trader": {
+   "requirements": {
+    "quests": [
+     "The Feud",
+     "Rune Mysteries",
+     "Icthlarin's Little Helper"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Romeo & Juliet": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Roving Elves": {
+   "requirements": {
+    "quests": [
+     "Regicide",
+     "Waterfall Quest"
+    ],
+    "skills": {
+     "agility": 56
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "strength": 10000
+   }
+  },
+  "Royal Trouble": {
+   "requirements": {
+    "quests": [
+     "Throne of Miscellania"
+    ],
+    "skills": {
+     "agility": 40,
+     "slayer": 40
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 5000,
+    "hitpoints": 5000,
+    "slayer": 5000
+   }
+  },
+  "Rum Deal": {
+   "requirements": {
+    "quests": [
+     "Priest in Peril",
+     "Zogre Flesh Eaters"
+    ],
+    "skills": {
+     "crafting": 42,
+     "farming": 40,
+     "fishing": 50,
+     "prayer": 47,
+     "slayer": 42
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "farming": 7000,
+    "fishing": 7000,
+    "prayer": 7000
+   }
+  },
+  "Rune Mysteries": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Sacred Bone Burner restoration": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Scorpion Catcher": {
+   "requirements": {
+    "quests": [
+     "Alfred Grimhand's Barcrawl"
+    ],
+    "skills": {
+     "prayer": 31
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "strength": 6625
+   }
+  },
+  "Scrambled!": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "construction": 5000,
+    "cooking": 5000,
+    "smithing": 5000
+   }
+  },
+  "Sea Slug": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "firemaking": 30
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "fishing": 7175
+   }
+  },
+  "Secrets of the North": {
+   "requirements": {
+    "quests": [
+     "Making Friends with My Arm",
+     "The General's Shadow",
+     "Devious Minds",
+     "Hazeel Cult"
+    ],
+    "skills": {
+     "agility": 69,
+     "thieving": 64,
+     "hunter": 56
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 60000,
+    "hunter": 40000,
+    "thieving": 50000
+   }
+  },
+  "Shades of Mort'ton": {
+   "requirements": {
+    "quests": [
+     "Druidic Ritual",
+     "Priest in Peril"
+    ],
+    "skills": {
+     "crafting": 20,
+     "firemaking": 5,
+     "herblore": 15
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 2000,
+    "herblore": 2000
+   }
+  },
+  "Shadow of the Storm": {
+   "requirements": {
+    "quests": [
+     "Demon Slayer",
+     "The Golem"
+    ],
+    "skills": {
+     "crafting": 30
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Shadows of Custodia": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "construction": 3000,
+    "fishing": 3000,
+    "hunter": 4000,
+    "slayer": 10000
+   }
+  },
+  "Sheep Herder": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Sheep Shearer": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 150
+   }
+  },
+  "Shield of Arrav": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Shilo Village": {
+   "requirements": {
+    "quests": [
+     "Jungle Potion"
+    ],
+    "skills": {
+     "agility": 32,
+     "crafting": 20
+    },
+    "skills_ironman": {
+     "smithing": 4
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 3875
+   }
+  },
+  "Sins of the Father": {
+   "requirements": {
+    "quests": [
+     "A Taste of Hope",
+     "Vampyre Slayer"
+    ],
+    "skills": {
+     "agility": 52,
+     "attack": 50,
+     "crafting": 56,
+     "fletching": 60,
+     "magic": 49,
+     "slayer": 50,
+     "woodcutting": 62
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Skippy and the Mogres": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "cooking": 20
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Sleeping Giants": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "smithing": 6000
+   }
+  },
+  "Song of the Elves": {
+   "requirements": {
+    "quests": [
+     "Druidic Ritual",
+     "Making History",
+     "Mourning's End Part II"
+    ],
+    "skills": {
+     "agility": 70,
+     "construction": 70,
+     "farming": 70,
+     "herblore": 70,
+     "hunter": 70,
+     "mining": 70,
+     "smithing": 70,
+     "woodcutting": 70
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 40000,
+    "construction": 40000,
+    "farming": 40000,
+    "herblore": 40000,
+    "hunter": 40000,
+    "mining": 40000,
+    "smithing": 40000,
+    "woodcutting": 40000
+   }
+  },
+  "Spirits of the Elid": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "magic": 33,
+     "mining": 37,
+     "ranged": 37,
+     "thieving": 37
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "magic": 1000,
+    "prayer": 8000,
+    "thieving": 1000
+   }
+  },
+  "Swan Song": {
+   "requirements": {
+    "quests": [
+     "Garden of Tranquillity",
+     "One Small Favour"
+    ],
+    "skills": {
+     "cooking": 62,
+     "crafting": 40,
+     "firemaking": 42,
+     "fishing": 62,
+     "magic": 66,
+     "smithing": 45
+    },
+    "skills_ironman": {},
+    "quest_points": 100
+   },
+   "xp_rewards": {
+    "fishing": 50000,
+    "magic": 15000,
+    "prayer": 10000
+   }
+  },
+  "Tai Bwo Wannai Trio": {
+   "requirements": {
+    "quests": [
+     "Jungle Potion"
+    ],
+    "skills": {
+     "agility": 15,
+     "cooking": 30,
+     "fishing": 5
+    },
+    "skills_ironman": {
+     "fishing": 65,
+     "herblore": 34
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "attack": 2500,
+    "cooking": 5000,
+    "fishing": 5000,
+    "strength": 2500
+   }
+  },
+  "Tale of the Righteous": {
+   "requirements": {
+    "quests": [
+     "Client of Kourend"
+    ],
+    "skills": {
+     "mining": 10,
+     "strength": 16
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Tears of Guthix": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "crafting": 20,
+     "firemaking": 49,
+     "mining": 20
+    },
+    "skills_ironman": {},
+    "quest_points": 43
+   },
+   "xp_rewards": {
+    "crafting": 1000
+   }
+  },
+  "Temple of Ikov": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "ranged": 40,
+     "thieving": 42
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "fletching": 8000,
+    "ranged": 10500
+   }
+  },
+  "Temple of the Eye": {
+   "requirements": {
+    "quests": [
+     "Enter the Abyss"
+    ],
+    "skills": {
+     "runecraft": 10
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "runecraft": 5000
+   }
+  },
+  "The Ascent of Arceuus": {
+   "requirements": {
+    "quests": [
+     "Client of Kourend"
+    ],
+    "skills": {
+     "hunter": 12
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "hunter": 1500,
+    "runecraft": 500
+   }
+  },
+  "The Corsair Curse": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "The Curse of Arrav": {
+   "requirements": {
+    "quests": [
+     "Defender of Varrock",
+     "Troll Romance"
+    ],
+    "skills": {
+     "mining": 64,
+     "ranged": 62,
+     "thieving": 62,
+     "agility": 61,
+     "strength": 58,
+     "slayer": 37
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 40000,
+    "mining": 40000,
+    "thieving": 40000
+   }
+  },
+  "The Depths of Despair": {
+   "requirements": {
+    "quests": [
+     "Client of Kourend"
+    ],
+    "skills": {
+     "agility": 18
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 1500
+   }
+  },
+  "The Dig Site": {
+   "requirements": {
+    "quests": [
+     "Druidic Ritual"
+    ],
+    "skills": {
+     "agility": 10,
+     "herblore": 10,
+     "thieving": 25
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "herblore": 2000,
+    "mining": 15300
+   }
+  },
+  "The Enchanted Key": {
+   "requirements": {
+    "quests": [
+     "Making History"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "The Eyes of Glouphrie": {
+   "requirements": {
+    "quests": [
+     "The Grand Tree"
+    ],
+    "skills": {
+     "construction": 5,
+     "magic": 46
+    },
+    "skills_ironman": {
+     "runecraft": 13
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "construction": 650,
+    "magic": 12000,
+    "runecraft": 6000,
+    "woodcutting": 2500
+   }
+  },
+  "The Feud": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "thieving": 30
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "thieving": 15000
+   }
+  },
+  "The Final Dawn": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "fletching": 25000,
+    "runecraft": 25000,
+    "thieving": 55000
+   }
+  },
+  "The Forsaken Tower": {
+   "requirements": {
+    "quests": [
+     "Client of Kourend"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "mining": 500,
+    "smithing": 500
+   }
+  },
+  "The Fremennik Exiles": {
+   "requirements": {
+    "quests": [
+     "The Fremennik Isles",
+     "Lunar Diplomacy",
+     "Mountain Daughter",
+     "Heroes' Quest"
+    ],
+    "skills": {
+     "crafting": 65,
+     "fishing": 60,
+     "runecraft": 55,
+     "slayer": 60,
+     "smithing": 60
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 50000,
+    "runecraft": 30000,
+    "slayer": 50000
+   }
+  },
+  "The Fremennik Isles": {
+   "requirements": {
+    "quests": [
+     "The Fremennik Trials"
+    ],
+    "skills": {
+     "construction": 20
+    },
+    "skills_ironman": {
+     "crafting": 46,
+     "woodcutting": 56
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "construction": 5000,
+    "crafting": 5000,
+    "woodcutting": 10000
+   }
+  },
+  "The Fremennik Trials": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 2812.4,
+    "attack": 2812.4,
+    "crafting": 2812.4,
+    "defence": 2812.4,
+    "fishing": 2812.4,
+    "fletching": 2812.4,
+    "hitpoints": 2812.4,
+    "strength": 2812.4,
+    "thieving": 2812.4,
+    "woodcutting": 2812.4
+   },
+   "unlocks": [
+    "Fremennik lands access",
+    "Rellekka",
+    "Lunar/other regional access path"
+   ]
+  },
+  "The Frozen Door": {
+   "requirements": {
+    "quests": [
+     "Desert Treasure I"
+    ],
+    "skills": {
+     "agility": 70,
+     "hitpoints": 70,
+     "ranged": 70,
+     "strength": 70
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "The Garden of Death": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "farming": 20
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "farming": 10000
+   }
+  },
+  "The General's Shadow": {
+   "requirements": {
+    "quests": [
+     "Curse of the Empty Lord",
+     "Fight Arena"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "The Giant Dwarf": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "crafting": 12,
+     "firemaking": 16,
+     "magic": 33,
+     "thieving": 14
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 2500,
+    "firemaking": 1500,
+    "magic": 1500,
+    "mining": 2500,
+    "smithing": 2500,
+    "thieving": 1500
+   }
+  },
+  "The Golem": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "crafting": 20,
+     "thieving": 25
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 1000,
+    "thieving": 1000
+   }
+  },
+  "The Grand Tree": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "agility": 25
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 7900,
+    "attack": 18400,
+    "magic": 2150
+   }
+  },
+  "The Great Brain Robbery": {
+   "requirements": {
+    "quests": [
+     "Cabin Fever",
+     "Creature of Fenkenstrain",
+     "Recipe for Disaster/Freeing Pirate Pete"
+    ],
+    "skills": {
+     "crafting": 16,
+     "construction": 30,
+     "prayer": 50
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "construction": 2000,
+    "crafting": 3000,
+    "prayer": 6000
+   }
+  },
+  "The Hand in the Sand": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "crafting": 49,
+     "thieving": 17
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 9000,
+    "thieving": 1000
+   }
+  },
+  "The Heart of Darkness": {
+   "requirements": {
+    "quests": [
+     "Twilight's Promise"
+    ],
+    "skills": {
+     "mining": 55,
+     "thieving": 48,
+     "slayer": 48,
+     "agility": 46
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 8000,
+    "mining": 8000,
+    "slayer": 8000,
+    "thieving": 8000
+   }
+  },
+  "The Knight's Sword": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "mining": 10
+    },
+    "skills_ironman": {
+     "cooking": 10,
+     "mining": 15,
+     "smithing": 15
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "smithing": 12725
+   }
+  },
+  "The Lost Tribe": {
+   "requirements": {
+    "quests": [
+     "Goblin Diplomacy",
+     "Rune Mysteries"
+    ],
+    "skills": {
+     "agility": 13,
+     "mining": 17,
+     "thieving": 13
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "mining": 3000
+   }
+  },
+  "The Path of Glouphrie": {
+   "requirements": {
+    "quests": [
+     "The Eyes of Glouphrie",
+     "Waterfall Quest",
+     "Tree Gnome Village"
+    ],
+    "skills": {
+     "strength": 60,
+     "slayer": 56,
+     "thieving": 56,
+     "ranged": 47,
+     "agility": 45
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "magic": 5000,
+    "slayer": 20000,
+    "strength": 30000,
+    "thieving": 5000
+   }
+  },
+  "The Queen of Thieves": {
+   "requirements": {
+    "quests": [
+     "Client of Kourend"
+    ],
+    "skills": {
+     "thieving": 20
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "thieving": 2000
+   }
+  },
+  "The Red Reef": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "sailing": 15000,
+    "smithing": 5000
+   }
+  },
+  "The Restless Ghost": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "prayer": 1125
+   }
+  },
+  "The Ribbiting Tale of a Lily Pad Labour Dispute": {
+   "requirements": {
+    "quests": [
+     "Children of the Sun"
+    ],
+    "skills": {
+     "woodcutting": 15
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "woodcutting": 2000
+   }
+  },
+  "The Slug Menace": {
+   "requirements": {
+    "quests": [
+     "Sea Slug",
+     "Wanted!"
+    ],
+    "skills": {
+     "crafting": 30,
+     "runecraft": 30,
+     "slayer": 30,
+     "thieving": 30
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "crafting": 3500,
+    "runecraft": 3500,
+    "thieving": 3500
+   }
+  },
+  "The Tourist Trap": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "fletching": 10,
+     "smithing": 20
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Throne of Miscellania": {
+   "requirements": {
+    "quests": [
+     "The Fremennik Trials",
+     "Heroes' Quest"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Tower of Life": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "construction": 10
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "construction": 1000,
+    "crafting": 500,
+    "thieving": 500
+   }
+  },
+  "Tree Gnome Village": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "attack": 11450
+   }
+  },
+  "Tribal Totem": {
+   "requirements": {
+    "quests": [],
+    "skills": {
+     "thieving": 21
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "thieving": 1775
+   }
+  },
+  "Troll Romance": {
+   "requirements": {
+    "quests": [
+     "Troll Stronghold"
+    ],
+    "skills": {
+     "agility": 28
+    },
+    "skills_ironman": {
+     "woodcutting": 45
+    },
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 8000,
+    "strength": 4000
+   }
+  },
+  "Troll Stronghold": {
+   "requirements": {
+    "quests": [
+     "Death Plateau"
+    ],
+    "skills": {
+     "agility": 15
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Troubled Tortugans": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "sailing": 10000,
+    "slayer": 8000
+   }
+  },
+  "Tutorial Island": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Twilight's Promise": {
+   "requirements": {
+    "quests": [
+     "Children of the Sun"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "thieving": 3000
+   }
+  },
+  "Underground Pass": {
+   "requirements": {
+    "quests": [
+     "Biohazard"
+    ],
+    "skills": {
+     "ranged": 25
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "agility": 3000,
+    "attack": 3000
+   }
+  },
+  "Vampyre Slayer": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "attack": 4825
+   }
+  },
+  "Wanted!": {
+   "requirements": {
+    "quests": [
+     "The Lost Tribe",
+     "Priest in Peril",
+     "Recruitment Drive",
+     "Started:Enter the Abyss"
+    ],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 32
+   },
+   "xp_rewards": {
+    "slayer": 10000
+   }
+  },
+  "Watchtower": {
+   "requirements": {
+    "quests": [
+     "Druidic Ritual"
+    ],
+    "skills": {
+     "agility": 25,
+     "herblore": 14,
+     "magic": 15,
+     "mining": 40,
+     "thieving": 15
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "magic": 15250
+   }
+  },
+  "Waterfall Quest": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "attack": 13750,
+    "strength": 13750
+   }
+  },
+  "What Lies Below": {
+   "requirements": {
+    "quests": [
+     "Rune Mysteries"
+    ],
+    "skills": {
+     "runecraft": 35
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "defence": 2000,
+    "runecraft": 8000
+   }
+  },
+  "While Guthix Sleeps": {
+   "requirements": {
+    "quests": [
+     "Defender of Varrock",
+     "The Path of Glouphrie",
+     "Fight Arena",
+     "Dream Mentor",
+     "The Hand in the Sand",
+     "Wanted!",
+     "Temple of the Eye",
+     "Tears of Guthix",
+     "Nature Spirit",
+     "A Tail of Two Cats"
+    ],
+    "skills": {
+     "thieving": 72,
+     "magic": 67,
+     "agility": 66,
+     "farming": 65,
+     "herblore": 65,
+     "hunter": 62
+    },
+    "skills_ironman": {},
+    "quest_points": 180
+   },
+   "xp_rewards": {
+    "farming": 75000,
+    "herblore": 75000,
+    "hunter": 50000,
+    "thieving": 80000
+   }
+  },
+  "Witch's House": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "hitpoints": 6325
+   }
+  },
+  "Witch's Potion": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "magic": 325
+   }
+  },
+  "X Marks the Spot": {
+   "requirements": {
+    "quests": [],
+    "skills": {},
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {}
+  },
+  "Zogre Flesh Eaters": {
+   "requirements": {
+    "quests": [
+     "Big Chompy Bird Hunting",
+     "Jungle Potion"
+    ],
+    "skills": {
+     "herblore": 8,
+     "ranged": 30,
+     "smithing": 4
+    },
+    "skills_ironman": {},
+    "quest_points": 0
+   },
+   "xp_rewards": {
+    "fletching": 2000,
+    "herblore": 2000,
+    "ranged": 2000
+   }
+  }
+ }
+}

@@ -48,6 +48,7 @@ public class OsrsMcpChatPanel extends PluginPanel
     @Inject private ConfigManager configManager;
     @Inject private TelemetryService telemetry;
     @Inject private TaskService taskService;
+    @Inject private PlayerDataService playerDataService;
 
     private final JPanel      messages   = new JPanel();
     private final JScrollPane scroll;
@@ -59,6 +60,15 @@ public class OsrsMcpChatPanel extends PluginPanel
     private final JPanel      goalsPanel  = new JPanel();
     private boolean           goalsOpen   = false;
     private final JLabel      providerLbl = new JLabel();
+
+    // Flips section (the flip model as a collapsible tab, like Goals/Settings)
+    private final JButton     flipsBtn     = new JButton("Flips");
+    private final JPanel      flipsPanel   = new JPanel();
+    private final JTextField  capitalField = new JTextField("10m");
+    private final JButton     findFlipsBtn = new JButton("Find flips");
+    private final JPanel      flipResults  = new JPanel();
+    private final JLabel      flipStatus   = new JLabel(" ");
+    private boolean           flipsOpen    = false;
 
     // Settings controls
     private final JPanel                     settingsPanel = new JPanel();
@@ -103,10 +113,7 @@ public class OsrsMcpChatPanel extends PluginPanel
 
         add(buildComposer(), BorderLayout.SOUTH);
 
-        addMessage("RuneAssist", ACCENT, "R",
-            "Hi! I can see your live account, the wiki, your planner and your other "
-            + "plugins. Ask me what to do next, how to train something, what your dailies "
-            + "are, or anything OSRS.", ACCENT);
+        addMessage("RuneAssist", ACCENT, "R", "Hi! Ask me anything OSRS.", ACCENT);
     }
 
     // ── header (title, provider, actions, settings) ──────────────────────────────
@@ -137,19 +144,22 @@ public class OsrsMcpChatPanel extends PluginPanel
         settingsBtn.addActionListener(e -> toggleSettings());
         styleButton(goalsBtn, false);
         goalsBtn.addActionListener(e -> toggleGoals());
-        JPanel row = new JPanel();
-        row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
+        styleButton(flipsBtn, false);
+        flipsBtn.addActionListener(e -> toggleFlips());
+        // Four toggle tabs won't fit on one row at this panel width, so wrap them
+        // into a 2-column grid: New chat / Goals · Flips / Settings.
+        JPanel row = new JPanel(new GridLayout(0, 2, 6, 6));
         row.setBackground(PANEL_BG);
         row.setAlignmentX(LEFT_ALIGNMENT);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 64));
         row.add(newChatBtn);
-        row.add(Box.createHorizontalStrut(6));
         row.add(goalsBtn);
-        row.add(Box.createHorizontalStrut(6));
+        row.add(flipsBtn);
         row.add(settingsBtn);
-        row.add(Box.createHorizontalGlue());
         p.add(row);
 
         p.add(buildGoalsPanel());
+        p.add(buildFlipsPanel());
         p.add(buildSettingsPanel());
         return p;
     }
@@ -295,6 +305,177 @@ public class OsrsMcpChatPanel extends PluginPanel
         row.add(lbl);
         row.add(Box.createHorizontalGlue());
         return row;
+    }
+
+    // ── flips section (the flip model, collapsible like Goals/Settings) ───────────
+
+    private JPanel buildFlipsPanel()
+    {
+        flipsPanel.setLayout(new BoxLayout(flipsPanel, BoxLayout.Y_AXIS));
+        flipsPanel.setBackground(FIELD_BG);
+        flipsPanel.setAlignmentX(LEFT_ALIGNMENT);
+        flipsPanel.setBorder(new CompoundBorder(
+            new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
+            new EmptyBorder(8, 8, 8, 8)));
+        flipsPanel.setVisible(false);
+
+        flipsPanel.add(fieldLabel("Capital"));
+        capitalField.setAlignmentX(LEFT_ALIGNMENT);
+        capitalField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+        capitalField.setFont(BODY_FONT);
+        capitalField.setForeground(Color.WHITE);
+        capitalField.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        capitalField.setCaretColor(Color.WHITE);
+        capitalField.setBorder(new CompoundBorder(
+            new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
+            new EmptyBorder(3, 5, 3, 5)));
+        capitalField.addActionListener(e -> refreshFlips());
+        flipsPanel.add(capitalField);
+        flipsPanel.add(Box.createVerticalStrut(6));
+
+        styleButton(findFlipsBtn, true);
+        findFlipsBtn.addActionListener(e -> refreshFlips());
+        flipsPanel.add(findFlipsBtn);
+
+        flipStatus.setFont(META_FONT);
+        flipStatus.setForeground(META_COLOR);
+        flipStatus.setAlignmentX(LEFT_ALIGNMENT);
+        flipsPanel.add(Box.createVerticalStrut(4));
+        flipsPanel.add(flipStatus);
+
+        flipResults.setLayout(new BoxLayout(flipResults, BoxLayout.Y_AXIS));
+        flipResults.setBackground(FIELD_BG);
+        flipResults.setAlignmentX(LEFT_ALIGNMENT);
+        flipsPanel.add(Box.createVerticalStrut(4));
+        flipsPanel.add(flipResults);
+
+        JLabel hint = new JLabel("<html><body style='width:" + BODY_WIDTH + "px'>"
+            + "Display-only market flips ranked for your capital. Advice, not automation.</body></html>");
+        hint.setFont(META_FONT);
+        hint.setForeground(META_COLOR);
+        hint.setAlignmentX(LEFT_ALIGNMENT);
+        flipsPanel.add(Box.createVerticalStrut(6));
+        flipsPanel.add(hint);
+        return flipsPanel;
+    }
+
+    private void toggleFlips() { showFlips(!flipsOpen); }
+
+    private void showFlips(boolean open)
+    {
+        flipsOpen = open;
+        flipsBtn.setText(open ? "Hide flips" : "Flips");
+        flipsPanel.setVisible(open);
+        revalidate();
+        repaint();
+    }
+
+    private void refreshFlips()
+    {
+        final long capital = parseCapital(capitalField.getText());
+        findFlipsBtn.setEnabled(false);
+        flipStatus.setText("Finding flips...");
+        new Thread(() ->
+        {
+            java.util.Map<String, Object> res;
+            try { res = playerDataService.buildFlipSuggestions(capital, 0, 0, 12); }
+            catch (Exception ex) { res = null; }
+            final java.util.Map<String, Object> r = res;
+            SwingUtilities.invokeLater(() -> renderFlips(r));
+        }, "runeassist-flips").start();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void renderFlips(java.util.Map<String, Object> r)
+    {
+        flipResults.removeAll();
+        findFlipsBtn.setEnabled(true);
+        if (r == null || r.get("error") != null)
+        {
+            flipStatus.setText(r != null ? String.valueOf(r.get("error")) : "Failed to load prices.");
+            flipResults.revalidate(); flipResults.repaint();
+            return;
+        }
+        java.util.List<java.util.Map<String, Object>> list =
+            (java.util.List<java.util.Map<String, Object>>) r.get("suggestions");
+        int count = r.get("count") instanceof Number ? ((Number) r.get("count")).intValue()
+            : (list == null ? 0 : list.size());
+        flipStatus.setText(count + " candidates · top " + (list == null ? 0 : list.size()));
+        if (list != null) for (java.util.Map<String, Object> s : list) flipResults.add(flipRow(s));
+        flipResults.revalidate(); flipResults.repaint();
+        revalidate(); repaint();
+    }
+
+    @SuppressWarnings("unchecked")
+    private JComponent flipRow(java.util.Map<String, Object> s)
+    {
+        JPanel p = new JPanel();
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+        p.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        p.setAlignmentX(LEFT_ALIGNMENT);
+        p.setBorder(new CompoundBorder(
+            new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
+            new EmptyBorder(5, 7, 5, 7)));
+        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 80));
+
+        JLabel name = new JLabel(String.valueOf(s.get("name")));
+        name.setFont(NAME_FONT);
+        name.setForeground(Color.WHITE);
+        name.setAlignmentX(LEFT_ALIGNMENT);
+        p.add(name);
+
+        JLabel d1 = new JLabel(fmt(s.get("buy_at")) + " → " + fmt(s.get("sell_at"))
+            + "  +" + fmt(s.get("margin_post_tax")) + " (" + s.get("margin_pct") + "%)");
+        d1.setFont(META_FONT);
+        d1.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        d1.setAlignmentX(LEFT_ALIGNMENT);
+        p.add(d1);
+
+        JLabel d2 = new JLabel("x" + s.get("suggested_qty") + "  =  "
+            + fmt(s.get("projected_profit")) + " profit");
+        d2.setFont(META_FONT);
+        d2.setForeground(new Color(0, 180, 90));
+        d2.setAlignmentX(LEFT_ALIGNMENT);
+        p.add(d2);
+
+        Object flags = s.get("flags");
+        if (flags instanceof java.util.List && !((java.util.List<?>) flags).isEmpty())
+        {
+            JLabel fl = new JLabel(String.join(", ", (java.util.List<String>) flags));
+            fl.setFont(META_FONT);
+            fl.setForeground(ColorScheme.BRAND_ORANGE);
+            fl.setAlignmentX(LEFT_ALIGNMENT);
+            p.add(fl);
+        }
+
+        JPanel wrap = new JPanel(new BorderLayout());
+        wrap.setBackground(FIELD_BG);
+        wrap.setBorder(new EmptyBorder(0, 0, 6, 0));
+        wrap.add(p, BorderLayout.NORTH);
+        wrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, 88));
+        wrap.setAlignmentX(LEFT_ALIGNMENT);
+        return wrap;
+    }
+
+    private static String fmt(Object o)
+    {
+        long n = o instanceof Number ? ((Number) o).longValue() : 0;
+        long a = Math.abs(n);
+        if (a >= 1_000_000) return (Math.round(n / 100000.0) / 10.0) + "M";
+        if (a >= 1_000) return (Math.round(n / 100.0) / 10.0) + "k";
+        return String.valueOf(n);
+    }
+
+    private static long parseCapital(String s)
+    {
+        if (s == null) return 0;
+        s = s.trim().toLowerCase().replace(",", "");
+        if (s.isEmpty()) return 0;
+        double mul = 1;
+        if (s.endsWith("m")) { mul = 1_000_000; s = s.substring(0, s.length() - 1); }
+        else if (s.endsWith("k")) { mul = 1_000; s = s.substring(0, s.length() - 1); }
+        try { return (long) (Double.parseDouble(s) * mul); }
+        catch (NumberFormatException e) { return 0; }
     }
 
     private JPanel buildComposer()
@@ -472,7 +653,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         messages.removeAll();
         turnTools = new ArrayList<>();
         setStatus(" ");
-        addMessage("RuneAssist", ACCENT, "R", "New chat. What would you like to do?", ACCENT);
+        addMessage("RuneAssist", ACCENT, "R", "New chat.", ACCENT);
         messages.revalidate();
         messages.repaint();
     }
@@ -609,18 +790,17 @@ public class OsrsMcpChatPanel extends PluginPanel
 
     private void addMeta(int inTok, int outTok, List<String> tools)
     {
-        StringBuilder sb = new StringBuilder();
-        if (tools != null && !tools.isEmpty())
-            sb.append(tools.size()).append(tools.size() == 1 ? " tool" : " tools").append(" · ");
-        sb.append(inTok).append(" in / ").append(outTok).append(" out");
+        // Keep the visible line minimal: just a small tool count when tools ran.
+        // Token counts and the tool list live in the tooltip so the chat stays clean.
+        if (tools == null || tools.isEmpty()) return;
 
-        JLabel meta = new JLabel(sb.toString());
+        JLabel meta = new JLabel(tools.size() + (tools.size() == 1 ? " tool" : " tools"));
         meta.setFont(META_FONT);
         meta.setForeground(META_COLOR);
         meta.setAlignmentX(LEFT_ALIGNMENT);
         meta.setBorder(new EmptyBorder(3, 26, 0, 0)); // small gap, indented under the name
-        if (tools != null && !tools.isEmpty())
-            meta.setToolTipText("Checked: " + String.join(", ", tools));
+        meta.setToolTipText("Checked: " + String.join(", ", tools)
+            + "  ·  " + inTok + " in / " + outTok + " out tokens");
 
         // Tuck it into the reply block so it sits directly beneath the text.
         JPanel target = lastMsg;
