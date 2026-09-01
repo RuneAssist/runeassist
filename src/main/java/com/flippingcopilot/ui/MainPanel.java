@@ -43,8 +43,7 @@ public class MainPanel extends PluginPanel {
         setBorder(BorderFactory.createEmptyBorder(5, 6, 5, 6));
         add(buildView(true, copilotPanel), "logged-in");
         add(buildView(false, loginPanel), "logged-out");
-        cardLayout.show(this, copilotLoginRS.get().isLoggedIn() ? "logged-in" : "logged-out");
-
+        cardLayout.show(this, "logged-in"); // RuneAssist fork: no FC login screen
     }
 
     private JPanel buildView(boolean isLoggedIn, JComponent content) {
@@ -57,13 +56,9 @@ public class MainPanel extends PluginPanel {
 
     public void refresh() {
         if (!UIUtilities.ensureEdt(this::refresh)) return;
-        if (copilotLoginRS.get().isLoggedIn()) {
-            showLoggedInView();
-            copilotPanel.refresh();
-        } else {
-            showLoggedOutView();
-            copilotPanel.suggestionPanel.refresh();
-        }
+        // RuneAssist fork: always show the flip view (no FC account).
+        showLoggedInView();
+        copilotPanel.refresh();
     }
 
     private void showLoggedOutView() {

@@ -33,12 +33,14 @@ import java.awt.image.BufferedImage;
 import java.util.concurrent.*;
 
 @Slf4j
-// RuneAssist fork: FC's own @PluginDescriptor is disabled so it does not load as a
-// separate plugin or contact FC's servers. RuneAssist drives the flipping controllers.
-// @PluginDescriptor(
-// 		name = "Flipping Copilot",
-// 		description = "Your AI assistant for trading"
-// )
+// RuneAssist fork: rebranded, self-wiring flipping plugin. It runs on RuneAssist's local
+// suggestion source (see RuneAssistSuggestionSource / SuggestionController) — no FC account
+// or FC servers. Kept as its own RuneLite plugin so FC's Guice @Provides + wiring stay intact.
+@PluginDescriptor(
+		name = "RuneAssist Flipping",
+		description = "Grand Exchange flip assistant (RuneAssist)",
+		tags = {"runeassist", "flipping", "ge", "grand exchange", "money"}
+)
 @PluginDependency(BankTagsPlugin.class)
 public class FlippingCopilotPlugin extends Plugin {
 
