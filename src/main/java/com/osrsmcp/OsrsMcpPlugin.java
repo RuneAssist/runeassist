@@ -65,6 +65,7 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private GeHighlightOverlay geHighlightOverlay;
     @Inject private GeOfferHintOverlay geOfferHintOverlay;
     @Inject private GeSlotProfitOverlay geSlotProfitOverlay;
+    @Inject private GeInventoryCostOverlay geInventoryCostOverlay;
     @Inject private GeKeybindHandler geKeybindHandler;
     @Inject private GeSearchPrefill geSearchPrefill;
     @Inject private FlipTrackerService flipTracker;
@@ -117,6 +118,7 @@ public class OsrsMcpPlugin extends Plugin
         overlayManager.add(geHighlightOverlay);
         overlayManager.add(geOfferHintOverlay);
         overlayManager.add(geSlotProfitOverlay);
+        overlayManager.add(geInventoryCostOverlay);
         geKeybindHandler.register();
     }
 
@@ -132,6 +134,7 @@ public class OsrsMcpPlugin extends Plugin
         overlayManager.remove(geHighlightOverlay);
         overlayManager.remove(geOfferHintOverlay);
         overlayManager.remove(geSlotProfitOverlay);
+        overlayManager.remove(geInventoryCostOverlay);
         geKeybindHandler.unregister();
         stopServer();
         clientToolbar.removeNavigation(navButton);
