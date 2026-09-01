@@ -14,6 +14,10 @@ Parts of this plugin are adapted from the Flipping Copilot RuneLite plugin
   `util/ProfitCalculator`).
 - `graph/Data.java` — the price-history graph data-model field layout (from their
   `ui/graph/model/Data`), populated from JSON here rather than protobuf.
+- `GeSearchPrefill.java` — populating the GE "last searched" row with the suggested
+  item (from their `GePreviousSearch`).
+- `GeKeybindHandler.java` — the keybind that fills a suggested price/quantity into the
+  open GE input (from their `OfferHandler.setChatboxValue` / `KeybindHandler`).
 
 The original copyright notice and license text are reproduced below as required.
 

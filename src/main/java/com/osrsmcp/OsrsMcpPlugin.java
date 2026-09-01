@@ -11,6 +11,8 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GrandExchangeOfferChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.StatChanged;
+import net.runelite.api.events.VarClientIntChanged;
+import net.runelite.api.gameval.VarClientID;
 import net.runelite.api.InventoryID;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.config.ConfigManager;
@@ -62,6 +64,8 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private GeSuggestionOverlay geSuggestionOverlay;
     @Inject private GeHighlightOverlay geHighlightOverlay;
     @Inject private GeOfferHintOverlay geOfferHintOverlay;
+    @Inject private GeKeybindHandler geKeybindHandler;
+    @Inject private GeSearchPrefill geSearchPrefill;
     @Inject private FlipTrackerService flipTracker;
     @Inject private TaskService taskService;
     @Inject private net.runelite.client.ui.overlay.OverlayManager overlayManager;
@@ -111,6 +115,7 @@ public class OsrsMcpPlugin extends Plugin
         overlayManager.add(geSuggestionOverlay);
         overlayManager.add(geHighlightOverlay);
         overlayManager.add(geOfferHintOverlay);
+        geKeybindHandler.register();
     }
 
     @Override
@@ -124,6 +129,7 @@ public class OsrsMcpPlugin extends Plugin
         overlayManager.remove(geSuggestionOverlay);
         overlayManager.remove(geHighlightOverlay);
         overlayManager.remove(geOfferHintOverlay);
+        geKeybindHandler.unregister();
         stopServer();
         clientToolbar.removeNavigation(navButton);
         clientToolbar.removeNavigation(chatNavButton);
@@ -422,6 +428,18 @@ public class OsrsMcpPlugin extends Plugin
             }
         }
         chatPanel.setGeOffers(m);
+    }
+
+    @Subscribe
+    public void onVarClientIntChanged(VarClientIntChanged event)
+    {
+        // MESLAYERMODE == 14 with the GE search list present = the buy-search box just opened.
+        if (event.getIndex() == VarClientID.MESLAYERMODE
+            && client.getVarcIntValue(VarClientID.MESLAYERMODE) == 14
+            && client.getWidget(net.runelite.api.widgets.ComponentID.CHATBOX_GE_SEARCH_RESULTS) != null)
+        {
+            geSearchPrefill.showSuggestedItem();
+        }
     }
 
     @Subscribe

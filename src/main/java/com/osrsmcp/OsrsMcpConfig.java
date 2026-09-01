@@ -4,6 +4,7 @@ import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
+import net.runelite.client.config.Keybind;
 
 @ConfigGroup("osrsmcp")
 public interface OsrsMcpConfig extends Config
@@ -93,6 +94,25 @@ public interface OsrsMcpConfig extends Config
             "(public OSRS-wiki data, no account data sent — just the item id). Blank disables the " +
             "graph. Default is the hosted RuneAssist server.")
     default String graphServerUrl() { return "https://runeassist.ares-server.co.uk"; }
+
+    // ── GRAND EXCHANGE ─────────────────────────────────────────────────────────
+
+    @ConfigSection(name = "Grand Exchange", description = "GE flip helpers", position = 3)
+    String geSection = "grandExchange";
+
+    @ConfigItem(keyName = "geSearchPrefill", name = "Pre-fill item in GE search",
+        section = geSection, position = 0,
+        description = "When you open the GE buy search, show the suggested item in the " +
+            "'last searched' row so you can click it. You still click it yourself. " +
+            "(Requires the game's \"Show last searched\" option enabled.)")
+    default boolean geSearchPrefill() { return true; }
+
+    @ConfigItem(keyName = "quickSetKeybind", name = "Quick-set price/qty key",
+        section = geSection, position = 1,
+        description = "When the GE price or quantity input is open for the suggested item, " +
+            "press this to fill RuneAssist's suggested value into the box. You still press " +
+            "Enter to confirm. Unset by default.")
+    default Keybind quickSetKeybind() { return Keybind.NOT_SET; }
 
     // ── AI CHAT ──────────────────────────────────────────────────────────────
 
