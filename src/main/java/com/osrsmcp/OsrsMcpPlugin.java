@@ -58,6 +58,7 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private TelemetryService telemetry;
     @Inject private NudgeService nudgeService;
     @Inject private RuneAssistOverlay runeAssistOverlay;
+    @Inject private TaskService taskService;
     @Inject private net.runelite.client.ui.overlay.OverlayManager overlayManager;
     @Inject private SessionTracker sessionTracker;
 
@@ -226,6 +227,9 @@ public class OsrsMcpPlugin extends Plugin
 
         // Proactive nudge on a genuine level-up (milestone only; NudgeService gates it).
         nudgeService.onLevelUp(event.getSkill(), event.getLevel());
+
+        // Auto-tick any goal whose skill/level target is now met.
+        taskService.evaluate();
 
         // Telemetry: record XP gain delta on the client thread.
         Skill skill = event.getSkill();
