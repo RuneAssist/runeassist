@@ -282,6 +282,15 @@ public class FlipTrackerService
         return out;
     }
 
+    /** Full completed-flip log (newest last), as independent copies so callers can't mutate us. */
+    public synchronized List<Map<String, Object>> allFlips()
+    {
+        ensureLoaded();
+        List<Map<String, Object>> out = new ArrayList<>(flips.size());
+        for (Map<String, Object> f : flips) out.add(new LinkedHashMap<>(f));
+        return out;
+    }
+
     /** Units of {@code itemId} bought in the last 4h (for buy-limit remaining). Client-free. */
     public synchronized int boughtInWindow(int itemId)
     {
