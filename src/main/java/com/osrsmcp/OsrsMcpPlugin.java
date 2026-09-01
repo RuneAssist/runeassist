@@ -113,13 +113,15 @@ public class OsrsMcpPlugin extends Plugin
         chatPanel.refresh();
 
         overlayManager.add(runeAssistOverlay);
-        overlayManager.add(geOffersOverlay);
-        overlayManager.add(geSuggestionOverlay);
-        overlayManager.add(geHighlightOverlay);
-        overlayManager.add(geOfferHintOverlay);
-        overlayManager.add(geSlotProfitOverlay);
-        overlayManager.add(geInventoryCostOverlay);
-        geKeybindHandler.register();
+        // RuneAssist fork: home-grown flipping overlays disabled -- the FC-based
+        // "RuneAssist Flipping" plugin now owns all GE annotation. Kept for reference.
+        // overlayManager.add(geOffersOverlay);
+        // overlayManager.add(geSuggestionOverlay);
+        // overlayManager.add(geHighlightOverlay);
+        // overlayManager.add(geOfferHintOverlay);
+        // overlayManager.add(geSlotProfitOverlay);
+        // overlayManager.add(geInventoryCostOverlay);
+        // geKeybindHandler.register();
     }
 
     @Override
@@ -129,13 +131,14 @@ public class OsrsMcpPlugin extends Plugin
         companionAgent.shutdown();
         telemetry.shutdown();
         overlayManager.remove(runeAssistOverlay);
-        overlayManager.remove(geOffersOverlay);
-        overlayManager.remove(geSuggestionOverlay);
-        overlayManager.remove(geHighlightOverlay);
-        overlayManager.remove(geOfferHintOverlay);
-        overlayManager.remove(geSlotProfitOverlay);
-        overlayManager.remove(geInventoryCostOverlay);
-        geKeybindHandler.unregister();
+        // Home-grown flipping overlays disabled (see startUp).
+        // overlayManager.remove(geOffersOverlay);
+        // overlayManager.remove(geSuggestionOverlay);
+        // overlayManager.remove(geHighlightOverlay);
+        // overlayManager.remove(geOfferHintOverlay);
+        // overlayManager.remove(geSlotProfitOverlay);
+        // overlayManager.remove(geInventoryCostOverlay);
+        // geKeybindHandler.unregister();
         stopServer();
         clientToolbar.removeNavigation(navButton);
         clientToolbar.removeNavigation(chatNavButton);
@@ -456,7 +459,8 @@ public class OsrsMcpPlugin extends Plugin
             && client.getVarcIntValue(VarClientID.MESLAYERMODE) == 14
             && client.getWidget(net.runelite.api.widgets.ComponentID.CHATBOX_GE_SEARCH_RESULTS) != null)
         {
-            geSearchPrefill.request();
+            // RuneAssist fork: FC's GePreviousSearch owns the last-searched row now.
+            // geSearchPrefill.request();
         }
     }
 
