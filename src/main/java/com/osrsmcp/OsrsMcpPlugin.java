@@ -60,6 +60,7 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private RuneAssistOverlay runeAssistOverlay;
     @Inject private GeOffersOverlay geOffersOverlay;
     @Inject private GeOfferSetupOverlay geOfferSetupOverlay;
+    @Inject private FlipTrackerService flipTracker;
     @Inject private TaskService taskService;
     @Inject private net.runelite.client.ui.overlay.OverlayManager overlayManager;
     @Inject private SessionTracker sessionTracker;
@@ -377,6 +378,8 @@ public class OsrsMcpPlugin extends Plugin
         GrandExchangeOffer o = e.getOffer();
         if (o == null) return;
         telemetry.logGeOffer(rsn(), e.getSlot(), o.getState().name(), o.getItemId(),
+            o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
+        flipTracker.onOffer(e.getSlot(), o.getState(), o.getItemId(),
             o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
     }
 

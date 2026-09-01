@@ -49,6 +49,7 @@ public class OsrsMcpChatPanel extends PluginPanel
     @Inject private TelemetryService telemetry;
     @Inject private TaskService taskService;
     @Inject private PlayerDataService playerDataService;
+    @Inject private FlipTrackerService flipTracker;
 
     private final JPanel      messages   = new JPanel();
     private final JScrollPane scroll;
@@ -68,6 +69,8 @@ public class OsrsMcpChatPanel extends PluginPanel
     private final JButton     findFlipsBtn = new JButton("Find flips");
     private final JPanel      flipResults  = new JPanel();
     private final JLabel      flipStatus   = new JLabel(" ");
+    private final JLabel      profitLbl    = new JLabel(" ");
+    private final JPanel      flipLog      = new JPanel();
     private boolean           flipsOpen    = false;
 
     // Settings controls
@@ -319,6 +322,32 @@ public class OsrsMcpChatPanel extends PluginPanel
             new EmptyBorder(8, 8, 8, 8)));
         flipsPanel.setVisible(false);
 
+        // Profit tracker header (session / all-time) + recent flips, Flipping-Copilot style.
+        profitLbl.setFont(NAME_FONT);
+        profitLbl.setForeground(Color.WHITE);
+        profitLbl.setAlignmentX(LEFT_ALIGNMENT);
+        flipsPanel.add(profitLbl);
+
+        flipLog.setLayout(new BoxLayout(flipLog, BoxLayout.Y_AXIS));
+        flipLog.setBackground(FIELD_BG);
+        flipLog.setAlignmentX(LEFT_ALIGNMENT);
+        flipsPanel.add(Box.createVerticalStrut(2));
+        flipsPanel.add(flipLog);
+
+        JButton resetBtn = new JButton("Reset flips");
+        styleButton(resetBtn, false);
+        resetBtn.addActionListener(e -> { flipTracker.reset(); refreshFlipLog(); });
+        flipsPanel.add(Box.createVerticalStrut(4));
+        flipsPanel.add(resetBtn);
+
+        JPanel sep = new JPanel();
+        sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
+        sep.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+        sep.setAlignmentX(LEFT_ALIGNMENT);
+        flipsPanel.add(Box.createVerticalStrut(8));
+        flipsPanel.add(sep);
+        flipsPanel.add(Box.createVerticalStrut(8));
+
         flipsPanel.add(fieldLabel("Capital"));
         capitalField.setAlignmentX(LEFT_ALIGNMENT);
         capitalField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
@@ -366,9 +395,63 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipsOpen = open;
         flipsBtn.setText(open ? "Hide flips" : "Flips");
         flipsPanel.setVisible(open);
+        if (open) refreshFlipLog();
         revalidate();
         repaint();
     }
+
+    /** Refresh the profit header + recent-flip log from the tracker (client-free snapshot). */
+    private void refreshFlipLog()
+    {
+        java.util.Map<String, Object> snap;
+        try { snap = flipTracker.snapshot(); }
+        catch (Exception ex) { snap = null; }
+        flipLog.removeAll();
+        if (snap == null)
+        {
+            profitLbl.setText("Flips: —");
+            flipLog.revalidate(); flipLog.repaint();
+            return;
+        }
+        long session = num(snap.get("session_profit"));
+        long allTime = num(snap.get("all_time_profit"));
+        profitLbl.setText("Session " + signed(session) + "  ·  Total " + signed(allTime));
+        profitLbl.setForeground(session >= 0 ? new Color(0, 200, 100) : ERROR_COLOR);
+
+        @SuppressWarnings("unchecked")
+        java.util.List<java.util.Map<String, Object>> recent =
+            (java.util.List<java.util.Map<String, Object>>) snap.get("recent");
+        if (recent == null || recent.isEmpty())
+        {
+            JLabel none = new JLabel("No completed flips yet this account.");
+            none.setFont(META_FONT);
+            none.setForeground(META_COLOR);
+            none.setAlignmentX(LEFT_ALIGNMENT);
+            flipLog.add(none);
+        }
+        else
+        {
+            int shown = 0;
+            for (java.util.Map<String, Object> f : recent)
+            {
+                if (shown++ >= 8) break; // keep the panel compact
+                long profit = num(f.get("profit"));
+                JLabel row = new JLabel(fmt(f.get("qty")) + "x " + f.get("name")
+                    + "  " + signed(profit));
+                row.setFont(META_FONT);
+                row.setForeground(profit >= 0 ? ColorScheme.LIGHT_GRAY_COLOR : ERROR_COLOR);
+                row.setAlignmentX(LEFT_ALIGNMENT);
+                row.setToolTipText(f.get("name") + ": bought " + fmt(f.get("buy_at"))
+                    + ", sold " + fmt(f.get("sell_at")) + ", tax " + fmt(f.get("tax")));
+                flipLog.add(row);
+            }
+        }
+        flipLog.revalidate(); flipLog.repaint();
+    }
+
+    private static long num(Object o) { return o instanceof Number ? ((Number) o).longValue() : 0; }
+
+    private static String signed(long n) { return (n >= 0 ? "+" : "-") + fmt(Math.abs(n)) + " gp"; }
 
     private void refreshFlips()
     {
@@ -403,6 +486,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipStatus.setText(count + " candidates · top " + (list == null ? 0 : list.size()));
         if (list != null) for (java.util.Map<String, Object> s : list) flipResults.add(flipRow(s));
         flipResults.revalidate(); flipResults.repaint();
+        refreshFlipLog();
         revalidate(); repaint();
     }
 
@@ -416,7 +500,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         p.setBorder(new CompoundBorder(
             new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
             new EmptyBorder(5, 7, 5, 7)));
-        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 80));
+        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 108));
 
         JLabel name = new JLabel(String.valueOf(s.get("name")));
         name.setFont(NAME_FONT);
@@ -438,6 +522,19 @@ public class OsrsMcpChatPanel extends PluginPanel
         d2.setAlignmentX(LEFT_ALIGNMENT);
         p.add(d2);
 
+        // Buy-limit remaining in the 4h window (from what you've actually bought).
+        int id = (int) num(s.get("id"));
+        int geLimit = (int) num(s.get("ge_limit"));
+        int left = flipTracker.limitRemaining(id, geLimit);
+        if (geLimit > 0)
+        {
+            JLabel lim = new JLabel("limit " + fmt(left) + "/" + fmt(geLimit) + " left (4h)");
+            lim.setFont(META_FONT);
+            lim.setForeground(left == 0 ? ColorScheme.BRAND_ORANGE : META_COLOR);
+            lim.setAlignmentX(LEFT_ALIGNMENT);
+            p.add(lim);
+        }
+
         Object flags = s.get("flags");
         if (flags instanceof java.util.List && !((java.util.List<?>) flags).isEmpty())
         {
@@ -452,7 +549,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         wrap.setBackground(FIELD_BG);
         wrap.setBorder(new EmptyBorder(0, 0, 6, 0));
         wrap.add(p, BorderLayout.NORTH);
-        wrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, 88));
+        wrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, 116));
         wrap.setAlignmentX(LEFT_ALIGNMENT);
         return wrap;
     }

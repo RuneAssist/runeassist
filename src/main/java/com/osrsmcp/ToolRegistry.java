@@ -24,6 +24,7 @@ public class ToolRegistry
     @Inject private WiseOldManService wiseOldManService;
     @Inject private DestinationService destinationService;
     @Inject private TaskService taskService;
+    @Inject private FlipTrackerService flipTracker;
     @Inject private ClientThread clientThread;
     @Inject private OsrsMcpConfig config;
     @Inject private Gson gson;
@@ -258,6 +259,11 @@ public class ToolRegistry
         tools.add(buildTool("get_money_making_context", "Get location, stats, coins and slayer task for money making method recommendations."));
         tools.add(buildTool("get_installed_plugins", "Get all installed RuneLite plugins (both built-in and Plugin Hub) with their enabled state. Use this to suggest relevant Plugin Hub plugins."));
         tools.add(buildTool("get_ge_offers",          "Get all active Grand Exchange offers including item, quantity, price and state."));
+        tools.add(buildTool("get_flip_log",
+            "The player's tracked flipping results for this account: session profit, all-time "
+            + "profit, recent completed flips (item, qty, buy/sell price, tax, profit) and open "
+            + "buy positions. Built locally from the player's real GE buys/sells (sells matched "
+            + "to buys FIFO, 2% tax, 5M cap). Use for 'how much have I made flipping' or a recap."));
         tools.add(buildTool("get_session_summary",
             "What the player has done since logging in this session: XP gained per skill "
             + "(sorted), total XP gained, levels gained, and minutes played. Great for a "
@@ -314,6 +320,7 @@ public class ToolRegistry
             case "get_dailies":          return questPlanService.buildDailies();
             case "get_optimal_quest_route": return questPlanService.buildOptimalQuestRoute(jsonToMap(args));
             case "reload_planner_data": return questPlanService.reloadData();
+            case "get_flip_log":       return flipTracker.snapshot();
             case "list_tasks":         return taskService.list();
             case "add_task":
             {

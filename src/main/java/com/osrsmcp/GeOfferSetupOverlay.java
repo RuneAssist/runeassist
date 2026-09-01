@@ -40,6 +40,7 @@ public class GeOfferSetupOverlay extends Overlay
     private final Client client;
     private final OsrsMcpConfig config;
     private final PlayerDataService playerDataService;
+    private final FlipTrackerService flipTracker;
     private final PanelComponent panel = new PanelComponent();
 
     // Cached quote for the current item, computed off the render thread.
@@ -48,11 +49,13 @@ public class GeOfferSetupOverlay extends Overlay
     private volatile boolean loading = false;
 
     @Inject
-    GeOfferSetupOverlay(Client client, OsrsMcpConfig config, PlayerDataService playerDataService)
+    GeOfferSetupOverlay(Client client, OsrsMcpConfig config,
+                        PlayerDataService playerDataService, FlipTrackerService flipTracker)
     {
         this.client = client;
         this.config = config;
         this.playerDataService = playerDataService;
+        this.flipTracker = flipTracker;
         setPosition(OverlayPosition.TOP_LEFT);
     }
 
@@ -114,10 +117,22 @@ public class GeOfferSetupOverlay extends Overlay
             .rightColor(num(q.get("margin_post_tax")) > 0 ? GOOD : WARN).build());
         panel.getChildren().add(LineComponent.builder()
             .left("1h volume").right(fmt(q.get("volume_1h"))).rightColor(Color.LIGHT_GRAY).build());
-        Object limit = q.get("ge_limit");
-        if (num(limit) > 0)
+        int geLimit = (int) num(q.get("ge_limit"));
+        if (geLimit > 0)
+        {
+            // On a buy, show how much of the 4h limit is left; on a sell, just the limit.
+            String txt;
+            Color c = Color.LIGHT_GRAY;
+            if (buying)
+            {
+                int rem = flipTracker.limitRemaining(itemId, geLimit);
+                txt = fmt(rem) + "/" + fmt(geLimit) + " left";
+                if (rem == 0) c = WARN;
+            }
+            else txt = fmt(geLimit);
             panel.getChildren().add(LineComponent.builder()
-                .left("Buy limit").right(fmt(limit)).rightColor(Color.LIGHT_GRAY).build());
+                .left("Buy limit").right(txt).rightColor(c).build());
+        }
 
         // Compare what the player has typed to the suggested side.
         if (enteredPrice > 0)
