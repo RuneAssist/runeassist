@@ -60,6 +60,7 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private RuneAssistOverlay runeAssistOverlay;
     @Inject private GeOffersOverlay geOffersOverlay;
     @Inject private GeSuggestionOverlay geSuggestionOverlay;
+    @Inject private GeHighlightOverlay geHighlightOverlay;
     @Inject private FlipTrackerService flipTracker;
     @Inject private TaskService taskService;
     @Inject private net.runelite.client.ui.overlay.OverlayManager overlayManager;
@@ -107,6 +108,7 @@ public class OsrsMcpPlugin extends Plugin
         overlayManager.add(runeAssistOverlay);
         overlayManager.add(geOffersOverlay);
         overlayManager.add(geSuggestionOverlay);
+        overlayManager.add(geHighlightOverlay);
     }
 
     @Override
@@ -118,6 +120,7 @@ public class OsrsMcpPlugin extends Plugin
         overlayManager.remove(runeAssistOverlay);
         overlayManager.remove(geOffersOverlay);
         overlayManager.remove(geSuggestionOverlay);
+        overlayManager.remove(geHighlightOverlay);
         stopServer();
         clientToolbar.removeNavigation(navButton);
         clientToolbar.removeNavigation(chatNavButton);
