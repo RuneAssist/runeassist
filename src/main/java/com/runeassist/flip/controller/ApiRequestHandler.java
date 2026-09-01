@@ -195,6 +195,28 @@ public class ApiRequestHandler {
         return call;
     }
 
+    /**
+     * RuneAssist fork: fetch an item's price-history graph from our own backend (JSON that
+     * matches the {@link Data} field layout), replacing FC's server graph feed.
+     */
+    public void asyncGetRuneAssistGraph(int itemId, Consumer<Data> onData, Consumer<Throwable> onError) {
+        Request request = new Request.Builder()
+                .url("https://runeassist.ares-server.co.uk/v1/graph?id=" + itemId)
+                .header("User-Agent", "RuneAssist-flip/1.0")
+                .build();
+        client.newCall(request).enqueue(new Callback() {
+            @Override public void onFailure(Call call, java.io.IOException e) { onError.accept(e); }
+            @Override public void onResponse(Call call, Response response) {
+                try (Response r = response) {
+                    if (!r.isSuccessful() || r.body() == null) { onError.accept(new RuntimeException("graph HTTP " + r.code())); return; }
+                    Data d = gson.fromJson(r.body().charStream(), Data.class);
+                    if (d == null) { onError.accept(new RuntimeException("empty graph")); return; }
+                    onData.accept(d);
+                } catch (Exception ex) { onError.accept(ex); }
+            }
+        });
+    }
+
     public void getSuggestionAsync(byte[] status,
                                    Consumer<Suggestion> suggestionConsumer,
                                    Consumer<Data> graphDataConsumer,
