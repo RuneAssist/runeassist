@@ -244,8 +244,33 @@ async function buildGraph(itemId) {
     wikiSeries(itemId, '5m'),
   ]);
   const data = reshape(itemId, hourly, fiveMin);
+  // If the learned v2 forecast service is up, overlay its prediction; else keep the v1 cone.
+  await applyLearnedForecast(itemId, data);
   graphCache.set(itemId, { at: Date.now(), data });
   return data;
+}
+
+// Overlay the trained v2-quantile-lgbm forecast onto data.prediction* when FORECAST_URL is
+// set and reachable within FORECAST_TIMEOUT; on any failure leave the v1-volcone fallback.
+async function applyLearnedForecast(itemId, data) {
+  const base = process.env.FORECAST_URL;
+  if (!base) return;
+  const ms = Number(process.env.FORECAST_TIMEOUT || 800);
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
+  try {
+    const r = await fetch(`${base}/forecast?id=${itemId}`, { signal: ac.signal });
+    if (!r.ok) return;
+    const f = await r.json();
+    if (!Array.isArray(f.predictionTimes) || f.predictionTimes.length === 0) return;
+    for (const k of ['predictionTimes', 'predictionLowMeans', 'predictionLowIQRUpper',
+      'predictionLowIQRLower', 'predictionHighMeans', 'predictionHighIQRUpper',
+      'predictionHighIQRLower']) {
+      if (Array.isArray(f[k])) data[k] = f[k];
+    }
+    data.forecastModel = f.forecastModel || 'v2-quantile-lgbm';
+  } catch { /* fall back to v1 already in data */ }
+  finally { clearTimeout(t); }
 }
 
 function authed(req) {
