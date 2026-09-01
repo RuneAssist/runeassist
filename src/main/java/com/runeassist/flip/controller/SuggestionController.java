@@ -51,7 +51,7 @@ public class SuggestionController {
     private final FlipsDialogController flipDialogController;
     private final GePreviousSearch gePreviousSearch;
     // RuneAssist fork: our local suggestion source replaces FC's backend.
-    private final com.osrsmcp.RuneAssistSuggestionSource runeAssistSource;
+    private final com.runeassist.flip.RuneAssistSuggestionSource runeAssistSource;
 
 
     private MainPanel mainPanel;

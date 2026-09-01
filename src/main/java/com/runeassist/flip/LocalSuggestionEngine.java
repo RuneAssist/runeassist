@@ -1,4 +1,4 @@
-package com.osrsmcp;
+package com.runeassist.flip;
 
 import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.model.SuggestionType;
