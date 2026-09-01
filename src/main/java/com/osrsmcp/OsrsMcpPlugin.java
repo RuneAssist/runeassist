@@ -261,6 +261,9 @@ public class OsrsMcpPlugin extends Plugin
         // Capture the per-session baseline once skills are reliable (first tick after login).
         sessionTracker.captureIfNeeded(client);
 
+        // Keep the coin cache warm so the Flips panel can auto-size its budget off-thread.
+        playerDataService.refreshCoinsCache();
+
         // Every ~3000 ticks (~30 min) capture a periodic account snapshot.
         if (++gameTickCounter < SNAPSHOT_INTERVAL_TICKS) return;
         gameTickCounter = 0;

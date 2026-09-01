@@ -1926,6 +1926,15 @@ public class PlayerDataService
     }
 
     private long getCoins()        { return getInventoryCoins() + getBankCoins(); }
+
+    // Coins cached on the client thread so off-thread callers (the Flips panel) can size a
+    // flip budget without touching the Client. Refreshed each tick by the plugin.
+    private volatile long cachedCoins = -1;
+    /** Refresh the cached coin total. MUST be called on the client thread. */
+    public void refreshCoinsCache() { cachedCoins = getCoins(); }
+    /** Last cached inventory+bank coins, or -1 if never captured. Client-free. */
+    public long cachedCoins() { return cachedCoins; }
+
     private long getInventoryCoins()
     {
         ItemContainer inv = client.getItemContainer(InventoryID.INVENTORY);
