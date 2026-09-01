@@ -6,6 +6,7 @@ import net.runelite.api.widgets.JavaScriptCallback;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetTextAlignment;
 import net.runelite.api.widgets.WidgetType;
+import net.runelite.client.callback.ClientThread;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -24,20 +25,32 @@ import javax.inject.Singleton;
 public class GeSearchPrefill
 {
     private final Client client;
+    private final ClientThread clientThread;
     private final OsrsMcpConfig config;
     private final SharedFlipState flip;
     private final GeWidgets ge;
 
     @Inject
-    GeSearchPrefill(Client client, OsrsMcpConfig config, SharedFlipState flip)
+    GeSearchPrefill(Client client, ClientThread clientThread, OsrsMcpConfig config, SharedFlipState flip)
     {
         this.client = client;
+        this.clientThread = clientThread;
         this.config = config;
         this.flip = flip;
         this.ge = new GeWidgets(client);
     }
 
-    /** Populate the last-searched row with the suggestion. Call on the client thread. */
+    /**
+     * Request a pre-fill. Deferred to the next client cycle so the GE search widgets are
+     * fully built before we touch them (populating synchronously on the varc change is too
+     * early — the row isn't there yet).
+     */
+    public void request()
+    {
+        clientThread.invokeLater(this::showSuggestedItem);
+    }
+
+    /** Populate the last-searched row with the suggestion. Runs on the client thread. */
     public void showSuggestedItem()
     {
         if (config == null || !config.geSearchPrefill() || !flip.valid) return;
