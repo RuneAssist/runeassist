@@ -81,6 +81,43 @@ update default model IDs to current (Claude 5 family).
 
 ---
 
+## Data & ML (start capturing NOW — data compounds)
+
+The moats aren't the models, they're the datasets. Every day not logging is training
+data lost forever. Two tracks, both startable before any ML exists.
+
+### Track A — capture our own data (opt-in, local JSONL first, upload later)
+No backend needed yet: write versioned JSONL to `~/.runelite/runeassist/telemetry/`,
+opt-in + anonymised. Datasets in value order:
+
+1. **Advice -> outcome loop** _(only we can build this)_ — per RuneAssist turn: question,
+   tools fired, answer, tokens, + account snapshot before/after. Trains a recommender AND
+   evaluates the agent. Nobody else has chat + live account + what-happened-next together.
+2. **Measured XP/hr by activity** — log `onStatChanged` {skill, xpDelta, ts, location, gear};
+   sessionise offline -> real rates per method/segment vs the wiki's stale ballparks.
+3. **Real GE/flip performance** — GE offer lifecycle (item, prices, qty, placed/filled time)
+   -> realised margins + fill times (the Flipping Copilot moat).
+4. **Account trajectories** — periodic stats/quests/diaries snapshots -> "what players at
+   this point did next".
+
+> **Design the schema carefully up front** (version every record) — schema drift makes
+> early data useless. **Opt-in, off by default, anonymised** (hash RSN, no chat/other-player
+> PII). Trust is the whole game; a data scandal gets the plugin pulled.
+
+### Track B — bootstrap ML from PUBLIC data (no userbase needed)
+- **Wise Old Man** public player histories/gains (we already call the API) = thousands of
+  real account trajectories + gain rates, free.
+- **OSRS hiscores** + wiki = cross-sectional priors.
+Prototype the "what next" recommender and rate models on public data now; personalise with
+private telemetry later. De-risks the chicken-and-egg.
+
+### Next build item
+- [ ] **TelemetryService** (opt-in local logger): xp_gain + account_snapshot + advice
+      (+ ge_offer) to versioned JSONL, gated by a new `shareTelemetry` toggle. Mechanical —
+      good DeepSeek job (prompt drafted). Starts the compounding clock.
+
+---
+
 ## Notes / decisions
 - 2026-08-31: Decided **all features stay in the plugin, free, BYOK**; paid = hosted
   convenience + server-side data, not feature removal.
