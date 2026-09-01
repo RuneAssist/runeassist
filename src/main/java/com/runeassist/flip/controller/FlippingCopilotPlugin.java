@@ -196,7 +196,7 @@ public class FlippingCopilotPlugin extends Plugin {
 					boolean isFlipping = accStatus != null && accStatus.currentlyFlipping();
 					long cashStack = accStatus == null ? 0 : accStatus.currentCashStack();
 					if(sessionManager.updateSessionStats(isFlipping, cashStack)) {
-						mainPanel.copilotPanel.statsPanel.refresh(false, copilotLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState());
+						mainPanel.copilotPanel.statsPanel.refresh(false, osrsLoginManager.isValidLoginState());
 					}
 				}
 			})
@@ -332,7 +332,7 @@ public class FlippingCopilotPlugin extends Plugin {
 				osrsLoginManager.reset();
 				accountStatusManager.reset();
 				grandExchangeUncollectedManager.reset();
-				statsPanel.refresh(true, copilotLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState());
+				statsPanel.refresh(true, osrsLoginManager.isValidLoginState());
 				osrsLoginRS.set(osrsLoginRS.get().nextState(client));
 				mainPanel.refresh();
 				break;
@@ -362,7 +362,7 @@ public class FlippingCopilotPlugin extends Plugin {
 						flipManager.setIntervalAccount(null);
 					}
 					flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
-					statsPanel.refresh(true, copilotLoginRS.get().isLoggedIn()  && osrsLoginManager.isValidLoginState());
+					statsPanel.refresh(true, osrsLoginManager.isValidLoginState());
 					mainPanel.refresh();
 					if(copilotLoginRS.get().isLoggedIn()) {
 						transactionManager.scheduleSyncIn(0, name);
@@ -396,7 +396,7 @@ public class FlippingCopilotPlugin extends Plugin {
 			log.debug("copilot config changed event received");
 			configRS.forceSet(config);
 			if (event.getKey().equals("profitAmountColor") || event.getKey().equals("lossAmountColor")) {
-				mainPanel.copilotPanel.statsPanel.refresh(true, copilotLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState());
+				mainPanel.copilotPanel.statsPanel.refresh(true, osrsLoginManager.isValidLoginState());
 			}
 			if (event.getKey().equals("suggestionHighlights")) {
 				clientThread.invokeLater(() -> highlightController.redraw());
