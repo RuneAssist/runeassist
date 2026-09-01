@@ -23,6 +23,7 @@ public class ToolRegistry
     @Inject private InteropService interopService;
     @Inject private WiseOldManService wiseOldManService;
     @Inject private DestinationService destinationService;
+    @Inject private TaskService taskService;
     @Inject private ClientThread clientThread;
     @Inject private OsrsMcpConfig config;
     @Inject private Gson gson;
@@ -139,6 +140,24 @@ public class ToolRegistry
             tools.add(buildToolWithSchema("get_training_methods", "Curated training methods with approximate XP/hr and start requirements, so you can reason about TIME not just XP. Optionally filter by skill. When logged in, each method is annotated with meets_requirements and your current_level. Rates are ballpark and dated -- state that when advising.", props, new String[]{}));
         }
         tools.add(buildTool("get_dailies", "Daily / weekly / recurring tasks (battlestaves, herb boxes, Miscellania, farm/tree/bird-house runs, buckets of sand, Tears of Guthix), requirement-checked live so 'available' = doable now with rough times. Use for 'what are my dailies' and as quick fillers for short play sessions. Pair with get_farm_run for live patch state."));
+        {
+            JsonObject tp = new JsonObject();
+            tp.add("text", strProp("The goal text, e.g. 'Finish 70 Agility for the shortcut'."));
+            tp.add("metric", strProp("Optional AUTO-complete metric: a skill name (e.g. 'agility'), 'total_level' or 'combat_level'. Omit for a manual task."));
+            tp.add("target", numProp("Target value for the metric (e.g. 70). Required when metric is set."));
+            tools.add(buildToolWithSchema("add_task", "Add a goal to the player's RuneAssist checklist. AUTO tasks (metric + target) tick themselves when the live value is reached; without a metric it's a manual task. Persists across sessions. Use this to turn a plan step into a tracked goal.", tp, new String[]{"text"}));
+        }
+        tools.add(buildTool("list_tasks", "The player's RuneAssist goals/tasks checklist (active vs done), re-evaluated live so AUTO tasks reflect current progress. Use for 'what are my goals / tasks'."));
+        {
+            JsonObject cp = new JsonObject();
+            cp.add("id", numProp("The task id (from list_tasks)."));
+            tools.add(buildToolWithSchema("complete_task", "Mark a task done (for manual tasks, or to tick one off early).", cp, new String[]{"id"}));
+        }
+        {
+            JsonObject rp2 = new JsonObject();
+            rp2.add("id", numProp("The task id (from list_tasks)."));
+            tools.add(buildToolWithSchema("remove_task", "Remove a task from the checklist.", rp2, new String[]{"id"}));
+        }
         {
             JsonObject props = new JsonObject();
             JsonObject onlyRem = new JsonObject(); onlyRem.addProperty("type", "boolean"); onlyRem.addProperty("description", "If true, omit already-completed quests and return only what's left of the route.");
@@ -294,6 +313,16 @@ public class ToolRegistry
             case "get_dailies":          return questPlanService.buildDailies();
             case "get_optimal_quest_route": return questPlanService.buildOptimalQuestRoute(jsonToMap(args));
             case "reload_planner_data": return questPlanService.reloadData();
+            case "list_tasks":         return taskService.list();
+            case "add_task":
+            {
+                String text   = strArg(args, "text", null);
+                String metric = strArg(args, "metric", null);
+                int    target = args.has("target") && args.get("target").isJsonPrimitive() ? args.get("target").getAsInt() : 0;
+                return taskService.add(text, metric, target);
+            }
+            case "complete_task":      return taskService.complete(args.has("id") && args.get("id").isJsonPrimitive() ? args.get("id").getAsLong() : -1);
+            case "remove_task":        return taskService.remove(args.has("id") && args.get("id").isJsonPrimitive() ? args.get("id").getAsLong() : -1);
             case "get_slayer_task":   return playerDataService.buildSlayerTask();
             case "get_clue_scroll":   return playerDataService.buildClueScroll();
             case "get_nearby_npcs":       return playerDataService.buildNearbyNpcs();
