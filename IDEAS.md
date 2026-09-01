@@ -50,7 +50,7 @@ update default model IDs to current (Claude 5 family).
 ### Companion UX (Free — client-side)
 | Idea | Notes | Priority |
 |---|---|---|
-| **Proactive nudges** | React to `onStatChanged`/quest events: "hit 70 Slayer → unlocks X". What makes it feel like a *companion*, not a chatbox. **Design speced → `docs/nudges-design.md`**; plumbing is a DeepSeek job. | ★ High |
+| **Proactive nudges** | **v1 built** (`NudgeService`): dim passive tips in the panel, rate-limited/deduped/grace-gated, `proactiveNudges` toggle (default ON). v1 triggers: 99 level-up, dailies-waiting. TODO: unlock-detection on level-up (planner glue), quest-complete, GE-filled, nav unread dot. See `docs/nudges-design.md`. | ★ (v1 done) |
 | **`get_session_summary`** | "This session: +X XP per skill, minutes played." Built (DeepSeek), compiles; runtime check pending. | Done* |
 | **Clue scroll meta-advice** | ~~Step solving~~ is already done well by RuneLite's built-in **Clue Scroll** plugin (map arrows, cryptic/anagram/emote hints, STASH, hot/cold) — don't reimplement. AI only adds a meta layer: "is this tier worth it for my account", clearing stacked clues efficiently, explaining a step in context. Nice extra, not a headline. Needs reward/wiki data. | Low |
 | **Slayer task helper** | On new task: gear, location, cannon?, skip/keep? Fires exactly when needed. | Med |

@@ -246,6 +246,24 @@ public class OsrsMcpChatPanel extends PluginPanel
 
     // ── external hooks ────────────────────────────────────────────────────────────
 
+    /** A proactive nudge: a dim, avatar-less line, visually distinct from chat. EDT-safe. */
+    public void addNudge(String text)
+    {
+        SwingUtilities.invokeLater(() ->
+        {
+            JLabel body = new JLabel("<html><body style='width:" + BODY_WIDTH + "px'>"
+                + "<i>* " + toHtml(text) + "</i></body></html>");
+            body.setFont(META_FONT);
+            body.setForeground(META_COLOR);
+            body.setAlignmentX(LEFT_ALIGNMENT);
+            body.setBorder(new EmptyBorder(2, 2, 2, 0));
+            messages.add(body);
+            messages.add(Box.createVerticalStrut(8));
+            messages.revalidate();
+            scrollToBottom();
+        });
+    }
+
     /** Called by the plugin once Guice injection is done. */
     public void refresh()
     {
