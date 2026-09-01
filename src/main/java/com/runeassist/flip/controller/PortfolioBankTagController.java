@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Singleton
 @Slf4j
 public class PortfolioBankTagController {
-    private static final String COPILOT_CONFIG_GROUP = "flippingcopilot";
+    private static final String COPILOT_CONFIG_GROUP = "runeassistflip";
     private static final String CREATED_TAB_CONFIG_KEY = "portfolioBankTagTabCreated";
     private static final String BANK_TAGS_CONFIG_GROUP = "banktags";
     private static final String BANK_TAGS_TAB_CONFIG = "tagtabs";
