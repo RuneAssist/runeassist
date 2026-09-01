@@ -116,16 +116,18 @@ public class FlippingCopilotPlugin extends Plugin {
 	private InventorySlotTooltipOverlay inventorySlotTooltipOverlay;
 	@Inject
 	private InventoryPortfolioBadgeOverlay inventoryPortfolioBadgeOverlay;
-	@Inject
-	private PortfolioBankTabBadgeOverlay portfolioBankTabBadgeOverlay;
+	// RuneAssist fork: bank-tag components disabled (hard-depend on the core BankTags plugin,
+	// which breaks sideloaded construction). The niche "portfolio bank tab" feature is dropped.
+	// @Inject
+	// private PortfolioBankTabBadgeOverlay portfolioBankTabBadgeOverlay;
 	@Inject
 	private BankStateRS bankStateRS;
 	@Inject
 	private GeHistoryStateRS geHistoryStateRS;
 	@Inject
 	private PatchNotesController patchNotesController;
-	@Inject
-	private PortfolioBankTagController portfolioBankTagController;
+	// @Inject
+	// private PortfolioBankTagController portfolioBankTagController;
 	@Inject
 	private PlayerLocationController playerLocationController;
 
@@ -153,8 +155,8 @@ public class FlippingCopilotPlugin extends Plugin {
 		keybindHandler.register();
 		overlayManager.add(inventorySlotTooltipOverlay);
 		overlayManager.add(inventoryPortfolioBadgeOverlay);
-		overlayManager.add(portfolioBankTabBadgeOverlay);
-		portfolioBankTagController.startUp();
+		// overlayManager.add(portfolioBankTabBadgeOverlay);   // RuneAssist fork: BankTags disabled
+		// portfolioBankTagController.startUp();               // RuneAssist fork: BankTags disabled
 		highlightController.activate();
 		Persistance.setUp(gson);
 		// seems we need to delay instantiating the UI till here as otherwise the panels look different
@@ -203,8 +205,8 @@ public class FlippingCopilotPlugin extends Plugin {
 	protected void shutDown() throws Exception {
 		overlayManager.remove(inventorySlotTooltipOverlay);
 		overlayManager.remove(inventoryPortfolioBadgeOverlay);
-		overlayManager.remove(portfolioBankTabBadgeOverlay);
-		portfolioBankTagController.shutDown();
+		// overlayManager.remove(portfolioBankTabBadgeOverlay); // RuneAssist fork: BankTags disabled
+		// portfolioBankTagController.shutDown();               // RuneAssist fork: BankTags disabled
 		offerManager.saveAll();
 		highlightController.deactivateAndRemoveAll();
 		clientThread.invokeLater(() -> slotProfitColorizer.resetAllSlots());
@@ -400,9 +402,10 @@ public class FlippingCopilotPlugin extends Plugin {
 					highlightController.redraw();
 				});
 			}
-			if (event.getKey().equals("portfolioBankTag")) {
-				portfolioBankTagController.onConfigChanged();
-			}
+			// RuneAssist fork: BankTags portfolio-tag feature disabled.
+			// if (event.getKey().equals("portfolioBankTag")) {
+			// 	portfolioBankTagController.onConfigChanged();
+			// }
 		}
 	}
 
