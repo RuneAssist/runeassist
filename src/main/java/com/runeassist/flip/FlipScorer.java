@@ -138,6 +138,26 @@ public class FlipScorer
         return q;
     }
 
+    /**
+     * Current market quote for ANY item (no margin/volume filtering) — used to price the
+     * GE offer-setup screen for an item the suggestion engine didn't propose. Returns
+     * {name, buy_at, sell_at, ge_limit} or null if the wiki has no price for this item.
+     * Blocks on HTTP (first call / stale cache); call off the client thread.
+     */
+    public Map<String, Object> quote(int itemId)
+    {
+        try { ensureLoaded(); } catch (Exception e) { return null; }
+        long[] p = latest.get(itemId);
+        if (p == null || (p[0] <= 0 && p[1] <= 0)) return null;
+        Object[] m = meta.get(itemId);
+        Map<String, Object> q = new LinkedHashMap<>();
+        q.put("name", m != null ? String.valueOf(m[0]) : ("item " + itemId));
+        q.put("buy_at", p[1]);
+        q.put("sell_at", p[0]);
+        q.put("ge_limit", m != null ? (int) m[1] : 0);
+        return q;
+    }
+
     private long taxAmount(int id, long price)
     {
         if (price <= 0 || TAX_EXEMPT.contains(id)) return 0;

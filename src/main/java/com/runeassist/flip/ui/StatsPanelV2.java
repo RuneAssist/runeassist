@@ -142,7 +142,7 @@ public class StatsPanelV2 extends JPanel {
 
         add(bottomPanel, BorderLayout.SOUTH);
 
-        flipManager.setFlipsChangedCallback(() -> refresh(true, copilotLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState()));
+        flipManager.setFlipsChangedCallback(() -> refresh(true, osrsLoginManager.isValidLoginState()));
     }
 
     private void setupFlipsDialogButton() {
@@ -183,7 +183,7 @@ public class StatsPanelV2 extends JPanel {
                                 flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
                             }
                         }
-                        refresh(true, copilotLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState());
+                        refresh(true, osrsLoginManager.isValidLoginState());
                     }
                 });
             }

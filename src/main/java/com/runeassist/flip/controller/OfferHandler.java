@@ -14,6 +14,7 @@ import net.runelite.client.callback.ClientThread;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -37,6 +38,7 @@ public class OfferHandler {
     private final OfferManager offerManager;
     private final HighlightController highlightController;
     private final CopilotLoginRS copilotLoginRS;
+    private final com.runeassist.flip.FlipScorer flipScorer;
 
     // state
     private String viewedSlotPriceErrorText = null;
@@ -57,30 +59,31 @@ public class OfferHandler {
                 return;
             }
 
-            if (!copilotLoginRS.get().isLoggedIn()) {
-                viewedSlotPriceErrorText = "Login to copilot to see item price.";
-                return;
-            }
-            viewedSlotPriceErrorText = "Loading copilot item price..";
-            Consumer<ItemPrice> itemPriceConsumer = (fetchedPrice) -> {
+            // RuneAssist fork: price an item the suggestion engine didn't propose from our
+            // own wiki-based FlipScorer instead of FC's (removed) backend. Blocks on HTTP,
+            // so run it off the client thread and marshal the result back.
+            viewedSlotPriceErrorText = "Loading price...";
+            final int itemIdForQuote = currentItemId;
+            new Thread(() -> {
+                Map<String, Object> q;
+                try { q = flipScorer.quote(itemIdForQuote); } catch (Exception e) { q = null; }
+                final Map<String, Object> fq = q;
                 clientThread.invoke(() -> {
-                    if (fetchedPrice == null) {
-                        viewedSlotPriceErrorText = "Unknown error";
+                    if (fq == null) {
+                        viewedSlotPriceErrorText = "No price data for this item.";
                         return;
                     }
-
-                    if (fetchedPrice.getMessage() != null && !fetchedPrice.getMessage().isEmpty()) {
-                        viewedSlotPriceErrorText = fetchedPrice.getMessage();
-                    } else {
-                        viewedSlotPriceErrorText = null;
-                    }
-                    offerManager.setViewedSlotItemPrice(isSelling() ? fetchedPrice.getSellPrice() : fetchedPrice.getBuyPrice());
+                    viewedSlotPriceErrorText = null;
+                    long price = isSelling()
+                        ? ((Number) fq.get("sell_at")).longValue()
+                        : ((Number) fq.get("buy_at")).longValue();
+                    offerManager.setViewedSlotItemPrice(price);
                     offerManager.setLastViewedSlotItemId(offerManager.getViewedSlotItemId());
-                    offerManager.setLastViewedSlotItemPrice(offerManager.getViewedSlotItemPrice());
+                    offerManager.setLastViewedSlotItemPrice(price);
                     offerManager.setLastViewedSlotPriceTime((int) Instant.now().getEpochSecond());
 
                     highlightController.redraw();
-                    log.debug("fetched item {} price: {}", offerManager.getViewedSlotItemId(), offerManager.getViewedSlotItemPrice());
+                    log.debug("fetched item {} price: {}", offerManager.getViewedSlotItemId(), price);
 
                     // todo: Usage of OfferEditor is messy. It mutates a widget so we need to get the original instance
                     //  of it which is created downstream on some other event handler path. This is why we use a supplier
@@ -89,13 +92,10 @@ public class OfferHandler {
 
                     OfferEditor flippingWidget = offerEditorSupplier.get();
                     if (flippingWidget != null) {
-                        flippingWidget.showPrice(offerManager.getViewedSlotItemPrice());
+                        flippingWidget.showPrice(price);
                     }
                 });
-            };
-
-
-            apiRequestHandler.asyncGetItemPriceWithGraphData(currentItemId, osrsLoginManager.getPlayerDisplayName(), itemPriceConsumer, false);
+            }, "runeassist-item-quote").start();
 
         } else {
             offerManager.setViewedSlotItemPrice(-1);
