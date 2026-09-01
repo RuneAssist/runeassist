@@ -14,22 +14,38 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * OPT-IN, anonymised, LOCAL-ONLY telemetry logger.
  *
  * Writes versioned JSONL to a per-day file under ~/.runelite/runeassist/telemetry/
  * so account data (real XP/hr, GE performance, account trajectories) can be analysed
- * later. There is NO backend and NO network -- every file stays on this PC. It is a
- * no-op unless the user explicitly enables {@code shareTelemetry} (default OFF).
+ * later. It is a no-op unless the user explicitly enables {@code shareTelemetry}
+ * (default OFF).
+ *
+ * <p>Local files are always the primary sink. Records are ALSO uploaded to a hosted
+ * ingest endpoint only when the user both enables telemetry AND sets a
+ * {@code telemetryEndpoint} — batched, retried, off-thread. Uploads are limited to
+ * {@link #UPLOAD_TYPES} (GE/XP/account); the {@code advice} record, which holds the
+ * player's raw chat question, is NEVER uploaded.
  *
  * Callers (client thread / EDT) gather live values and pass primitives in; this class
  * never touches the RuneLite Client and never throws. All disk IO runs on a single
@@ -52,6 +68,23 @@ public class TelemetryService
         t.setDaemon(true);
         return t;
     });
+
+    // ── optional upload (the hosted ingest flywheel; opt-in + endpoint required) ──
+    // Only these record types are ever uploaded. Notably "advice" is excluded — it
+    // contains the player's raw chat question, which never leaves the PC.
+    private static final Set<String> UPLOAD_TYPES =
+        new HashSet<>(Arrays.asList("ge_offer", "account_snapshot", "xp_gain"));
+    private static final int  BATCH_MAX     = 50;   // flush when this many queued
+    private static final long FLUSH_EVERY_S = 60;   // or at least this often
+    private static final int  QUEUE_CAP     = 2000; // drop oldest beyond this (bounded memory)
+
+    private final List<Map<String, Object>> uploadQueue = new ArrayList<>();
+    private final ScheduledExecutorService uploader = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "runeassist-telemetry-upload");
+        t.setDaemon(true);
+        return t;
+    });
+    { uploader.scheduleWithFixedDelay(this::flushUploads, FLUSH_EVERY_S, FLUSH_EVERY_S, TimeUnit.SECONDS); }
 
     // Cache the last (rsn -> hash) pair to avoid rehashing every record.
     private String lastRsn;
@@ -171,7 +204,80 @@ public class TelemetryService
 
     public void shutdown()
     {
+        try { flushUploads(); } catch (Exception ignored) {}
+        uploader.shutdown();
         executor.shutdown();
+    }
+
+    // ── UPLOAD (optional, opt-in, endpoint-gated) ──────────────────────────────
+
+    private boolean uploadEnabled()
+    {
+        return enabled() && config != null
+            && config.telemetryEndpoint() != null && !config.telemetryEndpoint().trim().isEmpty();
+    }
+
+    private void enqueueUpload(String type, Map<String, Object> record)
+    {
+        if (!uploadEnabled() || !UPLOAD_TYPES.contains(type)) return;
+        synchronized (uploadQueue)
+        {
+            uploadQueue.add(record);
+            while (uploadQueue.size() > QUEUE_CAP) uploadQueue.remove(0); // bounded
+            if (uploadQueue.size() >= BATCH_MAX)
+                uploader.submit(this::flushUploads);
+        }
+    }
+
+    /** POST the queued batch as a JSON array. Runs on the uploader thread; never throws. */
+    private void flushUploads()
+    {
+        if (!uploadEnabled()) return;
+        List<Map<String, Object>> batch;
+        synchronized (uploadQueue)
+        {
+            if (uploadQueue.isEmpty()) return;
+            batch = new ArrayList<>(uploadQueue);
+            uploadQueue.clear();
+        }
+        String endpoint = config.telemetryEndpoint().trim();
+        String token    = config.telemetryToken();
+        try
+        {
+            byte[] body = gson.toJson(batch).getBytes(StandardCharsets.UTF_8);
+            HttpURLConnection c = (HttpURLConnection) new URL(endpoint).openConnection();
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(8000);
+            c.setReadTimeout(12000);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            c.setRequestProperty("X-Schema-Version", String.valueOf(SCHEMA_VERSION));
+            if (token != null && !token.trim().isEmpty())
+                c.setRequestProperty("Authorization", "Bearer " + token.trim());
+            try (OutputStream os = c.getOutputStream()) { os.write(body); }
+            int code = c.getResponseCode();
+            c.disconnect();
+            if (code < 200 || code >= 300)
+            {
+                log.warn("Telemetry upload failed HTTP {}; re-queueing {} records", code, batch.size());
+                requeue(batch);
+            }
+        }
+        catch (Exception e)
+        {
+            // Network hiccup: put the batch back so it retries on the next flush.
+            log.warn("Telemetry upload error ({}); re-queueing {} records", e.getMessage(), batch.size());
+            requeue(batch);
+        }
+    }
+
+    private void requeue(List<Map<String, Object>> batch)
+    {
+        synchronized (uploadQueue)
+        {
+            uploadQueue.addAll(0, batch);
+            while (uploadQueue.size() > QUEUE_CAP) uploadQueue.remove(0);
+        }
     }
 
     // ── ANONYMISATION ─────────────────────────────────────────────────────────
@@ -204,6 +310,7 @@ public class TelemetryService
 
     private void write(String type, Map<String, Object> record)
     {
+        enqueueUpload(type, record);
         executor.submit(() -> {
             try
             {
