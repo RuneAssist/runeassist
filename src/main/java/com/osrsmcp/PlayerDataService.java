@@ -2067,6 +2067,52 @@ public class PlayerDataService
     }
 
     /**
+     * SELL-side suggestions: for items the player is holding (open buy positions from the
+     * flip tracker), a suggestion to sell at the current market high, priced after tax and
+     * netted against the average buy. Only non-loss sells (current sell &gt;= avg buy) are
+     * returned, ranked by profit. Shaped like the buy suggestions so the same card renders
+     * them, with side="sell". Client-free (uses cached wiki prices) — safe off the EDT.
+     */
+    public List<Map<String, Object>> buildHeldSellSuggestions(List<Map<String, Object>> openPositions)
+    {
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (openPositions == null) return out;
+        for (Map<String, Object> pos : openPositions)
+        {
+            int id = pos.get("item_id") instanceof Number ? ((Number) pos.get("item_id")).intValue() : 0;
+            long qty = pos.get("qty") instanceof Number ? ((Number) pos.get("qty")).longValue() : 0;
+            long avgBuy = pos.get("avg_buy") instanceof Number ? ((Number) pos.get("avg_buy")).longValue() : 0;
+            if (id <= 0 || qty <= 0) continue;
+
+            WikiPriceService.PriceData pd = wikiPriceService.getPrice(id);
+            if (pd == null || pd.high <= 0) continue;
+            long sell = pd.high;
+            long tax = GeTax.taxAmount(id, sell);
+            long marginEa = sell - tax - avgBuy;
+            if (marginEa < 0) continue; // don't advise selling at a loss
+
+            WikiPriceService.ItemMeta m = wikiPriceService.getMeta(id);
+            Map<String, Object> s = new LinkedHashMap<>();
+            s.put("id", id);
+            s.put("name", m != null && m.name != null ? m.name : ("item " + id));
+            s.put("side", "sell");
+            s.put("buy_at", avgBuy);              // your cost basis
+            s.put("sell_at", sell);
+            s.put("margin_post_tax", marginEa);
+            s.put("margin_pct", avgBuy > 0 ? Math.round(marginEa * 1000.0 / avgBuy) / 10.0 : 0.0);
+            s.put("suggested_qty", qty);
+            s.put("ge_limit", 0);                 // no buy-limit on selling
+            s.put("projected_profit", marginEa * qty);
+            s.put("flags", new ArrayList<String>());
+            s.put("score", marginEa * qty);
+            out.add(s);
+        }
+        out.sort((a, b) -> Long.compare(((Number) b.get("score")).longValue(),
+                                        ((Number) a.get("score")).longValue()));
+        return out;
+    }
+
+    /**
      * A compact flip quote for a SINGLE item, using the same tax/margin math as
      * {@link #buildFlipSuggestions}. For the GE offer-setup overlay: given the item the
      * player is configuring, return suggested buy/sell, post-tax margin, 1h volume, buy

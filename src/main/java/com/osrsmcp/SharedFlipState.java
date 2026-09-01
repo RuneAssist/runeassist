@@ -11,6 +11,7 @@ import javax.inject.Singleton;
 public class SharedFlipState
 {
     public volatile boolean valid = false;
+    public volatile boolean sell = false; // true = suggestion is to SELL a held item
     public volatile int    itemId;
     public volatile String name = "";
     public volatile long   buyAt;

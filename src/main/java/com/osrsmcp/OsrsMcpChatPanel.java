@@ -85,6 +85,7 @@ public class OsrsMcpChatPanel extends PluginPanel
     private java.util.List<java.util.Map<String, Object>> lastSuggestions = null;
     private final java.util.Set<Integer> skipped = new java.util.HashSet<>();
     private volatile java.util.Map<Integer, long[]> geOffers = new java.util.HashMap<>();
+    private volatile int currentPickId = -1; // item id of the shown suggestion
     private final JLabel      profitLbl    = new JLabel(" ");
     private final JPanel      flipLog      = new JPanel();
 
@@ -488,33 +489,57 @@ public class OsrsMcpChatPanel extends PluginPanel
         skipped.clear(); // a fresh fetch starts the candidate list over
         findFlipsBtn.setEnabled(false);
         flipStatus.setText(coins > 0 ? "Budget " + fmt(capital) + " · finding…" : "Finding…");
+        // Held positions to consider selling (client-free snapshot, safe off-thread).
+        java.util.List<java.util.Map<String, Object>> held = null;
+        try
+        {
+            @SuppressWarnings("unchecked")
+            java.util.List<java.util.Map<String, Object>> op =
+                (java.util.List<java.util.Map<String, Object>>) flipTracker.snapshot().get("open_positions");
+            held = op;
+        }
+        catch (Exception ignored) {}
+        final java.util.List<java.util.Map<String, Object>> heldPos = held;
+
         new Thread(() ->
         {
             java.util.Map<String, Object> res;
             // Ask for a handful so we can skip items whose 4h buy limit you've maxed.
             try { res = playerDataService.buildFlipSuggestions(capital, 0, 0, 8); }
             catch (Exception ex) { res = null; }
+            java.util.List<java.util.Map<String, Object>> sells;
+            try { sells = playerDataService.buildHeldSellSuggestions(heldPos); }
+            catch (Exception ex) { sells = null; }
             final java.util.Map<String, Object> r = res;
-            SwingUtilities.invokeLater(() -> renderFlips(r));
+            final java.util.List<java.util.Map<String, Object>> fsells = sells;
+            SwingUtilities.invokeLater(() -> renderFlips(r, fsells));
         }, "runeassist-flips").start();
     }
 
     @SuppressWarnings("unchecked")
-    private void renderFlips(java.util.Map<String, Object> r)
+    private void renderFlips(java.util.Map<String, Object> r, java.util.List<java.util.Map<String, Object>> sells)
     {
         findFlipsBtn.setEnabled(true);
-        if (r == null || r.get("error") != null)
+        java.util.List<java.util.Map<String, Object>> buys =
+            (r != null && r.get("error") == null)
+                ? (java.util.List<java.util.Map<String, Object>>) r.get("suggestions") : null;
+
+        // Combine: sell what you hold first (locks profit / frees capital), then buys.
+        java.util.List<java.util.Map<String, Object>> list = new java.util.ArrayList<>();
+        if (sells != null) list.addAll(sells);
+        if (buys != null) list.addAll(buys);
+
+        if (list.isEmpty())
         {
-            flipStatus.setText(r != null ? String.valueOf(r.get("error")) : "Failed to load prices.");
+            flipStatus.setText(r != null && r.get("error") != null
+                ? String.valueOf(r.get("error")) : "No flips right now.");
             flipTopCard.setVisible(false);
             revalidate(); repaint();
             return;
         }
-        java.util.List<java.util.Map<String, Object>> list =
-            (java.util.List<java.util.Map<String, Object>>) r.get("suggestions");
         long coins = playerDataService.cachedCoins();
         flipStatus.setText(coins > 0 ? "Budget " + fmt(coins) : "Suggested flip");
-        renderTopPick(list); // single best pick, no list
+        renderTopPick(list); // single best pick (sells prioritised), no list
         refreshFlipLog();
         revalidate(); repaint();
     }
@@ -526,6 +551,20 @@ public class OsrsMcpChatPanel extends PluginPanel
         {
             geOffers = offers != null ? offers : new java.util.HashMap<>();
             if (V_FLIPS.equals(currentView) && lastSuggestions != null) rerenderCard();
+        });
+    }
+
+    /**
+     * The player just placed an offer for {@code itemId}. If it's the item we were
+     * suggesting, drop it and surface the next flip so the card keeps moving. EDT-safe.
+     */
+    public void onOfferPlaced(int itemId)
+    {
+        SwingUtilities.invokeLater(() ->
+        {
+            if (itemId <= 0 || itemId != currentPickId || lastSuggestions == null) return;
+            skipped.add(itemId);
+            rerenderCard();
         });
     }
 
@@ -543,12 +582,14 @@ public class OsrsMcpChatPanel extends PluginPanel
         java.util.Map<String, Object> pick = choosePick();
         if (pick == null)
         {
+            currentPickId = -1;
             sharedFlip.clear();
             graphPanel.clear();
             flipTopCard.setVisible(false);
             flipTopCard.revalidate(); flipTopCard.repaint();
             return;
         }
+        currentPickId = (int) num(pick.get("id"));
         publishPick(pick);
         flipTopCard.add(buildActionCard(pick));
         flipTopCard.setVisible(true);
@@ -715,6 +756,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         int lim = (int) num(pick.get("ge_limit"));
         double pct = pick.get("margin_pct") instanceof Number
             ? ((Number) pick.get("margin_pct")).doubleValue() : 0;
+        sharedFlip.sell = "sell".equals(pick.get("side"));
         sharedFlip.set(id, String.valueOf(pick.get("name")),
             num(pick.get("buy_at")), num(pick.get("sell_at")), num(pick.get("suggested_qty")),
             num(pick.get("projected_profit")), pct, lim, flipTracker.limitRemaining(id, lim));
