@@ -90,6 +90,7 @@ public class OsrsMcpChatPanel extends PluginPanel
     private final JLabel      profitLbl    = new JLabel(" ");
     private final JPanel      flipLog      = new JPanel();
     private PortfolioWindow   portfolioWindow; // lazily created popup
+    private FlipsHistoryWindow historyWindow; // lazily created popup
 
     // Settings controls
     private final JPanel                     settingsPanel = new JPanel();
@@ -384,14 +385,18 @@ public class OsrsMcpChatPanel extends PluginPanel
         JButton portfolioBtn = new JButton("Portfolio");
         styleButton(portfolioBtn, false);
         portfolioBtn.addActionListener(e -> openPortfolio());
+        JButton historyBtn = new JButton("History");
+        styleButton(historyBtn, false);
+        historyBtn.addActionListener(e -> openHistory());
         JButton resetBtn = new JButton("Reset flips");
         styleButton(resetBtn, false);
         resetBtn.addActionListener(e -> { flipTracker.reset(); refreshFlipLog(); });
-        JPanel btnRow = new JPanel(new GridLayout(0, 2, 6, 0));
+        JPanel btnRow = new JPanel(new GridLayout(0, 3, 6, 0));
         btnRow.setBackground(FIELD_BG);
         btnRow.setAlignmentX(LEFT_ALIGNMENT);
         btnRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
         btnRow.add(portfolioBtn);
+        btnRow.add(historyBtn);
         btnRow.add(resetBtn);
         flipsPanel.add(Box.createVerticalStrut(4));
         flipsPanel.add(btnRow);
@@ -449,6 +454,14 @@ public class OsrsMcpChatPanel extends PluginPanel
         for (long[] o : geOffers.values())
             if (o.length >= 5 && o[0] == 1) cashInBuyOffers += o[1] * Math.max(0, o[3] - o[2]);
         portfolioWindow.open(cashInBuyOffers);
+    }
+
+    /** Open (creating on first use) the Flips-history popup — every completed flip, sortable. */
+    private void openHistory()
+    {
+        if (historyWindow == null)
+            historyWindow = new FlipsHistoryWindow(flipTracker);
+        historyWindow.open();
     }
 
     /** Refresh the profit header + recent-flip log from the tracker (client-free snapshot). */
