@@ -30,20 +30,26 @@ public class RuneAssistSuggestionSource
     @Inject private Client client;
     @Inject private ClientThread clientThread;
     @Inject private FlipScorer flipScorer;
+    @Inject private HeldCostTracker heldCostTracker;
 
     /** Compute the next suggestion and hand it to {@code consumer} on the client thread. */
     public void getSuggestionAsync(Consumer<Suggestion> consumer)
     {
         final long[][] offersBySlot = readOffers();
-        final Map<Integer, long[]> held = readHeld(offersBySlot);
+        // Real held stock with cost basis (FIFO from actual GE buys), so sells are profit-aware.
+        final Map<Integer, long[]> held = heldCostTracker.held();
         final long coins = inventoryCoins();
 
         new Thread(() ->
         {
-            List<Map<String, Object>> scored;
-            try { scored = flipScorer.topFlips(coins > 0 ? coins : 1_000_000L); }
-            catch (Exception e) { scored = java.util.Collections.emptyList(); }
-            final List<Map<String, Object>> fscored = scored;
+            List<Map<String, Object>> buys;
+            try { buys = flipScorer.topFlips(coins > 0 ? coins : 1_000_000L); }
+            catch (Exception e) { buys = java.util.Collections.emptyList(); }
+
+            // Sell entries for held stock (side="sell"), so LocalSuggestionEngine can offer sells.
+            List<Map<String, Object>> combined = new java.util.ArrayList<>(buildSells(held));
+            if (buys != null) combined.addAll(buys);
+            final List<Map<String, Object>> fscored = combined;
 
             Suggestion suggestion;
             try { suggestion = LocalSuggestionEngine.next(fscored, offersBySlot, held, coins, 8); }
@@ -74,25 +80,39 @@ public class RuneAssistSuggestionSource
         return out;
     }
 
-    /**
-     * Items currently held as a completed buy awaiting sale: BOUGHT offers not yet collected,
-     * keyed itemId -&gt; {qty, avgBuy}. (Inventory-held stock without a tracked cost basis is
-     * omitted for now — sell suggestions with a real cost basis need FC's tracking, wired
-     * next.) Read on the client thread.
-     */
-    private Map<Integer, long[]> readHeld(long[][] offersBySlot)
+    /** Turn held stock into sell suggestions (side="sell"), best profit first. */
+    private List<Map<String, Object>> buildSells(Map<Integer, long[]> held)
     {
-        Map<Integer, long[]> held = new HashMap<>();
-        for (long[] o : offersBySlot)
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        for (Map.Entry<Integer, long[]> e : held.entrySet())
         {
-            // A completed BUY (buy==1, sold==total, not filling) is stock ready to sell.
-            if (o != null && o[1] == 1 && o[5] == 0 && o[3] > 0 && o[3] >= o[4])
-            {
-                int id = (int) o[0];
-                held.merge(id, new long[]{ o[3], o[2] }, (a, b) -> new long[]{ a[0] + b[0], a[1] });
-            }
+            int id = e.getKey();
+            long qty = e.getValue()[0], avgBuy = e.getValue()[1];
+            Map<String, Object> q;
+            try { q = flipScorer.sellQuote(id); } catch (Exception ex) { q = null; }
+            if (q == null) continue;
+            long sell = ((Number) q.get("sell_at")).longValue();
+            long tax = ((Number) q.get("tax_at_sell")).longValue();
+            long marginEa = sell - tax - avgBuy;   // may be negative (underwater / cut loss)
+            Map<String, Object> s = new java.util.LinkedHashMap<>();
+            s.put("id", id);
+            s.put("name", q.get("name"));
+            s.put("side", "sell");
+            s.put("loss", marginEa < 0);
+            s.put("buy_at", avgBuy);
+            s.put("sell_at", sell);
+            s.put("margin_post_tax", marginEa);
+            s.put("margin_pct", avgBuy > 0 ? Math.round(marginEa * 1000.0 / avgBuy) / 10.0 : 0.0);
+            s.put("suggested_qty", qty);
+            s.put("ge_limit", 0);
+            s.put("projected_profit", marginEa * qty);
+            s.put("flags", new java.util.ArrayList<String>());
+            s.put("score", marginEa * qty);
+            out.add(s);
         }
-        return held;
+        out.sort((a, b) -> Long.compare(((Number) b.get("score")).longValue(),
+                                        ((Number) a.get("score")).longValue()));
+        return out;
     }
 
     private long inventoryCoins()
