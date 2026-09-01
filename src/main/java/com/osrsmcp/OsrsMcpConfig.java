@@ -111,4 +111,9 @@ public interface OsrsMcpConfig extends Config
             "something noteworthy happens (a 99, dailies waiting). Rate-limited; never interrupts play.",
         section = aiChatSection, position = 7)
     default boolean proactiveNudges() { return true; }
+
+    @ConfigItem(keyName = "screenOverlay", name = "On-screen tips",
+        description = "When on, RuneAssist shows its latest tip/nudge as a small overlay on the game screen (display only; auto-hides).",
+        section = aiChatSection, position = 8)
+    default boolean screenOverlay() { return true; }
 }

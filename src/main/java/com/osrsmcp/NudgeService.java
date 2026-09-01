@@ -30,6 +30,7 @@ public class NudgeService
 
     @Inject private OsrsMcpConfig config;
     @Inject private OsrsMcpChatPanel panel;
+    @Inject private RuneAssistOverlay overlay;
 
     private final Map<Skill, Integer> lastLevel = new EnumMap<>(Skill.class);
     private final Set<String> firedKeys = new HashSet<>();
@@ -80,6 +81,7 @@ public class NudgeService
         lastNudgeMs = now;
         nudgesToday++;
         try { panel.addNudge(text); } catch (Exception e) { log.warn("Nudge post failed", e); }
+        try { overlay.setTip(text); } catch (Exception ignored) {}
     }
 
     private static String cap(String s)
