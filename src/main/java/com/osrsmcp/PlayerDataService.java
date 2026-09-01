@@ -1977,11 +1977,11 @@ public class PlayerDataService
      * from the public price+volume API. Client-free, so it runs off the client thread as a
      * NETWORK tool. Ported from tools/flip-model.mjs (validated on live prices).
      */
-    public Map<String, Object> buildFlipSuggestions()
+    public Map<String, Object> buildFlipSuggestions(long capital, int minVolume, int minMargin, int top)
     {
-        final int    MIN_VOLUME = 500;         // 1h units traded
-        final int    MIN_MARGIN = 20;          // gp after tax
-        final int    TOP        = 20;
+        final int    MIN_VOLUME = minVolume > 0 ? minVolume : 500; // 1h units traded
+        final int    MIN_MARGIN = minMargin > 0 ? minMargin : 20;  // gp after tax
+        final int    TOP        = top > 0 ? top : 20;
         final double TAX_RATE   = 0.02;        // GE tax 2% of sell, capped 5M (matches game)
         final long   TAX_CAP    = 5_000_000L;
 
@@ -2012,6 +2012,8 @@ public class PlayerDataService
             int limit   = m.limit;
             int perHour = Math.max(1, Math.min(v.highVol, v.lowVol)); // bottleneck side
             int qtyCap  = limit > 0 ? limit : Math.max(1, perHour);
+            if (capital > 0) qtyCap = (int) Math.min(qtyCap, capital / buy);
+            if (qtyCap < 1) continue; // can't afford even one within the capital budget
             double fillHrs = (double) qtyCap / perHour;
 
             double imbalance  = Math.abs(v.highVol - v.lowVol) / (double) vol;
@@ -2036,6 +2038,9 @@ public class PlayerDataService
             s.put("volume_1h", vol);
             s.put("ge_limit", limit);
             s.put("est_fill_hours", Math.round(fillHrs * 100) / 100.0);
+            s.put("suggested_qty", qtyCap);
+            s.put("cost", (long) buy * qtyCap);
+            s.put("projected_profit", (long) margin * qtyCap);
             s.put("flags", flags);
             s.put("score", Math.round(score));
             rows.add(s);

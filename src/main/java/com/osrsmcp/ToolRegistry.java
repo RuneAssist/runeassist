@@ -227,7 +227,14 @@ public class ToolRegistry
         tools.add(buildTool("get_boss_kc",          "Get boss kill counts: game-tracked slayer boss KCs and profile-stored KCs from ChatCommands plugin."));
         tools.add(buildTool("get_price_trends",  "Get price trend data for specific items: current price, 5m and 1h averages, trade volume, and rising/falling/stable direction. Pass item_ids array."));
         tools.add(buildTool("get_item_prices",          "Get live Wiki GE prices for specific item IDs. Pass item_ids as an array of integers."));
-        tools.add(buildTool("get_flip_suggestions",     "MARKET-WIDE flip candidates ranked by margin-after-tax x liquidity (penalised for thin/one-sided/wide-spread risk), from live GE prices + 1h volume. Returns top items with buy/sell, post-tax margin, margin %, 1h volume, GE limit, an estimated buy-limit fill time and risk flags. No bank needed. GE tax is 2% (cap 5M); fill time is a volume estimate. Ironman can only buy bonds; UIM cannot use the GE."));
+        {
+            JsonObject flipProps = new JsonObject();
+            flipProps.add("capital", numProp("Optional GP budget; suggestions are sized to it (fills suggested_qty, cost, projected_profit)."));
+            flipProps.add("min_volume", numProp("Optional minimum 1h traded volume (default 500)."));
+            flipProps.add("min_margin", numProp("Optional minimum post-tax margin in gp (default 20)."));
+            flipProps.add("max_results", numProp("Optional number of suggestions to return (default 20)."));
+            tools.add(buildToolWithSchema("get_flip_suggestions", "MARKET-WIDE flip candidates ranked by margin-after-tax x liquidity (penalised for thin/one-sided/wide-spread risk), from live GE prices + 1h volume. Pass capital to size quantities to your budget. Returns per item: buy/sell price, post-tax margin, margin %, 1h volume, GE limit, suggested_qty, cost, projected_profit, an estimated buy-limit fill time and risk flags. No bank needed. GE tax is 2% (cap 5M); fill time is a volume estimate, not a guarantee. Ironman can only buy bonds; UIM cannot use the GE.", flipProps, new String[]{}));
+        }
         tools.add(buildTool("get_money_making_context", "Get location, stats, coins and slayer task for money making method recommendations."));
         tools.add(buildTool("get_installed_plugins", "Get all installed RuneLite plugins (both built-in and Plugin Hub) with their enabled state. Use this to suggest relevant Plugin Hub plugins."));
         tools.add(buildTool("get_ge_offers",          "Get all active Grand Exchange offers including item, quantity, price and state."));
@@ -410,7 +417,13 @@ public class ToolRegistry
             case "get_npc_info":
                 return playerDataService.buildNpcInfo(strArg(args, "name", ""));
             case "get_flip_suggestions":
-                return playerDataService.buildFlipSuggestions();
+            {
+                long capital = args.has("capital") && args.get("capital").isJsonPrimitive() ? args.get("capital").getAsLong() : 0;
+                int minVol   = args.has("min_volume") && args.get("min_volume").isJsonPrimitive() ? args.get("min_volume").getAsInt() : 0;
+                int minMrg   = args.has("min_margin") && args.get("min_margin").isJsonPrimitive() ? args.get("min_margin").getAsInt() : 0;
+                int top      = args.has("max_results") && args.get("max_results").isJsonPrimitive() ? args.get("max_results").getAsInt() : 0;
+                return playerDataService.buildFlipSuggestions(capital, minVol, minMrg, top);
+            }
             case "get_item_prices":
                 return playerDataService.buildItemPrices(intListArg(args, "item_ids"));
             case "get_price_trends":
