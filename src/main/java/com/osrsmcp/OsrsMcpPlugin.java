@@ -80,6 +80,7 @@ public class OsrsMcpPlugin extends Plugin
         startServer();
 
         final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "icon.png");
+        final BufferedImage chatIcon = ImageUtil.loadImageResource(getClass(), "runeassist.png");
         navButton = NavigationButton.builder()
             .tooltip("RuneAssist Server")
             .icon(icon)
@@ -90,7 +91,7 @@ public class OsrsMcpPlugin extends Plugin
 
         chatNavButton = NavigationButton.builder()
             .tooltip("RuneAssist (AI chat)")
-            .icon(icon)
+            .icon(chatIcon)
             .priority(10)
             .panel(chatPanel)
             .build();
