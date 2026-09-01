@@ -32,8 +32,8 @@ Owner: **CW**=Claude worktree agent · **DS**=DeepSeek harness on Ares · **me**
   green/red on active GE offers.
 - ☑ **Flips / Transactions history window** (CW) — `FlipsHistoryWindow`, sortable table of
   all completed flips + totals, opened from the Flips-tab History button.
-- ☐ **Profit-over-time graph** (CW) — cumulative profit chart from local flip history. FC:
-  Profit graph tab.
+- ☑ **Profit-over-time graph** (CW) — `ProfitGraphWindow`, cumulative-profit line from local
+  flip history, opened from the Flips-tab "Profit graph" button.
 
 ## Medium priority
 
@@ -42,7 +42,8 @@ Owner: **CW**=Claude worktree agent · **DS**=DeepSeek harness on Ares · **me**
   `isBuyDumpSuggestion`. (Benefits from the forecast model.)
 - ☐ **Skip + open-graph keybinds** — we only have quick-set. FC: `KeybindHandler`
   (`skipSuggestionKeybind`, `openGraphKeybind`).
-- ☐ **Inventory slot tooltips** — profit info on inventory items. FC: `InventorySlotTooltipOverlay`.
+- ☑ **Inventory slot tooltips** — `GeInventoryCostOverlay` shows your avg-buy on held items
+  while the GE is open. FC: `InventorySlotTooltipOverlay`.
 - ☐ **"Set quantity all"** highlight when dumping a full stack. FC:
   `getSetQuantityAllButton`, `highlightQuantity`.
 - ☐ **NPC highlight** — guide to the GE clerk / banker. FC: `NpcHighlightOverlay`,
