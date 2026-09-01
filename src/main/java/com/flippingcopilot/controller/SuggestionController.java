@@ -50,6 +50,8 @@ public class SuggestionController {
     private final PortfolioStateRS portfolioStateRS;
     private final FlipsDialogController flipDialogController;
     private final GePreviousSearch gePreviousSearch;
+    // RuneAssist fork: our local suggestion source replaces FC's backend.
+    private final com.osrsmcp.RuneAssistSuggestionSource runeAssistSource;
 
 
     private MainPanel mainPanel;
@@ -138,7 +140,8 @@ public class SuggestionController {
 
     public void getSuggestionAsync() {
         suggestionManager.setSuggestionNeeded(false);
-        if (!copilotLoginRS.get().isLoggedIn() || !osrsLoginManager.isValidLoginState()) {
+        // RuneAssist fork: no FC account required — only the OSRS login must be valid.
+        if (!osrsLoginManager.isValidLoginState()) {
             suggestionManager.setSuggestionRefreshPending(false);
             return;
         }
@@ -183,9 +186,9 @@ public class SuggestionController {
         };
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
-        boolean sendGraphData = config.priceGraphWebsite() == FlippingCopilotConfig.PriceGraphWebsite.FLIPPING_COPILOT && !config.lowDataMode();
-        boolean geOpen = grandExchange.isOpen();
-        apiRequestHandler.getSuggestionAsync(accountStatus.encodeProto(geOpen, sendGraphData), suggestionConsumer, graphDataConsumer, onFailure);
+        // RuneAssist fork: get the suggestion from our local scorer instead of FC's server.
+        suggestionManager.setGraphDataReadingInProgress(false); // graph is served separately
+        runeAssistSource.getSuggestionAsync(suggestionConsumer);
     }
 
     void handleDumpSuggestion(Suggestion suggestion) {
