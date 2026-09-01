@@ -130,6 +130,8 @@ public class FlippingCopilotPlugin extends Plugin {
 	// private PortfolioBankTagController portfolioBankTagController;
 	@Inject
 	private PlayerLocationController playerLocationController;
+	@Inject
+	private com.runeassist.flip.HeldCostTracker heldCostTracker;
 
 	// We use our own ThreadPool since the default ScheduledExecutorService only has a single thread and we don't want to block it
 	@Provides
@@ -230,6 +232,12 @@ public class FlippingCopilotPlugin extends Plugin {
 	@Subscribe
 	public void onGrandExchangeOfferChanged(GrandExchangeOfferChanged event) {
 		offerEventHandler.onGrandExchangeOfferChanged(event);
+		// RuneAssist: track cost basis of held stock so we can suggest profitable sells.
+		net.runelite.api.GrandExchangeOffer o = event.getOffer();
+		if (o != null) {
+			heldCostTracker.onOffer(event.getSlot(), o.getState(), o.getItemId(),
+				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
+		}
 		clientThread.invokeLater(() -> highlightController.redraw());
 	}
 

@@ -122,6 +122,22 @@ public class FlipScorer
         return rows.size() > 12 ? new ArrayList<>(rows.subList(0, 12)) : rows;
     }
 
+    /** Current sell quote for a held item: {name, sell_at, ge_limit, tax_at_sell}, or null. */
+    public Map<String, Object> sellQuote(int itemId)
+    {
+        try { ensureLoaded(); } catch (Exception e) { return null; }
+        long[] p = latest.get(itemId);
+        Object[] m = meta.get(itemId);
+        if (p == null || p[0] <= 0) return null;   // no sell (high) price
+        long sell = p[0];
+        Map<String, Object> q = new LinkedHashMap<>();
+        q.put("name", m != null ? String.valueOf(m[0]) : ("item " + itemId));
+        q.put("sell_at", sell);
+        q.put("ge_limit", m != null ? (int) m[1] : 0);
+        q.put("tax_at_sell", taxAmount(itemId, sell));
+        return q;
+    }
+
     private long taxAmount(int id, long price)
     {
         if (price <= 0 || TAX_EXEMPT.contains(id)) return 0;
