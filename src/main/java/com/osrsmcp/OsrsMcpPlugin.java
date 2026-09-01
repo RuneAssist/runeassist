@@ -438,7 +438,7 @@ public class OsrsMcpPlugin extends Plugin
             && client.getVarcIntValue(VarClientID.MESLAYERMODE) == 14
             && client.getWidget(net.runelite.api.widgets.ComponentID.CHATBOX_GE_SEARCH_RESULTS) != null)
         {
-            geSearchPrefill.showSuggestedItem();
+            geSearchPrefill.request();
         }
     }
 
