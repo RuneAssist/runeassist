@@ -306,6 +306,9 @@ public class OsrsMcpPlugin extends Plugin
         net.runelite.api.Player player = client.getLocalPlayer();
         if (player == null) return;
 
+        // Identify the account for cross-device flip sync (pulls history on first set).
+        flipTracker.setAccount(player.getName());
+
         WorldPoint wp = localPlayerLocation();
         int x = 0, y = 0, plane = 0;
         if (wp != null) { x = wp.getX(); y = wp.getY(); plane = wp.getPlane(); }
