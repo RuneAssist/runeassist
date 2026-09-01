@@ -56,6 +56,7 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private OsrsMcpChatPanel chatPanel;
     @Inject private CompanionAgent companionAgent;
     @Inject private TelemetryService telemetry;
+    @Inject private NudgeService nudgeService;
     @Inject private SessionTracker sessionTracker;
 
     private NavigationButton navButton;
@@ -203,6 +204,7 @@ public class OsrsMcpPlugin extends Plugin
             captureAccountSnapshot();
             // Start a fresh session baseline for get_session_summary.
             sessionTracker.onLogin();
+            nudgeService.onLogin();
         }
         else
         {
@@ -216,6 +218,9 @@ public class OsrsMcpPlugin extends Plugin
     {
         // Already on client thread -- write character cache directly
         writeCharacterCache();
+
+        // Proactive nudge on a genuine level-up (milestone only; NudgeService gates it).
+        nudgeService.onLevelUp(event.getSkill(), event.getLevel());
 
         // Telemetry: record XP gain delta on the client thread.
         Skill skill = event.getSkill();
@@ -346,6 +351,7 @@ public class OsrsMcpPlugin extends Plugin
     {
         // Capture daily "waiting to be collected" login messages for live status.
         dailyTracker.onChatMessage(event.getMessage());
+        nudgeService.onChatMessage(event.getMessage());
     }
 
     @Subscribe

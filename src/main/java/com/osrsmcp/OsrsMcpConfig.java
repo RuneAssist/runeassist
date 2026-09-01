@@ -105,4 +105,10 @@ public interface OsrsMcpConfig extends Config
         description = "Sign-in token for the hosted tier. Not a raw API key.",
         section = aiChatSection, position = 6, secret = true)
     default String hostedToken() { return ""; }
+
+    @ConfigItem(keyName = "proactiveNudges", name = "Proactive nudges",
+        description = "When on, RuneAssist posts short, passive tips in the chat panel when " +
+            "something noteworthy happens (a 99, dailies waiting). Rate-limited; never interrupts play.",
+        section = aiChatSection, position = 7)
+    default boolean proactiveNudges() { return true; }
 }
