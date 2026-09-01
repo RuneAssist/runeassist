@@ -114,6 +114,13 @@ public interface OsrsMcpConfig extends Config
             "Enter to confirm. Unset by default.")
     default Keybind quickSetKeybind() { return Keybind.NOT_SET; }
 
+    @ConfigItem(keyName = "geSlots", name = "GE slots to use",
+        section = geSection, position = 2,
+        description = "How many Grand Exchange slots RuneAssist may fill. When this many offers " +
+            "are already active it stops suggesting NEW buys/sells (only re-price/collect on " +
+            "existing offers), so it never tells you to place more than you want. 1–8.")
+    default int geSlots() { return 8; }
+
     // ── AI CHAT ──────────────────────────────────────────────────────────────
 
     @ConfigSection(name = "AI Chat", description = "LLM provider settings for in-game chat", position = 2)

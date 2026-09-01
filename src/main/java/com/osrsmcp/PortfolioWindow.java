@@ -30,9 +30,11 @@ public class PortfolioWindow extends JFrame
     private final JLabel marketVal = value();
     private final JLabel unrealized = value();
     private final JLabel cashVal = value();
+    private final JLabel inOffersVal = value();
     private final JLabel assetsVal = value();
     private final JLabel uniqueItems = value();
     private final JLabel status = new JLabel(" ");
+    private long cashInBuyOffers = 0;
 
     private final DefaultTableModel model = new DefaultTableModel(
         new Object[]{ "Item", "Market value", "Qty", "Unrealized", "ROI", "Avg buy", "Held" }, 0)
@@ -95,14 +97,16 @@ public class PortfolioWindow extends JFrame
         p.add(label("Market value")); p.add(marketVal);
         p.add(label("Unrealized"));   p.add(unrealized);
         p.add(label("Cash"));         p.add(cashVal);
+        p.add(label("In buy offers"));p.add(inOffersVal);
         p.add(label("Assets"));       p.add(assetsVal);
         p.add(label("Unique items")); p.add(uniqueItems);
         return p;
     }
 
-    /** Show + refresh. Call on the EDT. */
-    public void open()
+    /** Show + refresh. Call on the EDT. cashInBuyOffers = gp tied up in active buy offers. */
+    public void open(long cashInBuyOffers)
     {
+        this.cashInBuyOffers = Math.max(0, cashInBuyOffers);
         setVisible(true);
         toFront();
         refresh();
@@ -168,10 +172,11 @@ public class PortfolioWindow extends JFrame
             });
         }
 
-        marketVal.setText(fmt(totalMarket + cash));
+        marketVal.setText(fmt(totalMarket + cash + cashInBuyOffers));
         unrealized.setText(signed(totalUnreal));
         unrealized.setForeground(totalUnreal >= 0 ? GOOD : LOSS);
         cashVal.setText(fmt(cash));
+        inOffersVal.setText(fmt(cashInBuyOffers));
         assetsVal.setText(fmt(totalMarket));
         uniqueItems.setText(String.valueOf(unique));
         status.setText(unique == 0 ? "No open positions — buy something and it'll show here."
