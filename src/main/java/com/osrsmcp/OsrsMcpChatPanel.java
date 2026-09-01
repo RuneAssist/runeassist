@@ -497,12 +497,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         msg.add(headRow);
         msg.add(Box.createVerticalStrut(3));
 
-        JLabel body = new JLabel("<html><body style='width:" + BODY_WIDTH + "px'>"
-            + toHtml(text) + "</body></html>");
-        body.setFont(BODY_FONT);
-        body.setForeground(Color.WHITE);
-        body.setAlignmentX(LEFT_ALIGNMENT);
-        msg.add(body);
+        msg.add(selectableBody(text, Color.WHITE));
 
         lastMsg = msg;
         messages.add(msg);
@@ -543,6 +538,25 @@ public class OsrsMcpChatPanel extends PluginPanel
     }
 
     /** Escape HTML, then render a light subset of markdown (bold + dash bullets). */
+    /** A read-only, SELECTABLE/COPYABLE HTML body (JEditorPane) styled to match the chat. */
+    private JComponent selectableBody(String text, Color fg)
+    {
+        JEditorPane ep = new JEditorPane();
+        ep.setContentType("text/html");
+        ep.setEditable(false);
+        ep.setOpaque(false);
+        ep.setBorder(null);
+        ep.setForeground(fg);
+        ep.setFont(BODY_FONT);
+        ep.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+        ep.setText("<html><body style='width:" + BODY_WIDTH + "px'>" + toHtml(text) + "</body></html>");
+        ep.setCaretPosition(0);
+        ep.setAlignmentX(LEFT_ALIGNMENT);
+        // Bound vertical stretch in the BoxLayout; width follows the fixed HTML width.
+        ep.setMaximumSize(new Dimension(Integer.MAX_VALUE, ep.getPreferredSize().height));
+        return ep;
+    }
+
     private static String toHtml(String s)
     {
         if (s == null) return "";
