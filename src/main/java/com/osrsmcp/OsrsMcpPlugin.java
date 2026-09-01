@@ -59,6 +59,7 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private NudgeService nudgeService;
     @Inject private RuneAssistOverlay runeAssistOverlay;
     @Inject private GeOffersOverlay geOffersOverlay;
+    @Inject private GeOfferSetupOverlay geOfferSetupOverlay;
     @Inject private TaskService taskService;
     @Inject private net.runelite.client.ui.overlay.OverlayManager overlayManager;
     @Inject private SessionTracker sessionTracker;
@@ -104,6 +105,7 @@ public class OsrsMcpPlugin extends Plugin
 
         overlayManager.add(runeAssistOverlay);
         overlayManager.add(geOffersOverlay);
+        overlayManager.add(geOfferSetupOverlay);
     }
 
     @Override
@@ -114,6 +116,7 @@ public class OsrsMcpPlugin extends Plugin
         telemetry.shutdown();
         overlayManager.remove(runeAssistOverlay);
         overlayManager.remove(geOffersOverlay);
+        overlayManager.remove(geOfferSetupOverlay);
         stopServer();
         clientToolbar.removeNavigation(navButton);
         clientToolbar.removeNavigation(chatNavButton);

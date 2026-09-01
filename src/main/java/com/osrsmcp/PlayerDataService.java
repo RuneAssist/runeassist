@@ -2059,6 +2059,62 @@ public class PlayerDataService
         return result;
     }
 
+    /**
+     * A compact flip quote for a SINGLE item, using the same tax/margin math as
+     * {@link #buildFlipSuggestions}. For the GE offer-setup overlay: given the item the
+     * player is configuring, return suggested buy/sell, post-tax margin, 1h volume, buy
+     * limit and a short verdict. May block on a price/volume fetch, so callers must run it
+     * OFF the client/render thread and cache the result. Returns {@code null} if there is
+     * no usable price data for the item.
+     */
+    public Map<String, Object> flipQuoteForItem(int itemId)
+    {
+        if (itemId <= 0) return null;
+        WikiPriceService.PriceData  pd = wikiPriceService.getPrice(itemId);
+        WikiPriceService.VolumeData v  = wikiPriceService.getVolume1h(itemId);
+        WikiPriceService.ItemMeta   m  = wikiPriceService.getMeta(itemId);
+        if (pd == null) return null;
+
+        int buy = pd.low, sell = pd.high;
+        Map<String, Object> q = new LinkedHashMap<>();
+        q.put("id", itemId);
+        q.put("name", m != null ? m.name : ("item " + itemId));
+        q.put("buy_at", buy);
+        q.put("sell_at", sell);
+        q.put("ge_limit", m != null ? m.limit : 0);
+        q.put("volume_1h", v != null ? v.totalVol() : 0);
+
+        if (buy <= 0 || sell <= 0 || sell <= buy)
+        {
+            q.put("margin_post_tax", 0);
+            q.put("margin_pct", 0.0);
+            q.put("verdict", "no margin");
+            return q;
+        }
+        long tax    = sell < 50 ? 0 : Math.min(5_000_000L, (long) (sell * 0.02));
+        int  margin = (int) (sell - buy - tax);
+        double marginPct = margin * 100.0 / buy;
+        q.put("margin_post_tax", margin);
+        q.put("margin_pct", Math.round(marginPct * 10) / 10.0);
+
+        List<String> flags = new ArrayList<>();
+        if (v != null)
+        {
+            int vol = v.totalVol();
+            double imbalance = vol > 0 ? Math.abs(v.highVol - v.lowVol) / (double) vol : 1;
+            if (imbalance > 0.5) flags.add("one-sided");
+            if (vol < 200)       flags.add("thin");
+        }
+        if (marginPct > 25) flags.add("wide-spread");
+        q.put("flags", flags);
+
+        String verdict = margin <= 0 ? "skip"
+            : (!flags.isEmpty() ? "risky (" + String.join(", ", flags) + ")"
+            : (marginPct >= 3 ? "good margin" : "thin margin"));
+        q.put("verdict", verdict);
+        return q;
+    }
+
     public Map<String, Object> buildMoneyMakingContext()
     {
         if (!isLoggedIn()) return errorMap("Player is not logged in");
