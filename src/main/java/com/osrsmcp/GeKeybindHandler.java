@@ -71,7 +71,9 @@ public class GeKeybindHandler
         Widget title = client.getWidget(ComponentID.CHATBOX_TITLE);
         if (title == null || title.isHidden() || title.getText() == null) return;
         String t = title.getText();
-        if (ge.setupItemId() != flip.itemId) return; // only for the suggested item
+        // Note: no item-id guard here. The buy-SEARCH varp isn't set when selling (you click
+        // inventory, you don't search), so guarding on it broke quick-set for sells. The key
+        // is user-initiated, so fill the current suggestion's value for whichever box is open.
 
         long value;
         if (t.equals("How many do you wish to buy?") || t.equals("How many do you wish to sell?"))
@@ -81,7 +83,10 @@ public class GeKeybindHandler
         }
         else if (t.equals("Set a price for each item:"))
         {
-            value = ge.setupIsBuy() ? flip.buyAt : flip.sellAt;
+            // Match the price to the box type (sell box -> sell price), not the varp.
+            boolean sellBox = "SELL".equals(flip.action) || flip.sell;
+            value = sellBox ? flip.sellAt : flip.buyAt;
+            if (value <= 0) value = ge.setupIsBuy() ? flip.buyAt : flip.sellAt;
             if (value <= 0) return;
         }
         else return;

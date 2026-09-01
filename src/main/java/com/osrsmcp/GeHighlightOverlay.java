@@ -33,6 +33,7 @@ public class GeHighlightOverlay extends Overlay
 {
     private static final Color BASE = new Color(124, 138, 255); // indigo accent
     private static final Color WARN = new Color(220, 138, 0);    // amber for MODIFY
+    private static final Color SELLC = new Color(0, 160, 190);   // sell action
 
     private final Client client;
     private final OsrsMcpConfig config;
@@ -91,6 +92,15 @@ public class GeHighlightOverlay extends Overlay
                 int slot = slotForItem(flip.itemId);
                 if (slot != -1) { target = ge.slotWidget(slot); rel = new Rectangle(2, 2, 111, 79); color = WARN; }
             }
+            else if ("SELL".equals(flip.action))
+            {
+                // To sell, click the item in the GE inventory panel.
+                Widget item = inventoryItemWidget(flip.itemId);
+                if (item != null && !item.isHidden())
+                {
+                    target = item; rel = new Rectangle(0, 0, 34, 32); color = SELLC;
+                }
+            }
             else
             {
                 int slot = firstEmptySlot();
@@ -108,6 +118,21 @@ public class GeHighlightOverlay extends Overlay
         int alpha = 55 + (int) (35 * (0.5 + 0.5 * Math.sin(phase * 2 * Math.PI)));
         g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
         g.fillRect(b.x + rel.x, b.y + rel.y, rel.width, rel.height);
+        return null;
+    }
+
+    /** The item widget in the GE inventory panel for {@code itemId} (to click to sell), or null. */
+    private Widget inventoryItemWidget(int itemId)
+    {
+        Widget inv = client.getWidget(467, 0); // GE inventory container
+        if (inv == null) return null;
+        Widget[] children = inv.getDynamicChildren();
+        if (children == null) return null;
+        for (Widget w : children)
+        {
+            if (w == null || w.isHidden()) continue;
+            if (w.getItemId() == itemId && w.getItemQuantity() > 0) return w;
+        }
         return null;
     }
 
