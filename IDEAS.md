@@ -50,7 +50,8 @@ update default model IDs to current (Claude 5 family).
 ### Companion UX (Free — client-side)
 | Idea | Notes | Priority |
 |---|---|---|
-| **Proactive nudges** | React to `onStatChanged`/quest events: "hit 70 Slayer → unlocks X". What makes it feel like a *companion*, not a chatbox. Hooks already exist. | ★ High |
+| **Proactive nudges** | React to `onStatChanged`/quest events: "hit 70 Slayer → unlocks X". What makes it feel like a *companion*, not a chatbox. **Design speced → `docs/nudges-design.md`**; plumbing is a DeepSeek job. | ★ High |
+| **`get_session_summary`** | "This session: +X XP per skill, minutes played." Built (DeepSeek), compiles; runtime check pending. | Done* |
 | **Clue scroll meta-advice** | ~~Step solving~~ is already done well by RuneLite's built-in **Clue Scroll** plugin (map arrows, cryptic/anagram/emote hints, STASH, hot/cold) — don't reimplement. AI only adds a meta layer: "is this tier worth it for my account", clearing stacked clues efficiently, explaining a step in context. Nice extra, not a headline. Needs reward/wiki data. | Low |
 | **Slayer task helper** | On new task: gear, location, cannon?, skip/keep? Fires exactly when needed. | Med |
 | **"Closest completions"** | Collection log / combat achievements you're 1–2 away from. Turns vague goals into next actions. | Med |
@@ -112,9 +113,11 @@ Prototype the "what next" recommender and rate models on public data now; person
 private telemetry later. De-risks the chicken-and-egg.
 
 ### Next build item
-- [ ] **TelemetryService** (opt-in local logger): xp_gain + account_snapshot + advice
-      (+ ge_offer) to versioned JSONL, gated by a new `shareTelemetry` toggle. Mechanical —
-      good DeepSeek job (prompt drafted). Starts the compounding clock.
+- [x] **TelemetryService** (opt-in local logger): xp_gain + account_snapshot + ge_offer
+      (DeepSeek) + **advice->outcome** (Claude) to versioned JSONL, gated by `shareTelemetry`
+      (default OFF). Verified: compiles, opt-in gated, RSN hashed, off-thread. **Runtime
+      check pending** (enable -> valid JSONL; disabled -> nothing; needs login). The
+      compounding clock starts once Tom enables it.
 
 ---
 
