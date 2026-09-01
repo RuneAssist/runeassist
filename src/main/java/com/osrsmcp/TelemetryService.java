@@ -143,6 +143,32 @@ public class TelemetryService
         write("ge_offer", r);
     }
 
+    /**
+     * The RuneAssist advice-&gt;outcome loop: what was asked, which tools fired, and the
+     * cost. Joined offline to the surrounding account_snapshot records (by time + acct) to
+     * see whether the advice was taken and whether it helped. Uses the last-known account
+     * hash (captured on the client thread by xp/snapshot events), so the caller -- the chat
+     * panel on the EDT -- needs no Client access. The question is the user's own input and
+     * stays local like everything else here.
+     */
+    public void logAdvice(String question, java.util.List<String> tools, String provider,
+                          int inTokens, int outTokens, int answerChars)
+    {
+        if (!enabled()) return;
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("v", SCHEMA_VERSION);
+        r.put("type", "advice");
+        r.put("ts", System.currentTimeMillis());
+        r.put("acct", lastHash != null ? lastHash : "anon");
+        r.put("question", question);
+        r.put("tools", tools != null ? tools : java.util.Collections.emptyList());
+        r.put("provider", provider);
+        r.put("in_tokens", inTokens);
+        r.put("out_tokens", outTokens);
+        r.put("answer_chars", answerChars);
+        write("advice", r);
+    }
+
     public void shutdown()
     {
         executor.shutdown();
