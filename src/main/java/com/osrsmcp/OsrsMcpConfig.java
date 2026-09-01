@@ -59,6 +59,13 @@ public interface OsrsMcpConfig extends Config
         description = "Include your RSN in responses. Disable for privacy.")
     default boolean shareUsername() { return true; }
 
+    @ConfigItem(keyName = "shareTelemetry", name = "Contribute anonymous data (opt-in)",
+        section = privacySection, position = 5,
+        description = "Off by default. When on, RuneAssist logs anonymised gameplay data " +
+            "(XP gains, account snapshots, GE activity) to local files on your PC to improve " +
+            "future suggestions. Your RSN is hashed; nothing is uploaded.")
+    default boolean shareTelemetry() { return false; }
+
     // ── AI CHAT ──────────────────────────────────────────────────────────────
 
     @ConfigSection(name = "AI Chat", description = "LLM provider settings for in-game chat", position = 2)

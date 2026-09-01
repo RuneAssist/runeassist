@@ -3,7 +3,12 @@ package com.osrsmcp;
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.GrandExchangeOffer;
+import net.runelite.api.Skill;
+import net.runelite.api.VarPlayer;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GameTick;
+import net.runelite.api.events.GrandExchangeOfferChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.InventoryID;
@@ -50,9 +55,15 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private DailyTracker dailyTracker;
     @Inject private OsrsMcpChatPanel chatPanel;
     @Inject private CompanionAgent companionAgent;
+    @Inject private TelemetryService telemetry;
 
     private NavigationButton navButton;
     private NavigationButton chatNavButton;
+
+    // Telemetry: last seen XP per skill (for XP-gain deltas) and tick counter for periodic snapshots.
+    private final java.util.Map<Skill, Long> lastXp = new java.util.HashMap<>();
+    private int gameTickCounter = 0;
+    private static final int SNAPSHOT_INTERVAL_TICKS = 3000;
 
     @Override
     protected void startUp() throws Exception
@@ -90,6 +101,7 @@ public class OsrsMcpPlugin extends Plugin
     {
         panel.stopStatusUpdates();
         companionAgent.shutdown();
+        telemetry.shutdown();
         stopServer();
         clientToolbar.removeNavigation(navButton);
         clientToolbar.removeNavigation(chatNavButton);
@@ -181,6 +193,19 @@ public class OsrsMcpPlugin extends Plugin
     public void onGameStateChanged(GameStateChanged event)
     {
         panel.updateGameState(event.getGameState());
+
+        if (event.getGameState() == net.runelite.api.GameState.LOGGED_IN)
+        {
+            // Reset tracked XP so no bogus session-to-session delta is recorded, then
+            // immediately capture a baseline snapshot on the client thread.
+            lastXp.clear();
+            captureAccountSnapshot();
+        }
+        else
+        {
+            // Leaving the game / hopping: drop tracked XP so a fresh session starts clean.
+            lastXp.clear();
+        }
     }
 
     @Subscribe
@@ -188,6 +213,29 @@ public class OsrsMcpPlugin extends Plugin
     {
         // Already on client thread -- write character cache directly
         writeCharacterCache();
+
+        // Telemetry: record XP gain delta on the client thread.
+        Skill skill = event.getSkill();
+        long now = event.getXp();
+        long prev = lastXp.getOrDefault(skill, -1L);
+        lastXp.put(skill, now);
+        if (prev >= 0 && now > prev)
+        {
+            WorldPoint wp = localPlayerLocation();
+            int x = 0, y = 0, plane = 0;
+            if (wp != null) { x = wp.getX(); y = wp.getY(); plane = wp.getPlane(); }
+            telemetry.logXpGain(rsn(), skill.getName(), now, now - prev,
+                event.getLevel(), x, y, plane);
+        }
+    }
+
+    @Subscribe
+    public void onGameTick(GameTick event)
+    {
+        // Every ~3000 ticks (~30 min) capture a periodic account snapshot.
+        if (++gameTickCounter < SNAPSHOT_INTERVAL_TICKS) return;
+        gameTickCounter = 0;
+        captureAccountSnapshot();
     }
 
     private void writeCharacterCache()
@@ -205,6 +253,47 @@ public class OsrsMcpPlugin extends Plugin
         net.runelite.api.vars.AccountType at = client.getAccountType();
         boolean ironman = at != net.runelite.api.vars.AccountType.NORMAL;
         cacheWriter.writeCharacter(username, player.getCombatLevel(), skills, loc, at.name().toLowerCase(), ironman);
+    }
+
+    // ── TELEMETRY HELPERS ─────────────────────────────────────────────────────
+
+    /** The local player's name (telemetry hashes it), or "anon" when not logged in. */
+    private String rsn()
+    {
+        net.runelite.api.Player p = client.getLocalPlayer();
+        return p != null ? p.getName() : "anon";
+    }
+
+    private WorldPoint localPlayerLocation()
+    {
+        net.runelite.api.Player p = client.getLocalPlayer();
+        return p != null ? p.getWorldLocation() : null;
+    }
+
+    /** Gather a full account snapshot on the client thread and hand it to telemetry. */
+    private void captureAccountSnapshot()
+    {
+        if (client.getGameState() != net.runelite.api.GameState.LOGGED_IN) return;
+        net.runelite.api.Player player = client.getLocalPlayer();
+        if (player == null) return;
+
+        WorldPoint wp = localPlayerLocation();
+        int x = 0, y = 0, plane = 0;
+        if (wp != null) { x = wp.getX(); y = wp.getY(); plane = wp.getPlane(); }
+
+        java.util.Map<String, long[]> skills = new java.util.LinkedHashMap<>();
+        for (Skill skill : Skill.values())
+        {
+            if (skill == Skill.OVERALL) continue;
+            skills.put(skill.getName(),
+                new long[]{client.getRealSkillLevel(skill), client.getSkillExperience(skill)});
+        }
+
+        net.runelite.api.vars.AccountType at = client.getAccountType();
+        String acctType = at != null ? at.name() : "normal";
+        telemetry.logAccountSnapshot(rsn(), player.getCombatLevel(),
+            client.getTotalLevel(), client.getVarpValue(VarPlayer.QUEST_POINTS),
+            acctType, x, y, plane, skills);
     }
 
     @Subscribe
@@ -251,6 +340,15 @@ public class OsrsMcpPlugin extends Plugin
     {
         // Capture daily "waiting to be collected" login messages for live status.
         dailyTracker.onChatMessage(event.getMessage());
+    }
+
+    @Subscribe
+    public void onGrandExchangeOfferChanged(GrandExchangeOfferChanged e)
+    {
+        GrandExchangeOffer o = e.getOffer();
+        if (o == null) return;
+        telemetry.logGeOffer(rsn(), e.getSlot(), o.getState().name(), o.getItemId(),
+            o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
     }
 
     @Subscribe
