@@ -71,6 +71,8 @@ public class OsrsMcpChatPanel extends PluginPanel
     private final JPanel      flipsPanel   = new JPanel();
     private final JButton     findFlipsBtn = new JButton("Suggest next flip");
     private final JPanel      flipTopCard  = new JPanel();
+    private final com.osrsmcp.graph.PriceGraphPanel graphPanel =
+        new com.osrsmcp.graph.PriceGraphPanel(new com.google.gson.Gson());
     private final JLabel      flipStatus   = new JLabel(" ");
     // Action-card state: the last fetched suggestions, items the user skipped this session,
     // and a live snapshot of GE offers (fed by the plugin) so the card can say BUY/WAIT/MODIFY.
@@ -376,6 +378,11 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipsPanel.add(Box.createVerticalStrut(4));
         flipsPanel.add(flipTopCard);
 
+        // Price-history graph for the suggested item (public wiki data via our server).
+        graphPanel.setAlignmentX(LEFT_ALIGNMENT);
+        flipsPanel.add(Box.createVerticalStrut(4));
+        flipsPanel.add(graphPanel);
+
         JLabel hint = new JLabel("<html><body style='width:" + BODY_WIDTH + "px'>"
             + "Display-only. Budget is your coins; advice, not automation.</body></html>");
         hint.setFont(META_FONT);
@@ -515,6 +522,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         if (pick == null)
         {
             sharedFlip.clear();
+            graphPanel.clear();
             flipTopCard.setVisible(false);
             flipTopCard.revalidate(); flipTopCard.repaint();
             return;
@@ -688,6 +696,8 @@ public class OsrsMcpChatPanel extends PluginPanel
         sharedFlip.set(id, String.valueOf(pick.get("name")),
             num(pick.get("buy_at")), num(pick.get("sell_at")), num(pick.get("suggested_qty")),
             num(pick.get("projected_profit")), pct, lim, flipTracker.limitRemaining(id, lim));
+        try { graphPanel.setItem(config.graphServerUrl(), id, String.valueOf(pick.get("name"))); }
+        catch (Exception ignored) {}
     }
 
     /** Open buy quantity for an item from the tracker (stock you hold, ready to sell). */

@@ -219,7 +219,8 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'GET' && req.url.startsWith('/v1/graph')) {
-    if (!authed(req)) return send(res, 401, { error: 'unauthorized' });
+    // Public: this only reshapes public OSRS-wiki price data, so no token is required
+    // (lets every plugin user see graphs without configuring the contribution endpoint).
     const id = Number(new URL(req.url, 'http://x').searchParams.get('id'));
     if (!Number.isInteger(id) || id <= 0) return send(res, 400, { error: 'bad id' });
     buildGraph(id)

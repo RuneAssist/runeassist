@@ -2,12 +2,20 @@
 
 ## Flipping Copilot (BSD 2-Clause)
 
-Parts of this plugin's Grand Exchange highlighting — the widget accessors in
-`GeWidgets.java`, the click-by-click highlight decision logic in
-`GeHighlightOverlay.java`, and the widget-fill overlay technique — are adapted from the
-Flipping Copilot RuneLite plugin (https://github.com/cbrewitt/flipping-copilot), used
-under the BSD 2-Clause License. The original copyright notice and license text are
-reproduced below as required.
+Parts of this plugin are adapted from the Flipping Copilot RuneLite plugin
+(https://github.com/cbrewitt/flipping-copilot), used under the BSD 2-Clause License:
+
+- `GeWidgets.java` — Grand Exchange interface widget accessors (from their `GrandExchange`).
+- `GeHighlightOverlay.java` — click-by-click GE highlight logic + widget-fill technique
+  (from their `HighlightController` / `WidgetHighlightOverlay`).
+- `GeOfferHintOverlay.java` — showing the target price/qty at the GE chatbox, and the
+  chatbox-title detection (from their `OfferEditor` / `OfferHandler`).
+- `GeTax.java` — GE tax-exempt item list, 250M threshold and 5M cap (from their
+  `util/ProfitCalculator`).
+- `graph/Data.java` — the price-history graph data-model field layout (from their
+  `ui/graph/model/Data`), populated from JSON here rather than protobuf.
+
+The original copyright notice and license text are reproduced below as required.
 
 ```
 BSD 2-Clause License

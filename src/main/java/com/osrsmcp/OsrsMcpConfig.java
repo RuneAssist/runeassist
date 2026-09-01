@@ -87,6 +87,13 @@ public interface OsrsMcpConfig extends Config
             "survives reinstalls and merges across machines. Only your flip log is sent.")
     default boolean syncFlips() { return false; }
 
+    @ConfigItem(keyName = "graphServerUrl", name = "Price-graph server",
+        section = privacySection, position = 9,
+        description = "Base URL of the RuneAssist server that serves item price-history graphs " +
+            "(public OSRS-wiki data, no account data sent — just the item id). Blank disables the " +
+            "graph. Default is the hosted RuneAssist server.")
+    default String graphServerUrl() { return "https://runeassist.ares-server.co.uk"; }
+
     // ── AI CHAT ──────────────────────────────────────────────────────────────
 
     @ConfigSection(name = "AI Chat", description = "LLM provider settings for in-game chat", position = 2)
