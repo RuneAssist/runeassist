@@ -40,8 +40,6 @@ import java.util.Map;
 @Singleton
 public class FlipTrackerService
 {
-    private static final double TAX_RATE = 0.02;
-    private static final long   TAX_CAP  = 5_000_000L;
     private static final long   LIMIT_WINDOW_MS = 4L * 60 * 60 * 1000; // GE buy limit resets every 4h
     private static final int    MAX_FLIPS = 200;
 
@@ -206,7 +204,7 @@ public class FlipTrackerService
 
     private void recordSell(int itemId, int qty, long sellUnit)
     {
-        long taxUnit = sellUnit < 50 ? 0 : Math.min(TAX_CAP, (long) (sellUnit * TAX_RATE));
+        long taxUnit = GeTax.taxAmount(itemId, sellUnit);
         Deque<Lot> lots = positions.get(itemId);
         int remaining = qty;
         long matchedQty = 0, costSum = 0;

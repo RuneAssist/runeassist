@@ -21,6 +21,10 @@
 //                           completed-flip history (union by flip identity) and returns the
 //                           merged list. Phase 2: cross-device flip history. Keyed by the
 //                           account's HASHED rsn — no real usernames.
+//   GET  /v1/graph?id=N  -> Bearer auth; price-history for one item shaped like Flipping
+//                           Copilot's graph Data model (1h/5m/latest low+high price and
+//                           volume series, plus buy/sell/dailyVolume). Sourced from the OSRS
+//                           wiki timeseries; prediction fields are omitted (no model yet).
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -42,6 +46,11 @@ const ALLOWED_TYPES = new Set(['ge_offer', 'account_snapshot', 'xp_gain']);
 
 const FLIP_DIR   = path.join(DATA_DIR, 'flips');
 const MAX_FLIPS  = Number(process.env.MAX_FLIPS_PER_ACCT || 5000); // bound per-account history
+
+const WIKI_UA    = 'RuneAssist-ingest/1.0 (github.com/nickbeddows-ctrl/osrs-mcp-plugin)';
+const WIKI_TS    = 'https://prices.runescape.wiki/api/v1/osrs/timeseries';
+const GRAPH_TTL  = 5 * 60 * 1000; // cache each item's graph for 5 min
+const graphCache = new Map();     // itemId -> { at, data }
 
 if (!TOKEN) {
   console.error('Refusing to start: set INGEST_TOKEN (a shared secret the plugin sends as Bearer).');
@@ -118,6 +127,78 @@ function mergeFlips(account, incoming) {
   return merged;
 }
 
+// Fetch one wiki timeseries (a timestep: "5m" or "1h") for an item.
+async function wikiSeries(itemId, timestep) {
+  const r = await fetch(`${WIKI_TS}?timestep=${timestep}&id=${itemId}`, {
+    headers: { 'User-Agent': WIKI_UA },
+  });
+  if (!r.ok) throw new Error(`wiki ${timestep} HTTP ${r.status}`);
+  const j = await r.json();
+  return Array.isArray(j.data) ? j.data : [];
+}
+
+// Reshape wiki timeseries into Flipping Copilot's graph Data field layout (JSON, plain
+// arrays — no proto, no prediction). Times are epoch seconds. Missing buckets are skipped
+// for price series and treated as 0 for volume series.
+function reshape(itemId, hourly, fiveMin) {
+  const priceSeries = (rows, key) => {
+    const t = [], p = [];
+    for (const row of rows) {
+      if (row[key] == null) continue;
+      t.push(row.timestamp); p.push(row[key]);
+    }
+    return { t, p };
+  };
+  const volSeries = (rows) => {
+    const t = [], lo = [], hi = [];
+    for (const row of rows) {
+      t.push(row.timestamp);
+      lo.push(row.lowPriceVolume || 0);
+      hi.push(row.highPriceVolume || 0);
+    }
+    return { t, lo, hi };
+  };
+
+  const l1 = priceSeries(hourly, 'avgLowPrice');
+  const h1 = priceSeries(hourly, 'avgHighPrice');
+  const l5 = priceSeries(fiveMin, 'avgLowPrice');
+  const h5 = priceSeries(fiveMin, 'avgHighPrice');
+  const latest = fiveMin.slice(-72); // ~6h of 5m buckets as the "latest" band
+  const ll = priceSeries(latest, 'avgLowPrice');
+  const hl = priceSeries(latest, 'avgHighPrice');
+  const v1 = volSeries(hourly);
+  const v5 = volSeries(fiveMin);
+
+  const lastLow  = l5.p.length ? l5.p[l5.p.length - 1] : (l1.p[l1.p.length - 1] || 0);
+  const lastHigh = h5.p.length ? h5.p[h5.p.length - 1] : (h1.p[h1.p.length - 1] || 0);
+  const dailyVolume = v1.lo.slice(-24).reduce((a, b) => a + b, 0)
+                    + v1.hi.slice(-24).reduce((a, b) => a + b, 0);
+
+  return {
+    itemId,
+    dailyVolume,
+    buyPrice: lastLow,
+    sellPrice: lastHigh,
+    low1hTimes: l1.t, low1hPrices: l1.p, high1hTimes: h1.t, high1hPrices: h1.p,
+    low5mTimes: l5.t, low5mPrices: l5.p, high5mTimes: h5.t, high5mPrices: h5.p,
+    lowLatestTimes: ll.t, lowLatestPrices: ll.p, highLatestTimes: hl.t, highLatestPrices: hl.p,
+    volume1hTimes: v1.t, volume1hLows: v1.lo, volume1hHighs: v1.hi,
+    volume5mTimes: v5.t, volume5mLows: v5.lo, volume5mHighs: v5.hi,
+  };
+}
+
+async function buildGraph(itemId) {
+  const cached = graphCache.get(itemId);
+  if (cached && Date.now() - cached.at < GRAPH_TTL) return cached.data;
+  const [hourly, fiveMin] = await Promise.all([
+    wikiSeries(itemId, '1h'),
+    wikiSeries(itemId, '5m'),
+  ]);
+  const data = reshape(itemId, hourly, fiveMin);
+  graphCache.set(itemId, { at: Date.now(), data });
+  return data;
+}
+
 function authed(req) {
   const h = req.headers['authorization'] || '';
   return h.startsWith('Bearer ') && h.slice(7).trim() === TOKEN;
@@ -135,6 +216,16 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/v1/stats') {
     if (!authed(req)) return send(res, 401, { error: 'unauthorized' });
     return send(res, 200, statsToday());
+  }
+
+  if (req.method === 'GET' && req.url.startsWith('/v1/graph')) {
+    if (!authed(req)) return send(res, 401, { error: 'unauthorized' });
+    const id = Number(new URL(req.url, 'http://x').searchParams.get('id'));
+    if (!Number.isInteger(id) || id <= 0) return send(res, 400, { error: 'bad id' });
+    buildGraph(id)
+      .then((data) => send(res, 200, data))
+      .catch((e) => { console.error('graph failed:', e.message); send(res, 502, { error: 'graph source failed' }); });
+    return;
   }
 
   if (req.method === 'POST' && req.url === '/v1/flips/sync') {
