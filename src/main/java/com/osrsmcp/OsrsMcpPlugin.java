@@ -228,8 +228,9 @@ public class OsrsMcpPlugin extends Plugin
         // Proactive nudge on a genuine level-up (milestone only; NudgeService gates it).
         nudgeService.onLevelUp(event.getSkill(), event.getLevel());
 
-        // Auto-tick any goal whose skill/level target is now met.
-        taskService.evaluate();
+        // Auto-tick any goal whose skill/level target is now met; pop a nudge for each.
+        for (String doneGoal : taskService.evaluate())
+            nudgeService.onGoalComplete(doneGoal);
 
         // Telemetry: record XP gain delta on the client thread.
         Skill skill = event.getSkill();

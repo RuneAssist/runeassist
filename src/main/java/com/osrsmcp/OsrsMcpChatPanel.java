@@ -47,6 +47,7 @@ public class OsrsMcpChatPanel extends PluginPanel
     @Inject private OsrsMcpConfig config;
     @Inject private ConfigManager configManager;
     @Inject private TelemetryService telemetry;
+    @Inject private TaskService taskService;
 
     private final JPanel      messages   = new JPanel();
     private final JScrollPane scroll;
@@ -54,6 +55,9 @@ public class OsrsMcpChatPanel extends PluginPanel
     private final JButton     sendBtn     = new JButton("Send");
     private final JButton     newChatBtn  = new JButton("New chat");
     private final JButton     settingsBtn = new JButton("Settings");
+    private final JButton     goalsBtn    = new JButton("Goals");
+    private final JPanel      goalsPanel  = new JPanel();
+    private boolean           goalsOpen   = false;
     private final JLabel      providerLbl = new JLabel();
 
     // Settings controls
@@ -131,16 +135,21 @@ public class OsrsMcpChatPanel extends PluginPanel
         newChatBtn.addActionListener(e -> onNewChat());
         styleButton(settingsBtn, false);
         settingsBtn.addActionListener(e -> toggleSettings());
+        styleButton(goalsBtn, false);
+        goalsBtn.addActionListener(e -> toggleGoals());
         JPanel row = new JPanel();
         row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
         row.setBackground(PANEL_BG);
         row.setAlignmentX(LEFT_ALIGNMENT);
         row.add(newChatBtn);
         row.add(Box.createHorizontalStrut(6));
+        row.add(goalsBtn);
+        row.add(Box.createHorizontalStrut(6));
         row.add(settingsBtn);
         row.add(Box.createHorizontalGlue());
         p.add(row);
 
+        p.add(buildGoalsPanel());
         p.add(buildSettingsPanel());
         return p;
     }
@@ -194,6 +203,98 @@ public class OsrsMcpChatPanel extends PluginPanel
         settingsPanel.add(Box.createVerticalStrut(6));
         settingsPanel.add(hint);
         return settingsPanel;
+    }
+
+    private JPanel buildGoalsPanel()
+    {
+        goalsPanel.setLayout(new BoxLayout(goalsPanel, BoxLayout.Y_AXIS));
+        goalsPanel.setBackground(FIELD_BG);
+        goalsPanel.setAlignmentX(LEFT_ALIGNMENT);
+        goalsPanel.setBorder(new CompoundBorder(
+            new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
+            new EmptyBorder(8, 8, 8, 8)));
+        goalsPanel.setVisible(false);
+        return goalsPanel;
+    }
+
+    private void toggleGoals() { showGoals(!goalsOpen); }
+
+    private void showGoals(boolean open)
+    {
+        goalsOpen = open;
+        goalsBtn.setText(open ? "Hide goals" : "Goals");
+        goalsPanel.setVisible(open);
+        if (open) refreshGoals();
+        revalidate();
+        repaint();
+    }
+
+    private void refreshGoals()
+    {
+        goalsPanel.removeAll();
+        java.util.List<java.util.Map<String, Object>> active = new java.util.ArrayList<>();
+        java.util.List<java.util.Map<String, Object>> done = new java.util.ArrayList<>();
+        for (java.util.Map<String, Object> t : taskService.snapshot())
+            (Boolean.TRUE.equals(t.get("done")) ? done : active).add(t);
+
+        if (active.isEmpty() && done.isEmpty())
+        {
+            JLabel empty = new JLabel("<html><body style='width:" + BODY_WIDTH + "px'>"
+                + "No goals yet. Ask RuneAssist to add one, e.g. \"add a goal: 70 Agility\".</body></html>");
+            empty.setFont(META_FONT);
+            empty.setForeground(META_COLOR);
+            empty.setAlignmentX(LEFT_ALIGNMENT);
+            goalsPanel.add(empty);
+        }
+        for (java.util.Map<String, Object> t : active) goalsPanel.add(goalRow(t, false));
+        for (java.util.Map<String, Object> t : done)   goalsPanel.add(goalRow(t, true));
+
+        if (!done.isEmpty())
+        {
+            JButton clearDone = new JButton("Clear completed");
+            styleButton(clearDone, false);
+            clearDone.addActionListener(e -> {
+                for (java.util.Map<String, Object> t : done)
+                    taskService.remove(((Number) t.get("id")).longValue());
+                refreshGoals();
+            });
+            goalsPanel.add(Box.createVerticalStrut(6));
+            goalsPanel.add(clearDone);
+        }
+        goalsPanel.revalidate();
+        goalsPanel.repaint();
+    }
+
+    private JComponent goalRow(java.util.Map<String, Object> t, boolean done)
+    {
+        long id = ((Number) t.get("id")).longValue();
+        boolean auto = Boolean.TRUE.equals(t.get("auto"));
+        String suffix = auto ? "  (" + t.get("metric") + " " + t.get("target") + ")" : "";
+
+        JPanel row = new JPanel();
+        row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
+        row.setBackground(FIELD_BG);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+        row.setBorder(new EmptyBorder(2, 0, 2, 0));
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+
+        JCheckBox cb = new JCheckBox();
+        cb.setSelected(done);
+        cb.setEnabled(!done);
+        cb.setBackground(FIELD_BG);
+        cb.addActionListener(e -> { taskService.complete(id); refreshGoals(); });
+
+        JLabel lbl = new JLabel("<html><body style='width:150px'>"
+            + toHtml(String.valueOf(t.get("text")) + suffix) + "</body></html>");
+        lbl.setFont(META_FONT);
+        lbl.setForeground(done ? META_COLOR : Color.WHITE);
+        lbl.setAlignmentX(LEFT_ALIGNMENT);
+
+        row.add(cb);
+        row.add(Box.createHorizontalStrut(4));
+        row.add(lbl);
+        row.add(Box.createHorizontalGlue());
+        return row;
     }
 
     private JPanel buildComposer()
