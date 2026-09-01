@@ -20,3 +20,6 @@ gradle-app.setting
 
 # Logs
 *.log
+
+# WOM/ML crawled data outputs (do not commit bulk data)
+research/*.jsonl
