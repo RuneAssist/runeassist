@@ -55,18 +55,24 @@ public class OsrsMcpChatPanel extends PluginPanel
     @Inject private FlipTrackerService flipTracker;
     @Inject private SharedFlipState sharedFlip;
 
+    // Tabbed views: only one shows at a time so chat never renders under the other tabs.
+    private static final String V_CHAT = "chat", V_FLIPS = "flips", V_GOALS = "goals", V_SETTINGS = "settings";
+    private final JPanel      views      = new JPanel(new java.awt.CardLayout());
+    private String            currentView = V_CHAT;
+    private JPanel            composer;
+
     private final JPanel      messages   = new JPanel();
     private final JScrollPane scroll;
     private final JTextArea   input       = new JTextArea(2, 1);
     private final JButton     sendBtn     = new JButton("Send");
     private final JButton     newChatBtn  = new JButton("New chat");
+    private final JButton     chatBtn     = new JButton("Chat");
     private final JButton     settingsBtn = new JButton("Settings");
     private final JButton     goalsBtn    = new JButton("Goals");
     private final JPanel      goalsPanel  = new JPanel();
-    private boolean           goalsOpen   = false;
     private final JLabel      providerLbl = new JLabel();
 
-    // Flips section (the flip model as a collapsible tab, like Goals/Settings)
+    // Flips view (the flip model as its own tab)
     private final JButton     flipsBtn     = new JButton("Flips");
     private final JPanel      flipsPanel   = new JPanel();
     private final JButton     findFlipsBtn = new JButton("Suggest next flip");
@@ -81,7 +87,6 @@ public class OsrsMcpChatPanel extends PluginPanel
     private volatile java.util.Map<Integer, long[]> geOffers = new java.util.HashMap<>();
     private final JLabel      profitLbl    = new JLabel(" ");
     private final JPanel      flipLog      = new JPanel();
-    private boolean           flipsOpen    = false;
 
     // Settings controls
     private final JPanel                     settingsPanel = new JPanel();
@@ -94,7 +99,6 @@ public class OsrsMcpChatPanel extends PluginPanel
     private final JLabel statusLbl = new JLabel(" ");
 
     private volatile boolean busy = false;
-    private boolean settingsOpen = false;
     private List<String> turnTools = new ArrayList<>();
     private JPanel lastMsg = null; // most recent message block, so the meta line tucks under it
     private String currentQuestion = "";  // for the advice->outcome telemetry record
@@ -122,11 +126,57 @@ public class OsrsMcpChatPanel extends PluginPanel
         scroll.setBorder(null);
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         scroll.setBackground(PANEL_BG);
-        add(scroll, BorderLayout.CENTER);
 
-        add(buildComposer(), BorderLayout.SOUTH);
+        // One card per tab; only the selected one is shown, so tabs never stack.
+        views.setBackground(PANEL_BG);
+        views.add(scroll, V_CHAT);
+        views.add(cardScroll(buildFlipsPanel()), V_FLIPS);
+        views.add(cardScroll(buildGoalsPanel()), V_GOALS);
+        views.add(cardScroll(buildSettingsPanel()), V_SETTINGS);
+        add(views, BorderLayout.CENTER);
+
+        composer = buildComposer();
+        add(composer, BorderLayout.SOUTH);
 
         addMessage("RuneAssist", ACCENT, "R", "Hi! Ask me anything OSRS.", ACCENT);
+        selectView(V_CHAT);
+    }
+
+    /** Wrap a tab panel so its content hugs the top and scrolls if it's taller than the view. */
+    private JScrollPane cardScroll(JPanel content)
+    {
+        JPanel wrap = new JPanel(new BorderLayout());
+        wrap.setBackground(PANEL_BG);
+        wrap.add(content, BorderLayout.NORTH);
+        JScrollPane sp = new JScrollPane(wrap,
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        sp.setBorder(null);
+        sp.getVerticalScrollBar().setUnitIncrement(16);
+        sp.setBackground(PANEL_BG);
+        return sp;
+    }
+
+    /** Switch tabs: show one view, keep the composer only on Chat, refresh what's shown. */
+    private void selectView(String view)
+    {
+        currentView = view;
+        ((java.awt.CardLayout) views.getLayout()).show(views, view);
+        composer.setVisible(V_CHAT.equals(view));
+        setTabActive(chatBtn,     V_CHAT.equals(view));
+        setTabActive(flipsBtn,    V_FLIPS.equals(view));
+        setTabActive(goalsBtn,    V_GOALS.equals(view));
+        setTabActive(settingsBtn, V_SETTINGS.equals(view));
+        if (V_GOALS.equals(view)) refreshGoals();
+        else if (V_FLIPS.equals(view)) { refreshFlipLog(); refreshFlips(); }
+        else if (V_SETTINGS.equals(view)) { syncSettingsFromConfig(); savedLbl.setText(" "); }
+        revalidate();
+        repaint();
+    }
+
+    private void setTabActive(JButton b, boolean active)
+    {
+        b.setBackground(active ? ACCENT : ColorScheme.MEDIUM_GRAY_COLOR);
+        b.setForeground(active ? Color.BLACK : ColorScheme.LIGHT_GRAY_COLOR);
     }
 
     // ── header (title, provider, actions, settings) ──────────────────────────────
@@ -138,11 +188,20 @@ public class OsrsMcpChatPanel extends PluginPanel
         p.setBackground(PANEL_BG);
         p.setBorder(new EmptyBorder(10, 10, 6, 10));
 
+        // Title row: name on the left, a small "New chat" on the right.
+        JPanel titleRow = new JPanel();
+        titleRow.setLayout(new BoxLayout(titleRow, BoxLayout.X_AXIS));
+        titleRow.setBackground(PANEL_BG);
+        titleRow.setAlignmentX(LEFT_ALIGNMENT);
         JLabel title = new JLabel("RuneAssist");
         title.setForeground(Color.WHITE);
         title.setFont(new Font("SansSerif", Font.BOLD, 16));
-        title.setAlignmentX(LEFT_ALIGNMENT);
-        p.add(title);
+        titleRow.add(title);
+        titleRow.add(Box.createHorizontalGlue());
+        styleButton(newChatBtn, false);
+        newChatBtn.addActionListener(e -> { onNewChat(); selectView(V_CHAT); });
+        titleRow.add(newChatBtn);
+        p.add(titleRow);
         p.add(Box.createVerticalStrut(3));
 
         providerLbl.setFont(META_FONT);
@@ -151,29 +210,20 @@ public class OsrsMcpChatPanel extends PluginPanel
         p.add(providerLbl);
         p.add(Box.createVerticalStrut(6));
 
-        styleButton(newChatBtn, false);
-        newChatBtn.addActionListener(e -> onNewChat());
-        styleButton(settingsBtn, false);
-        settingsBtn.addActionListener(e -> toggleSettings());
-        styleButton(goalsBtn, false);
-        goalsBtn.addActionListener(e -> toggleGoals());
-        styleButton(flipsBtn, false);
-        flipsBtn.addActionListener(e -> toggleFlips());
-        // Four toggle tabs won't fit on one row at this panel width, so wrap them
-        // into a 2-column grid: New chat / Goals · Flips / Settings.
+        // Mutually-exclusive tabs: Chat / Flips / Goals / Settings.
+        styleButton(chatBtn, false);     chatBtn.addActionListener(e -> selectView(V_CHAT));
+        styleButton(flipsBtn, false);    flipsBtn.addActionListener(e -> selectView(V_FLIPS));
+        styleButton(goalsBtn, false);    goalsBtn.addActionListener(e -> selectView(V_GOALS));
+        styleButton(settingsBtn, false); settingsBtn.addActionListener(e -> selectView(V_SETTINGS));
         JPanel row = new JPanel(new GridLayout(0, 2, 6, 6));
         row.setBackground(PANEL_BG);
         row.setAlignmentX(LEFT_ALIGNMENT);
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 64));
-        row.add(newChatBtn);
-        row.add(goalsBtn);
+        row.add(chatBtn);
         row.add(flipsBtn);
+        row.add(goalsBtn);
         row.add(settingsBtn);
         p.add(row);
-
-        p.add(buildGoalsPanel());
-        p.add(buildFlipsPanel());
-        p.add(buildSettingsPanel());
         return p;
     }
 
@@ -185,7 +235,6 @@ public class OsrsMcpChatPanel extends PluginPanel
         settingsPanel.setBorder(new CompoundBorder(
             new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
             new EmptyBorder(8, 8, 8, 8)));
-        settingsPanel.setVisible(false);
 
         settingsPanel.add(Box.createVerticalStrut(4));
         settingsPanel.add(fieldLabel("Provider"));
@@ -236,20 +285,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         goalsPanel.setBorder(new CompoundBorder(
             new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
             new EmptyBorder(8, 8, 8, 8)));
-        goalsPanel.setVisible(false);
         return goalsPanel;
-    }
-
-    private void toggleGoals() { showGoals(!goalsOpen); }
-
-    private void showGoals(boolean open)
-    {
-        goalsOpen = open;
-        goalsBtn.setText(open ? "Hide goals" : "Goals");
-        goalsPanel.setVisible(open);
-        if (open) refreshGoals();
-        revalidate();
-        repaint();
     }
 
     private void refreshGoals()
@@ -330,8 +366,6 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipsPanel.setBorder(new CompoundBorder(
             new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
             new EmptyBorder(8, 8, 8, 8)));
-        flipsPanel.setVisible(false);
-
         // Profit tracker header (session / all-time) + recent flips, Flipping-Copilot style.
         profitLbl.setFont(NAME_FONT);
         profitLbl.setForeground(Color.WHITE);
@@ -391,18 +425,6 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipsPanel.add(Box.createVerticalStrut(6));
         flipsPanel.add(hint);
         return flipsPanel;
-    }
-
-    private void toggleFlips() { showFlips(!flipsOpen); }
-
-    private void showFlips(boolean open)
-    {
-        flipsOpen = open;
-        flipsBtn.setText(open ? "Hide flips" : "Flips");
-        flipsPanel.setVisible(open);
-        if (open) { refreshFlipLog(); refreshFlips(); } // auto-suggest on open
-        revalidate();
-        repaint();
     }
 
     /** Refresh the profit header + recent-flip log from the tracker (client-free snapshot). */
@@ -503,7 +525,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         SwingUtilities.invokeLater(() ->
         {
             geOffers = offers != null ? offers : new java.util.HashMap<>();
-            if (flipsOpen && lastSuggestions != null) rerenderCard();
+            if (V_FLIPS.equals(currentView) && lastSuggestions != null) rerenderCard();
         });
     }
 
@@ -829,18 +851,8 @@ public class OsrsMcpChatPanel extends PluginPanel
 
     // ── settings actions ──────────────────────────────────────────────────────────
 
-    private void toggleSettings() { showSettings(!settingsOpen); }
-
-    private void showSettings(boolean open)
-    {
-        settingsOpen = open;
-        settingsPanel.setVisible(open);
-        settingsBtn.setText(open ? "Hide settings" : "Settings");
-        if (open) syncSettingsFromConfig();
-        savedLbl.setText(" ");
-        revalidate();
-        repaint();
-    }
+    /** Kept for existing callers: true opens the Settings tab, false returns to Chat. */
+    private void showSettings(boolean open) { selectView(open ? V_SETTINGS : V_CHAT); }
 
     private void loadKeyForSelectedProvider()
     {
