@@ -444,7 +444,11 @@ public class OsrsMcpChatPanel extends PluginPanel
     {
         if (portfolioWindow == null)
             portfolioWindow = new PortfolioWindow(flipTracker, playerDataService);
-        portfolioWindow.open();
+        // Cash tied up in active BUY offers: price * unfilled qty, summed.
+        long cashInBuyOffers = 0;
+        for (long[] o : geOffers.values())
+            if (o.length >= 5 && o[0] == 1) cashInBuyOffers += o[1] * Math.max(0, o[3] - o[2]);
+        portfolioWindow.open(cashInBuyOffers);
     }
 
     /** Refresh the profit header + recent-flip log from the tracker (client-free snapshot). */
@@ -642,16 +646,48 @@ public class OsrsMcpChatPanel extends PluginPanel
     private java.util.Map<String, Object> choosePick()
     {
         if (lastSuggestions == null || lastSuggestions.isEmpty()) return null;
-        java.util.Map<String, Object> firstEligible = null;
+        int activeOffers = geOffers.size();
+        int slotBudget = config != null ? Math.max(1, Math.min(8, config.geSlots())) : 8;
+        boolean slotsFull = activeOffers >= slotBudget;
+
+        java.util.Map<String, Object> fallback = null; // best non-actionable, if nothing else
         for (java.util.Map<String, Object> s : lastSuggestions)
         {
             int id = (int) num(s.get("id"));
             if (skipped.contains(id)) continue;
-            if (firstEligible == null) firstEligible = s;
+
+            String verb = actionVerb(s);
+            boolean needsNewSlot = ("BUY".equals(verb) || "SELL".equals(verb)) && !geOffers.containsKey(id);
+
+            // Non-actionable right now: an offer already filling fine, or already done.
+            if ("WAIT".equals(verb) || "DONE".equals(verb)) { if (fallback == null) fallback = s; continue; }
+            // No free slot to place a new offer -> can't act on this one now.
+            if (needsNewSlot && slotsFull) { if (fallback == null) fallback = s; continue; }
+
             int lim = (int) num(s.get("ge_limit"));
-            if (flipTracker.limitRemaining(id, lim) != 0) return s; // not maxed — best choice
+            if ("BUY".equals(verb) && flipTracker.limitRemaining(id, lim) == 0)
+            { if (fallback == null) fallback = s; continue; } // buy-limit maxed
+
+            return s; // actionable
         }
-        return firstEligible; // everything left is limit-maxed; still show the top non-skipped
+        return fallback; // nothing actionable — show the top item so the user still sees status
+    }
+
+    /** The action the card would resolve for a candidate (BUY/SELL/WAIT/MODIFY/DONE). */
+    private String actionVerb(java.util.Map<String, Object> pick)
+    {
+        int id = (int) num(pick.get("id"));
+        long buyAt = num(pick.get("buy_at")), sellAt = num(pick.get("sell_at"));
+        long[] off = geOffers.get(id);
+        if (off != null)
+        {
+            boolean buy = off[0] == 1; long price = off[1]; boolean filling = off[4] == 1;
+            if (buy && filling) return price < buyAt ? "MODIFY" : "WAIT";
+            if (buy) return "SELL";                 // buy complete -> collect & sell
+            if (filling) return price > sellAt ? "MODIFY" : "WAIT";
+            return "DONE";
+        }
+        return openPosition(id) > 0 ? "SELL" : "BUY";
     }
 
     /** Flipping-Copilot-style card: an action badge (BUY/WAIT/MODIFY/SELL) + what to do now. */

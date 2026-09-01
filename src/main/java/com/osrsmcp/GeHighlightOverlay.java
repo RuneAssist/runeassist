@@ -32,6 +32,7 @@ import java.awt.Rectangle;
 public class GeHighlightOverlay extends Overlay
 {
     private static final Color BASE = new Color(124, 138, 255); // indigo accent
+    private static final Color WARN = new Color(220, 138, 0);    // amber for MODIFY
 
     private final Client client;
     private final OsrsMcpConfig config;
@@ -81,10 +82,20 @@ public class GeHighlightOverlay extends Overlay
                 }
             }
         }
-        else if (ge.isHomeScreenOpen())
+        Color color = BASE;
+        if (ge.isHomeScreenOpen())
         {
-            int slot = firstEmptySlot();
-            if (slot != -1) { target = ge.buyButton(slot); rel = new Rectangle(0, 0, 45, 44); }
+            if ("MODIFY".equals(flip.action))
+            {
+                // Point at the slot whose offer needs re-pricing.
+                int slot = slotForItem(flip.itemId);
+                if (slot != -1) { target = ge.slotWidget(slot); rel = new Rectangle(2, 2, 111, 79); color = WARN; }
+            }
+            else
+            {
+                int slot = firstEmptySlot();
+                if (slot != -1) { target = ge.buyButton(slot); rel = new Rectangle(0, 0, 45, 44); }
+            }
         }
 
         if (target == null || target.isHidden()) return null;
@@ -95,9 +106,23 @@ public class GeHighlightOverlay extends Overlay
         // Gentle pulse so the highlight is noticeable without being harsh.
         double phase = (System.currentTimeMillis() % 1200) / 1200.0;
         int alpha = 55 + (int) (35 * (0.5 + 0.5 * Math.sin(phase * 2 * Math.PI)));
-        g.setColor(new Color(BASE.getRed(), BASE.getGreen(), BASE.getBlue(), alpha));
+        g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
         g.fillRect(b.x + rel.x, b.y + rel.y, rel.width, rel.height);
         return null;
+    }
+
+    /** The slot index holding an active offer for {@code itemId}, or -1. */
+    private int slotForItem(int itemId)
+    {
+        GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
+        if (offers == null) return -1;
+        for (int i = 0; i < offers.length; i++)
+        {
+            GrandExchangeOffer o = offers[i];
+            if (o == null || o.getState() == null || o.getState() == GrandExchangeOfferState.EMPTY) continue;
+            if (o.getItemId() == itemId) return i;
+        }
+        return -1;
     }
 
     /** First GE slot with no active offer (where a new buy can go). */
