@@ -15,6 +15,8 @@ import javax.inject.Singleton;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * On-screen GE helper: a live HUD of the player's active Grand Exchange offers and their
@@ -27,11 +29,19 @@ import java.awt.Graphics2D;
 public class GeOffersOverlay extends Overlay
 {
     private static final Color ACCENT = new Color(124, 138, 255);
+    private static final Color WARN   = new Color(220, 138, 0);
+    // An unfilling offer is flagged "stale" after this long with no progress.
+    private static final long STALE_AFTER_MS = 5L * 60 * 1000;
 
     private final Client client;
     private final ItemManager itemManager;
     private final OsrsMcpConfig config;
     private final PanelComponent panel = new PanelComponent();
+
+    /** Per-slot fill-progress tracking, so we can tell how long an offer has been stuck. */
+    private static final class Progress { int itemId; int sold; long sinceChange;
+        Progress(int i, int s, long t){ itemId=i; sold=s; sinceChange=t; } }
+    private final Map<Integer, Progress> progress = new HashMap<>();
 
     @Inject
     GeOffersOverlay(Client client, ItemManager itemManager, OsrsMcpConfig config)
@@ -50,13 +60,19 @@ public class GeOffersOverlay extends Overlay
         if (offers == null) return null;
 
         panel.getChildren().clear();
-        panel.setPreferredSize(new Dimension(180, 0));
+        panel.setPreferredSize(new Dimension(190, 0));
+        long now = System.currentTimeMillis();
         boolean any = false;
-        for (GrandExchangeOffer o : offers)
+        for (int slot = 0; slot < offers.length; slot++)
         {
+            GrandExchangeOffer o = offers[slot];
             if (o == null) continue;
             GrandExchangeOfferState st = o.getState();
-            if (st == null || st == GrandExchangeOfferState.EMPTY) continue;
+            if (st == null || st == GrandExchangeOfferState.EMPTY)
+            {
+                progress.remove(slot);
+                continue;
+            }
             if (!any)
             {
                 panel.getChildren().add(TitleComponent.builder().text("GE Offers").color(ACCENT).build());
@@ -70,8 +86,38 @@ public class GeOffersOverlay extends Overlay
                 .right(prog)
                 .rightColor(done(st) ? Color.GREEN : Color.WHITE)
                 .build());
+
+            // Track fill progress; flag an in-progress offer that hasn't moved in a while.
+            long stuckMs = trackStale(slot, o.getItemId(), o.getQuantitySold(), now);
+            boolean active = st == GrandExchangeOfferState.BUYING || st == GrandExchangeOfferState.SELLING;
+            if (active && o.getQuantitySold() < o.getTotalQuantity() && stuckMs >= STALE_AFTER_MS)
+            {
+                boolean buy = st == GrandExchangeOfferState.BUYING;
+                panel.getChildren().add(LineComponent.builder()
+                    .left("  stale " + (stuckMs / 60000) + "m")
+                    .right(buy ? "raise bid?" : "lower ask?")
+                    .leftColor(WARN).rightColor(WARN)
+                    .build());
+            }
         }
         return any ? panel.render(g) : null;
+    }
+
+    /**
+     * Update per-slot progress and return how long (ms) this offer has gone without a fill.
+     * A new offer, a different item in the slot, or any increase in quantity sold resets the
+     * clock. Runs on the client thread (render), so the map needs no synchronisation.
+     */
+    private long trackStale(int slot, int itemId, int sold, long now)
+    {
+        Progress p = progress.get(slot);
+        if (p == null || p.itemId != itemId || sold < p.sold)
+        {
+            progress.put(slot, new Progress(itemId, sold, now));
+            return 0;
+        }
+        if (sold > p.sold) { p.sold = sold; p.sinceChange = now; return 0; }
+        return now - p.sinceChange;
     }
 
     private String safeName(int itemId)
