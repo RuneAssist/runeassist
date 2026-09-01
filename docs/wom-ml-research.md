@@ -8,8 +8,8 @@ prototype the rate/recommender models on PUBLIC data before we have our own user
 - **User-Agent REQUIRED** — no UA returns **403**. A descriptive UA (as the plugin
   already sends) works.
 - **Rate limit:** **20 requests / 60s** unauthenticated (from `ratelimit-limit: 20`,
-  `ratelimit-reset: 60` headers). => ~28.8k req/day if paced. An **API key** (WOM
-  Patreon) raises this — confirm the exact ceiling before planning a large crawl.
+  `ratelimit-reset: 60` headers). An **API key raises this to 100 / 60s** (~144k/day),
+  requested via their Discord. UA identifies you but does NOT raise the limit.
 - Open source (github.com/wise-old-man/wise-old-man): **self-hosting the stack or asking
   about a DB dump is the scalable path** if we need millions of rows — avoids crawling.
 
