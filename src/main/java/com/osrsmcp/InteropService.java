@@ -230,9 +230,26 @@ public class InteropService
         portable.put("setup", setup);
         portable.put("layout", null);
 
+        String importString = gson.toJson(portable);
+
+        // Put it straight on the system clipboard so the player skips the copy step:
+        // they just click Import in Inventory Setups. (Local clipboard write only — no
+        // game input is automated.)
+        boolean copied = false;
+        try
+        {
+            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                .setContents(new java.awt.datatransfer.StringSelection(importString), null);
+            copied = true;
+        }
+        catch (Exception ignored) { /* headless / no clipboard access */ }
+
         out.put("name", name);
-        out.put("import_string", gson.toJson(portable));
-        out.put("instructions", "In RuneLite: open the Inventory Setups panel, click the Import (down-arrow) button, and paste this string. It adds a new setup; it does not overwrite existing ones.");
+        out.put("import_string", importString);
+        out.put("copied_to_clipboard", copied);
+        out.put("instructions", copied
+            ? "Done - the loadout is on your clipboard. In RuneLite, open the Inventory Setups panel and click the Import (down-arrow) button to add it as a new setup (it won't overwrite existing ones). No manual copy/paste needed."
+            : "In RuneLite: open the Inventory Setups panel, click the Import (down-arrow) button, and paste this string. It adds a new setup; it does not overwrite existing ones.");
         out.put("_note", "Item ids required (get them from the wiki infobox_item.item_id or get_item_prices). Best-effort format -- if import fails, tell me and I'll adjust.");
         return out;
     }
