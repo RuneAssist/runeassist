@@ -48,8 +48,23 @@ GrandExchangePlugin code excerpt you based it on, with file paths and any versio
 
 ---
 
-## Claude's follow-up (on verify)
-- Confirm the constants exist in this build (compile a tiny read), open the GE buy screen
-  in-game, and check the item/price/qty read back correctly.
-- Then build the offer-setup overlay: when the screen is open, show suggested buy/sell +
-  post-tax margin + 1h volume + verdict for that item (from the flip model). Display only.
+## VERIFIED ANSWER (checked against runelite-api-1.12.37.jar with javap — 2026-09-01)
+
+All constants below resolve in this build with the cited values:
+
+| Purpose | Identifier (value) |
+|---|---|
+| GE offer-setup build script | `net.runelite.api.ScriptID.GE_OFFERS_SETUP_BUILD` (779) |
+| Offer container widget | `net.runelite.api.widgets.WidgetInfo.GRAND_EXCHANGE_OFFER_CONTAINER` |
+| Buy vs sell | `net.runelite.api.gameval.VarbitID.GE_NEWOFFER_TYPE` (4397) — 0 = BUY |
+| Item being set up | `net.runelite.api.gameval.VarPlayerID.TRADINGPOST_SEARCH` (1151), via `client.getVarpValue(...)` |
+| Price per item | `VarbitID.GE_NEWOFFER_PRICE` (4398) (+ `GE_PRICE_CUSTOM` 4284 flag) |
+| Quantity | `VarbitID.GE_NEWOFFER_QUANTITY` (4396) |
+
+Reference impl: `plugins/itemstats/ItemStatPlugin` (not GrandExchangePlugin, which reads
+*placed* offers via `client.getGrandExchangeOffers()`).
+
+Build: `GeOfferSetupOverlay` — when the setup screen is open, annotate the item being
+configured with suggested buy/sell + post-tax margin + 1h volume + verdict from the flip
+model (`PlayerDataService.flipQuoteForItem`). Display only; price fetch happens off the
+render thread (cached per item id).
