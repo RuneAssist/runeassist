@@ -12,6 +12,9 @@ public class SharedFlipState
 {
     public volatile boolean valid = false;
     public volatile boolean sell = false; // true = suggestion is to SELL a held item
+    // The action the card resolved from live offers/holdings: BUY / SELL / WAIT / MODIFY / DONE.
+    public volatile String  action = "BUY";
+    public volatile String  actionLine = ""; // the card's one-line instruction (for WAIT/MODIFY/DONE)
     public volatile int    itemId;
     public volatile String name = "";
     public volatile long   buyAt;
