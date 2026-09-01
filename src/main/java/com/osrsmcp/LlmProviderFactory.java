@@ -23,7 +23,7 @@ public class LlmProviderFactory
         {
             case ANTHROPIC:
                 return new AnthropicProvider(http, gson, config.anthropicKey(),
-                    blankToDefault(config.llmModel(), "claude-sonnet-4-5"));
+                    blankToDefault(config.llmModel(), "claude-sonnet-5"));
             case OPENAI:
                 return new OpenAiProvider(http, gson, config.openAiKey(),
                     "https://api.openai.com/v1",
