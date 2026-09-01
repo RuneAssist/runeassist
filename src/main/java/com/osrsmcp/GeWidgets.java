@@ -72,4 +72,8 @@ class GeWidgets
     int setupPrice()    { return client.getVarbitValue(VarbitID.GE_NEWOFFER_PRICE); }
     int setupQuantity() { return client.getVarbitValue(VarbitID.GE_NEWOFFER_QUANTITY); }
     boolean setupIsBuy(){ return client.getVarbitValue(VarbitID.GE_NEWOFFER_TYPE) == 0; }
+
+    /** The game's "last searched" GE item row exists / is enabled (for search pre-fill). */
+    boolean isPreviousSearchSet()   { return client.getVarpValue(VarPlayerID.GE_LAST_SEARCHED) != -1; }
+    boolean showLastSearchEnabled() { return client.getVarbitValue(VarbitID.DISABLE_LAST_SEARCHED) == 0; }
 }
