@@ -261,14 +261,15 @@ public class FlipTrackerService
         List<Map<String, Object>> open = new ArrayList<>();
         for (Map.Entry<Integer, Deque<Lot>> e : positions.entrySet())
         {
-            int qty = 0; long cost = 0;
-            for (Lot l : e.getValue()) { qty += l.qty; cost += (long) l.qty * l.unit; }
+            int qty = 0; long cost = 0, since = Long.MAX_VALUE;
+            for (Lot l : e.getValue()) { qty += l.qty; cost += (long) l.qty * l.unit; since = Math.min(since, l.time); }
             if (qty <= 0) continue;
             Map<String, Object> p = new LinkedHashMap<>();
             p.put("item_id", e.getKey());
             p.put("name", nameOf(e.getKey()));
             p.put("qty", qty);
             p.put("avg_buy", cost / qty);
+            p.put("since", since == Long.MAX_VALUE ? now() : since); // earliest lot = time held
             open.add(p);
         }
 

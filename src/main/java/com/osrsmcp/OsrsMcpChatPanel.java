@@ -89,6 +89,7 @@ public class OsrsMcpChatPanel extends PluginPanel
     private volatile long lastAutoRefresh = 0; // debounce auto-refresh on holdings changes
     private final JLabel      profitLbl    = new JLabel(" ");
     private final JPanel      flipLog      = new JPanel();
+    private PortfolioWindow   portfolioWindow; // lazily created popup
 
     // Settings controls
     private final JPanel                     settingsPanel = new JPanel();
@@ -380,11 +381,20 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipsPanel.add(Box.createVerticalStrut(2));
         flipsPanel.add(flipLog);
 
+        JButton portfolioBtn = new JButton("Portfolio");
+        styleButton(portfolioBtn, false);
+        portfolioBtn.addActionListener(e -> openPortfolio());
         JButton resetBtn = new JButton("Reset flips");
         styleButton(resetBtn, false);
         resetBtn.addActionListener(e -> { flipTracker.reset(); refreshFlipLog(); });
+        JPanel btnRow = new JPanel(new GridLayout(0, 2, 6, 0));
+        btnRow.setBackground(FIELD_BG);
+        btnRow.setAlignmentX(LEFT_ALIGNMENT);
+        btnRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        btnRow.add(portfolioBtn);
+        btnRow.add(resetBtn);
         flipsPanel.add(Box.createVerticalStrut(4));
-        flipsPanel.add(resetBtn);
+        flipsPanel.add(btnRow);
 
         JPanel sep = new JPanel();
         sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
@@ -427,6 +437,14 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipsPanel.add(Box.createVerticalStrut(6));
         flipsPanel.add(hint);
         return flipsPanel;
+    }
+
+    /** Open (creating on first use) the Flipping-Copilot-style Portfolio popup. */
+    private void openPortfolio()
+    {
+        if (portfolioWindow == null)
+            portfolioWindow = new PortfolioWindow(flipTracker, playerDataService);
+        portfolioWindow.open();
     }
 
     /** Refresh the profit header + recent-flip log from the tracker (client-free snapshot). */
@@ -527,10 +545,16 @@ public class OsrsMcpChatPanel extends PluginPanel
             (r != null && r.get("error") == null)
                 ? (java.util.List<java.util.Map<String, Object>>) r.get("suggestions") : null;
 
-        // Combine: sell what you hold first (locks profit / frees capital), then buys.
+        // Order: profitable sells first (lock gains), then buys, then loss-cutting sells last
+        // (surfaced but never leading — you decide whether to cut).
+        java.util.List<java.util.Map<String, Object>> profitableSells = new java.util.ArrayList<>();
+        java.util.List<java.util.Map<String, Object>> lossSells = new java.util.ArrayList<>();
+        if (sells != null) for (java.util.Map<String, Object> s : sells)
+            (Boolean.TRUE.equals(s.get("loss")) ? lossSells : profitableSells).add(s);
         java.util.List<java.util.Map<String, Object>> list = new java.util.ArrayList<>();
-        if (sells != null) list.addAll(sells);
+        list.addAll(profitableSells);
         if (buys != null) list.addAll(buys);
+        list.addAll(lossSells);
 
         if (list.isEmpty())
         {
@@ -674,8 +698,10 @@ public class OsrsMcpChatPanel extends PluginPanel
         }
         else if (openQty > 0) // hold stock, no active offer -> sell it
         {
-            badge = "SELL"; badgeColor = SELL_C;
-            line1 = "Sell " + fmt(openQty) + " @ " + fmt(sellAt); line1Color = Color.WHITE;
+            boolean loss = Boolean.TRUE.equals(pick.get("loss"));
+            badge = "SELL"; badgeColor = loss ? WARN : SELL_C;
+            line1 = "Sell " + fmt(openQty) + " @ " + fmt(sellAt) + (loss ? "  (cut loss)" : "");
+            line1Color = Color.WHITE;
         }
         else // nothing placed, don't hold -> buy
         {
@@ -725,7 +751,7 @@ public class OsrsMcpChatPanel extends PluginPanel
 
         // Always show the target buy→sell so the numbers are to hand.
         JLabel prices = new JLabel("Buy " + fmt(buyAt) + "  →  Sell " + fmt(sellAt)
-            + "   (+" + fmt(marginEa) + " ea, " + pct + "%)");
+            + "   (" + (marginEa >= 0 ? "+" : "") + fmt(marginEa) + " ea, " + pct + "%)");
         prices.setFont(META_FONT);
         prices.setForeground(META_COLOR);
         prices.setAlignmentX(LEFT_ALIGNMENT);
