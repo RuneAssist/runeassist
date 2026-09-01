@@ -72,7 +72,7 @@ public class ToolRegistry
         // hold the client thread (they only take a name argument and hit HTTP).
         "get_drop_table", "get_npc_info",
         // live GE price lookups (blocking HTTP, no live game state needed)
-        "get_item_prices", "get_price_trends",
+        "get_item_prices", "get_price_trends", "get_flip_suggestions",
         // inter-plugin messaging (post on client thread internally, then await a reply)
         "get_tcg_unlocks", "path_to", "get_inventory_setups", "view_inventory_setup", "get_destinations",
         // Wise Old Man web API (progress history / gains)
@@ -227,7 +227,7 @@ public class ToolRegistry
         tools.add(buildTool("get_boss_kc",          "Get boss kill counts: game-tracked slayer boss KCs and profile-stored KCs from ChatCommands plugin."));
         tools.add(buildTool("get_price_trends",  "Get price trend data for specific items: current price, 5m and 1h averages, trade volume, and rising/falling/stable direction. Pass item_ids array."));
         tools.add(buildTool("get_item_prices",          "Get live Wiki GE prices for specific item IDs. Pass item_ids as an array of integers."));
-        tools.add(buildTool("get_flip_suggestions",     "Flip ideas from items ALREADY IN THE BANK (needs the bank opened this session) cross-referenced with live GE margins. It does NOT propose fresh buys -- for that, look up specific items with get_item_prices / get_price_trends (from wiki_bucket_query infobox_item ids or the player's goals)."));
+        tools.add(buildTool("get_flip_suggestions",     "MARKET-WIDE flip candidates ranked by margin-after-tax x liquidity (penalised for thin/one-sided/wide-spread risk), from live GE prices + 1h volume. Returns top items with buy/sell, post-tax margin, margin %, 1h volume, GE limit, an estimated buy-limit fill time and risk flags. No bank needed. GE tax is 2% (cap 5M); fill time is a volume estimate. Ironman can only buy bonds; UIM cannot use the GE."));
         tools.add(buildTool("get_money_making_context", "Get location, stats, coins and slayer task for money making method recommendations."));
         tools.add(buildTool("get_installed_plugins", "Get all installed RuneLite plugins (both built-in and Plugin Hub) with their enabled state. Use this to suggest relevant Plugin Hub plugins."));
         tools.add(buildTool("get_ge_offers",          "Get all active Grand Exchange offers including item, quantity, price and state."));
@@ -331,7 +331,7 @@ public class ToolRegistry
             case "get_combat_context":     return playerDataService.buildCombatContext();
             case "get_boss_kc":             return playerDataService.buildBossKc();
             // get_price_trends / get_item_prices are handled off-thread in dispatchNetworkTool
-            case "get_flip_suggestions":    return playerDataService.buildFlipSuggestions();
+            // get_flip_suggestions is market-wide + client-free -> handled in dispatchNetworkTool
             case "get_money_making_context":return playerDataService.buildMoneyMakingContext();
             case "get_installed_plugins": return playerDataService.buildInstalledPlugins();
             case "get_ge_offers":          { Map<String,Object> ge = new LinkedHashMap<>(); ge.put("offers", playerDataService.buildGeOffers()); return ge; }
@@ -409,6 +409,8 @@ public class ToolRegistry
                 return playerDataService.buildDropTable(strArg(args, "name", ""));
             case "get_npc_info":
                 return playerDataService.buildNpcInfo(strArg(args, "name", ""));
+            case "get_flip_suggestions":
+                return playerDataService.buildFlipSuggestions();
             case "get_item_prices":
                 return playerDataService.buildItemPrices(intListArg(args, "item_ids"));
             case "get_price_trends":
