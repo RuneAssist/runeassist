@@ -68,6 +68,7 @@ public class OsrsMcpChatPanel extends PluginPanel
     private final JTextField  capitalField = new JTextField("10m");
     private final JButton     findFlipsBtn = new JButton("Find flips");
     private final JPanel      flipResults  = new JPanel();
+    private final JPanel      flipTopCard  = new JPanel();
     private final JLabel      flipStatus   = new JLabel(" ");
     private final JLabel      profitLbl    = new JLabel(" ");
     private final JPanel      flipLog      = new JPanel();
@@ -372,6 +373,14 @@ public class OsrsMcpChatPanel extends PluginPanel
         flipsPanel.add(Box.createVerticalStrut(4));
         flipsPanel.add(flipStatus);
 
+        // Prominent "recommended next flip" card (FC leads with one pick, not a list).
+        flipTopCard.setLayout(new BoxLayout(flipTopCard, BoxLayout.Y_AXIS));
+        flipTopCard.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        flipTopCard.setAlignmentX(LEFT_ALIGNMENT);
+        flipTopCard.setVisible(false);
+        flipsPanel.add(Box.createVerticalStrut(4));
+        flipsPanel.add(flipTopCard);
+
         flipResults.setLayout(new BoxLayout(flipResults, BoxLayout.Y_AXIS));
         flipResults.setBackground(FIELD_BG);
         flipResults.setAlignmentX(LEFT_ALIGNMENT);
@@ -476,6 +485,7 @@ public class OsrsMcpChatPanel extends PluginPanel
         if (r == null || r.get("error") != null)
         {
             flipStatus.setText(r != null ? String.valueOf(r.get("error")) : "Failed to load prices.");
+            flipTopCard.setVisible(false);
             flipResults.revalidate(); flipResults.repaint();
             return;
         }
@@ -484,10 +494,84 @@ public class OsrsMcpChatPanel extends PluginPanel
         int count = r.get("count") instanceof Number ? ((Number) r.get("count")).intValue()
             : (list == null ? 0 : list.size());
         flipStatus.setText(count + " candidates · top " + (list == null ? 0 : list.size()));
+        renderTopPick(list);
         if (list != null) for (java.util.Map<String, Object> s : list) flipResults.add(flipRow(s));
         flipResults.revalidate(); flipResults.repaint();
         refreshFlipLog();
         revalidate(); repaint();
+    }
+
+    /** Build the prominent "next flip" card from the best suggestion that still has limit left. */
+    private void renderTopPick(java.util.List<java.util.Map<String, Object>> list)
+    {
+        flipTopCard.removeAll();
+        if (list == null || list.isEmpty()) { flipTopCard.setVisible(false); return; }
+
+        // Prefer the highest-ranked item you haven't already maxed the 4h buy limit on.
+        java.util.Map<String, Object> pick = null;
+        for (java.util.Map<String, Object> s : list)
+        {
+            int id = (int) num(s.get("id"));
+            int lim = (int) num(s.get("ge_limit"));
+            if (flipTracker.limitRemaining(id, lim) != 0) { pick = s; break; }
+        }
+        if (pick == null) pick = list.get(0); // all maxed — still show the top one
+
+        JPanel card = new JPanel();
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBackground(FIELD_BG);
+        card.setAlignmentX(LEFT_ALIGNMENT);
+        card.setBorder(new CompoundBorder(
+            new MatteBorder(2, 2, 2, 2, ACCENT), new EmptyBorder(6, 8, 6, 8)));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 118));
+
+        JLabel tag = new JLabel("NEXT FLIP");
+        tag.setFont(META_FONT);
+        tag.setForeground(ACCENT);
+        tag.setAlignmentX(LEFT_ALIGNMENT);
+        card.add(tag);
+
+        JLabel name = new JLabel(String.valueOf(pick.get("name")));
+        name.setFont(new Font("SansSerif", Font.BOLD, 13));
+        name.setForeground(Color.WHITE);
+        name.setAlignmentX(LEFT_ALIGNMENT);
+        card.add(name);
+
+        JLabel buy = new JLabel("Buy " + fmt(pick.get("suggested_qty")) + " @ " + fmt(pick.get("buy_at")));
+        buy.setFont(BODY_FONT);
+        buy.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        buy.setAlignmentX(LEFT_ALIGNMENT);
+        card.add(buy);
+
+        JLabel sell = new JLabel("Sell @ " + fmt(pick.get("sell_at"))
+            + "  (+" + fmt(pick.get("margin_post_tax")) + " ea, " + pick.get("margin_pct") + "%)");
+        sell.setFont(BODY_FONT);
+        sell.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        sell.setAlignmentX(LEFT_ALIGNMENT);
+        card.add(sell);
+
+        JLabel profit = new JLabel("≈ " + signed(num(pick.get("projected_profit"))) + " profit");
+        profit.setFont(NAME_FONT);
+        profit.setForeground(new Color(0, 200, 100));
+        profit.setAlignmentX(LEFT_ALIGNMENT);
+        card.add(profit);
+
+        int id = (int) num(pick.get("id"));
+        int lim = (int) num(pick.get("ge_limit"));
+        int left = flipTracker.limitRemaining(id, lim);
+        if (lim > 0)
+        {
+            JLabel ll = new JLabel("limit " + fmt(left) + "/" + fmt(lim) + " left (4h)");
+            ll.setFont(META_FONT);
+            ll.setForeground(left == 0 ? ColorScheme.BRAND_ORANGE : META_COLOR);
+            ll.setAlignmentX(LEFT_ALIGNMENT);
+            card.add(ll);
+        }
+
+        flipTopCard.add(card);
+        flipTopCard.setVisible(true);
+        flipTopCard.revalidate();
+        flipTopCard.repaint();
     }
 
     @SuppressWarnings("unchecked")
