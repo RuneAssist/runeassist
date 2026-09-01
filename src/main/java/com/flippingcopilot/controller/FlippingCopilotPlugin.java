@@ -33,10 +33,12 @@ import java.awt.image.BufferedImage;
 import java.util.concurrent.*;
 
 @Slf4j
-@PluginDescriptor(
-		name = "Flipping Copilot",
-		description = "Your AI assistant for trading"
-)
+// RuneAssist fork: FC's own @PluginDescriptor is disabled so it does not load as a
+// separate plugin or contact FC's servers. RuneAssist drives the flipping controllers.
+// @PluginDescriptor(
+// 		name = "Flipping Copilot",
+// 		description = "Your AI assistant for trading"
+// )
 @PluginDependency(BankTagsPlugin.class)
 public class FlippingCopilotPlugin extends Plugin {
 
