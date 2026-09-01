@@ -62,9 +62,23 @@ public interface OsrsMcpConfig extends Config
     @ConfigItem(keyName = "shareTelemetry", name = "Contribute anonymous data (opt-in)",
         section = privacySection, position = 5,
         description = "Off by default. When on, RuneAssist logs anonymised gameplay data " +
-            "(XP gains, account snapshots, GE activity) to local files on your PC to improve " +
-            "future suggestions. Your RSN is hashed; nothing is uploaded.")
+            "(XP gains, account snapshots, GE activity) to local files on your PC. Your RSN is " +
+            "hashed. Data is uploaded only if you also set a Contribution endpoint below; " +
+            "otherwise it stays on your PC. Your chat questions are never uploaded.")
     default boolean shareTelemetry() { return false; }
+
+    @ConfigItem(keyName = "telemetryEndpoint", name = "Contribution endpoint (optional)",
+        section = privacySection, position = 6,
+        description = "Optional. A RuneAssist ingest URL (e.g. https://your-host/v1/ingest). " +
+            "When set AND 'Contribute anonymous data' is on, hashed GE/XP/account records are " +
+            "batched and uploaded here to train the flip model. Leave blank to stay local-only. " +
+            "Chat questions are never uploaded.")
+    default String telemetryEndpoint() { return ""; }
+
+    @ConfigItem(keyName = "telemetryToken", name = "Contribution token (optional)",
+        section = privacySection, position = 7, secret = true,
+        description = "Optional Bearer token sent with uploads, if your endpoint requires one.")
+    default String telemetryToken() { return ""; }
 
     // ── AI CHAT ──────────────────────────────────────────────────────────────
 
