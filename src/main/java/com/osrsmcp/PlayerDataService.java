@@ -2088,14 +2088,16 @@ public class PlayerDataService
             if (pd == null || pd.high <= 0) continue;
             long sell = pd.high;
             long tax = GeTax.taxAmount(id, sell);
-            long marginEa = sell - tax - avgBuy;
-            if (marginEa < 0) continue; // don't advise selling at a loss
+            long marginEa = sell - tax - avgBuy; // may be negative = underwater
 
             WikiPriceService.ItemMeta m = wikiPriceService.getMeta(id);
+            List<String> flags = new ArrayList<>();
+            if (marginEa < 0) flags.add("cut loss");
             Map<String, Object> s = new LinkedHashMap<>();
             s.put("id", id);
             s.put("name", m != null && m.name != null ? m.name : ("item " + id));
             s.put("side", "sell");
+            s.put("loss", marginEa < 0);
             s.put("buy_at", avgBuy);              // your cost basis
             s.put("sell_at", sell);
             s.put("margin_post_tax", marginEa);
@@ -2103,7 +2105,7 @@ public class PlayerDataService
             s.put("suggested_qty", qty);
             s.put("ge_limit", 0);                 // no buy-limit on selling
             s.put("projected_profit", marginEa * qty);
-            s.put("flags", new ArrayList<String>());
+            s.put("flags", flags);
             s.put("score", marginEa * qty);
             out.add(s);
         }
