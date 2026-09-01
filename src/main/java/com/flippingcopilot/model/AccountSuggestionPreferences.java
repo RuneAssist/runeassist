@@ -1,0 +1,16 @@
+package com.flippingcopilot.model;
+
+import lombok.Data;
+
+@Data
+public class AccountSuggestionPreferences {
+    public int timeframe = 5;
+    public boolean buyAndHold = true;
+    public boolean f2pOnlyMode = false;
+    public RiskLevel riskLevel = RiskLevel.MEDIUM;
+    public Integer reservedSlots = null;
+    public boolean receiveDumpSuggestions = false;
+    public Long minPredictedProfit = null;
+    public Long dumpMinPredictedProfit = null;
+    public String selectedProfile = null;
+}
