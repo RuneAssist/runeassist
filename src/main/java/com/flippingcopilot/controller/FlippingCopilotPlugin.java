@@ -41,7 +41,8 @@ import java.util.concurrent.*;
 		description = "Grand Exchange flip assistant (RuneAssist)",
 		tags = {"runeassist", "flipping", "ge", "grand exchange", "money"}
 )
-@PluginDependency(BankTagsPlugin.class)
+// RuneAssist fork: dropped @PluginDependency(BankTagsPlugin.class) -- a sideloaded plugin
+// depending on a core plugin makes RuneLite silently refuse to load it.
 public class FlippingCopilotPlugin extends Plugin {
 
 	@Inject
