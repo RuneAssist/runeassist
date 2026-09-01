@@ -27,6 +27,8 @@ public class PriceGraphPanel extends JComponent
 {
     private static final Color LOW  = new Color(0, 153, 255);   // buy
     private static final Color HIGH = new Color(255, 102, 0);   // sell
+    private static final Color LOW_BAND  = new Color(0, 153, 255, 45);  // forecast IQR (buy)
+    private static final Color HIGH_BAND = new Color(255, 102, 0, 45);  // forecast IQR (sell)
     private static final Color GRID = new Color(85, 85, 85, 90);
     private static final Color TEXT = new Color(210, 210, 210);
     private static final Font  FONT = new Font("SansSerif", Font.PLAIN, 10);
@@ -132,12 +134,25 @@ public class PriceGraphPanel extends JComponent
                 yMax = Math.max(yMax, d.low1hPrices[i]);
                 yMin = Math.min(yMin, d.low1hPrices[i]);
             }
+        boolean hasPred = d.predictionTimes != null && d.predictionTimes.length > 0
+            && d.predictionHighMeans != null && d.predictionLowMeans != null;
+
+        int lastHistT = d.high1hTimes[n - 1];
+        int xMinT = d.high1hTimes[from], xMaxT = lastHistT;
+        if (hasPred)
+        {
+            xMaxT = Math.max(xMaxT, d.predictionTimes[d.predictionTimes.length - 1]);
+            for (int i = 0; i < d.predictionTimes.length; i++)
+            {
+                if (d.predictionHighIQRUpper != null) yMax = Math.max(yMax, d.predictionHighIQRUpper[i]);
+                if (d.predictionLowIQRLower != null)  yMin = Math.min(yMin, d.predictionLowIQRLower[i]);
+            }
+        }
         if (yMin >= yMax) { yMax = yMin + 1; }
         long pad = Math.max(1, (yMax - yMin) / 12);
         yMin -= pad; yMax += pad;
 
         int left = 4, right = w - 52, top = 16, bottom = h - 14;
-        int xMinT = d.high1hTimes[from], xMaxT = d.high1hTimes[n - 1];
 
         // grid + y labels (min / mid / max)
         g.setStroke(new BasicStroke(0.8f));
@@ -155,6 +170,24 @@ public class PriceGraphPanel extends JComponent
         g.setColor(TEXT);
         g.drawString(title, 6, 11);
 
+        // forecast cone first, so the history lines sit on top of the shading
+        if (hasPred)
+        {
+            drawBand(g, d.predictionTimes, d.predictionHighIQRLower, d.predictionHighIQRUpper,
+                lastHistT, d.high1hPrices[n - 1], xMinT, xMaxT, yMin, yMax, left, right, top, bottom, HIGH_BAND);
+            drawBand(g, d.predictionTimes, d.predictionLowIQRLower, d.predictionLowIQRUpper,
+                lastHistT, lastLow(d, count), xMinT, xMaxT, yMin, yMax, left, right, top, bottom, LOW_BAND);
+            drawForecastLine(g, d.predictionTimes, d.predictionHighMeans, lastHistT, d.high1hPrices[n - 1],
+                xMinT, xMaxT, yMin, yMax, left, right, top, bottom, HIGH);
+            drawForecastLine(g, d.predictionTimes, d.predictionLowMeans, lastHistT, lastLow(d, count),
+                xMinT, xMaxT, yMin, yMax, left, right, top, bottom, LOW);
+            // "now" divider
+            int nx = mapX(lastHistT, xMinT, xMaxT, left, right);
+            g.setColor(GRID);
+            g.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{3}, 0));
+            g.drawLine(nx, top, nx, bottom);
+        }
+
         drawSeries(g, d.high1hTimes, d.high1hPrices, from, xMinT, xMaxT, yMin, yMax, left, right, top, bottom, HIGH);
         if (d.low1hTimes != null && d.low1hPrices != null)
         {
@@ -165,8 +198,60 @@ public class PriceGraphPanel extends JComponent
         // legend / current values
         g.setColor(HIGH); g.drawString("sell " + kmb(d.sellPrice), 6, bottom + 12);
         g.setColor(LOW);  g.drawString("buy " + kmb(d.buyPrice), 90, bottom + 12);
+        if (hasPred) { g.setColor(TEXT); g.drawString("forecast →", right - 56, 11); }
 
         g.dispose();
+    }
+
+    private static long lastLow(Data d, int count)
+    {
+        if (d.low1hPrices == null || d.low1hPrices.length == 0) return d.buyPrice;
+        return d.low1hPrices[d.low1hPrices.length - 1];
+    }
+
+    /** Shaded IQR band, anchored at the last historical point so it joins the history. */
+    private void drawBand(Graphics2D g, int[] times, long[] lower, long[] upper,
+                          int anchorT, long anchorV, int xMinT, int xMaxT, long yMin, long yMax,
+                          int left, int right, int top, int bottom, Color c)
+    {
+        if (lower == null || upper == null) return;
+        int m = Math.min(times.length, Math.min(lower.length, upper.length));
+        int[] xs = new int[m + 2];
+        int[] ysTop = new int[m + 2];
+        int[] ysBot = new int[m + 2];
+        xs[0] = mapX(anchorT, xMinT, xMaxT, left, right);
+        ysTop[0] = mapY(anchorV, yMin, yMax, top, bottom);
+        ysBot[0] = ysTop[0];
+        for (int i = 0; i < m; i++)
+        {
+            xs[i + 1] = mapX(times[i], xMinT, xMaxT, left, right);
+            ysTop[i + 1] = mapY(upper[i], yMin, yMax, top, bottom);
+            ysBot[i + 1] = mapY(lower[i], yMin, yMax, top, bottom);
+        }
+        xs[m + 1] = xs[m]; ysTop[m + 1] = ysTop[m]; ysBot[m + 1] = ysBot[m];
+        java.awt.Polygon poly = new java.awt.Polygon();
+        for (int i = 0; i <= m + 1; i++) poly.addPoint(xs[i], ysTop[i]);
+        for (int i = m + 1; i >= 0; i--) poly.addPoint(xs[i], ysBot[i]);
+        g.setColor(c);
+        g.fillPolygon(poly);
+    }
+
+    private void drawForecastLine(Graphics2D g, int[] times, long[] means, int anchorT, long anchorV,
+                                  int xMinT, int xMaxT, long yMin, long yMax,
+                                  int left, int right, int top, int bottom, Color c)
+    {
+        if (means == null) return;
+        g.setColor(c);
+        g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{4}, 0));
+        int px = mapX(anchorT, xMinT, xMaxT, left, right), py = mapY(anchorV, yMin, yMax, top, bottom);
+        int m = Math.min(times.length, means.length);
+        for (int i = 0; i < m; i++)
+        {
+            int x = mapX(times[i], xMinT, xMaxT, left, right);
+            int y = mapY(means[i], yMin, yMax, top, bottom);
+            g.drawLine(px, py, x, y);
+            px = x; py = y;
+        }
     }
 
     private void drawSeries(Graphics2D g, int[] times, long[] prices, int from,

@@ -42,4 +42,14 @@ public class Data
     public int[] volume5mTimes;
     public int[] volume5mLows;
     public int[] volume5mHighs;
+
+    // forward forecast (mean + interquartile band), shared prediction time axis; null if none
+    public int[]  predictionTimes;
+    public long[] predictionLowMeans;
+    public long[] predictionLowIQRUpper;
+    public long[] predictionLowIQRLower;
+    public long[] predictionHighMeans;
+    public long[] predictionHighIQRUpper;
+    public long[] predictionHighIQRLower;
+    public String forecastModel;
 }
