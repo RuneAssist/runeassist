@@ -410,6 +410,11 @@ public class OsrsMcpPlugin extends Plugin
             || st == net.runelite.api.GrandExchangeOfferState.SELLING)
             && o.getQuantitySold() == 0 && o.getTotalQuantity() > 0;
         if (fresh) chatPanel.onOfferPlaced(o.getItemId());
+
+        // A completed buy/sell changed your holdings -> re-evaluate what to sell/buy next.
+        if (st == net.runelite.api.GrandExchangeOfferState.BOUGHT
+            || st == net.runelite.api.GrandExchangeOfferState.SOLD)
+            chatPanel.onHoldingsChanged();
     }
 
     /** Snapshot active GE offers (client thread) and hand them to the Flips action card. */
