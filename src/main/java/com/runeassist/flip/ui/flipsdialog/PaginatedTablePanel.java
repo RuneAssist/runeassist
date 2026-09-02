@@ -68,7 +68,7 @@ public class PaginatedTablePanel<T> extends JPanel {
         table = new JTable(tableModel);
         table.setBackground(ColorScheme.DARK_GRAY_COLOR);
         table.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        table.setSelectionBackground(ColorScheme.BRAND_ORANGE);
+        table.setSelectionBackground(RuneAssistColors.ACCENT_MUTED);
         table.setSelectionForeground(Color.WHITE);
         table.setGridColor(ColorScheme.MEDIUM_GRAY_COLOR);
         table.setRowHeight(rowHeight);

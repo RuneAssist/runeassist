@@ -5,44 +5,55 @@
 // offers, XP gains, account snapshots) and appends them to per-day JSONL files, in the
 // SAME schema the plugin writes locally, so tools/flip-v2-train.mjs can train on either.
 //
-// It only INGESTS. It serves no predictions and stores no chat questions (the plugin never
-// uploads them). Zero npm dependencies — bare node:http — so it runs with just Node 18+.
+// Also serves public wiki-derived graphs and ranked flip candidates (no chat, no other
+// users' telemetry). Zero npm dependencies — bare node:http — so it runs with just Node 18+.
 //
 // Run:   INGEST_TOKEN=secret node server/ingest-server.mjs
 // Env:   PORT (default 8790), INGEST_TOKEN (required; reject if unset),
+//        CONTRIBUTE_TOKEN (default ra-plugin-contribute-v1; plugin ingest key),
 //        DATA_DIR (default ./server/data), MAX_BODY_BYTES (default 2_000_000),
 //        MAX_BATCH (default 500)
 //
 // Endpoints:
 //   GET  /health         -> {ok:true}
-//   POST /v1/ingest      -> Bearer auth; body = JSON array of records; appends; {stored:N}
+//   POST /v1/ingest      -> Bearer INGEST_TOKEN or CONTRIBUTE_TOKEN; body = JSON array; appends; {stored:N}
 //   GET  /v1/stats       -> Bearer auth; per-type record counts for today
 //   POST /v1/flips/sync  -> Bearer auth; body {account, flips:[...]}; merges the account's
 //                           completed-flip history (union by flip identity) and returns the
 //                           merged list. Phase 2: cross-device flip history. Keyed by the
 //                           account's HASHED rsn — no real usernames.
-//   GET  /v1/graph?id=N  -> Bearer auth; price-history for one item shaped like Flipping
+//   GET  /v1/graph?id=N  -> public; price-history for one item shaped like Flipping
 //                           Copilot's graph Data model (1h/5m/latest low+high price and
 //                           volume series, plus buy/sell/dailyVolume). Sourced from the OSRS
-//                           wiki timeseries; prediction fields are omitted (no model yet).
+//                           wiki timeseries; v2 forecast overlay when FORECAST_URL is up.
+//   GET/POST /v1/flips   -> public (wiki + client constraints only; no telemetry, no
+//                           forecast ML). Ranked buy candidates. POST JSON body preferred;
+//                           GET query works for curl. Alias: /v1/suggest.
 
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rankFlips, ensureMarketCache } from './flip-scorer.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT           = Number(process.env.PORT || 8790);
-const TOKEN          = process.env.INGEST_TOKEN || '';
+const TOKEN            = process.env.INGEST_TOKEN || '';
+// Public plugin contribute key (compiled into the RuneLite plugin). Authorizes
+// POST /v1/ingest only — not stats or flip sync. Not the admin INGEST_TOKEN.
+const CONTRIBUTE_TOKEN = process.env.CONTRIBUTE_TOKEN || 'ra-plugin-contribute-v1';
 const DATA_DIR       = process.env.DATA_DIR || path.join(__dirname, 'data');
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 2_000_000);
 const MAX_BATCH      = Number(process.env.MAX_BATCH || 500);
 const SCHEMA_VERSION = 1;
 
-// Record types we accept. Mirrors the plugin's UPLOAD_TYPES. Anything else is dropped
-// so a misconfigured or malicious client can't push arbitrary blobs into storage.
-const ALLOWED_TYPES = new Set(['ge_offer', 'account_snapshot', 'xp_gain']);
+// Record types we accept. Mirrors the plugin's UPLOAD_TYPES. ge_history is the
+// completed-offer backfill from the in-game GE history UI (not live slot events).
+// suggestion_decision is compact skip/abort/acted/ignored panel picks (no bank, no XP).
+// Anything else is dropped so a misconfigured or malicious client can't push
+// arbitrary blobs into storage.
+const ALLOWED_TYPES = new Set(['ge_offer', 'account_snapshot', 'xp_gain', 'ge_history', 'suggestion_decision']);
 
 const FLIP_DIR   = path.join(DATA_DIR, 'flips');
 const MAX_FLIPS  = Number(process.env.MAX_FLIPS_PER_ACCT || 5000); // bound per-account history
@@ -278,6 +289,13 @@ function authed(req) {
   return h.startsWith('Bearer ') && h.slice(7).trim() === TOKEN;
 }
 
+function ingestAuthed(req) {
+  const h = req.headers['authorization'] || '';
+  if (!h.startsWith('Bearer ')) return false;
+  const t = h.slice(7).trim();
+  return t === TOKEN || (CONTRIBUTE_TOKEN && t === CONTRIBUTE_TOKEN);
+}
+
 function send(res, code, obj) {
   const body = JSON.stringify(obj);
   res.writeHead(code, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
@@ -300,6 +318,55 @@ const server = http.createServer((req, res) => {
     buildGraph(id)
       .then((data) => send(res, 200, data))
       .catch((e) => { console.error('graph failed:', e.message); send(res, 502, { error: 'graph source failed' }); });
+    return;
+  }
+
+  const flipsPath = req.url.split('?')[0];
+  if ((req.method === 'GET' || req.method === 'POST')
+      && (flipsPath === '/v1/flips' || flipsPath === '/v1/suggest')) {
+    // Public like /v1/graph: ranks public wiki prices under client-supplied constraints.
+    // Does not read ingest JSONL or other users' telemetry.
+    const reply = (raw) => {
+      rankFlips(raw)
+        .then((data) => send(res, 200, data))
+        .catch((e) => { console.error('flips failed:', e.message); send(res, 502, { error: 'flip source failed' }); });
+    };
+    if (req.method === 'GET') {
+      const q = new URL(req.url, 'http://x').searchParams;
+      const raw = {
+        capital: q.get('capital'),
+        timeframeMinutes: q.get('timeframeMinutes') || q.get('timeframe'),
+        risk: q.get('risk') || q.get('riskLevel'),
+        membersItemsAllowed: q.get('membersItemsAllowed'),
+        f2pOnly: q.get('f2pOnly'),
+        remainingSlots: q.get('remainingSlots'),
+        minPredictedProfit: q.get('minPredictedProfit'),
+        top: q.get('top') || q.get('limit'),
+      };
+      if (raw.membersItemsAllowed != null) raw.membersItemsAllowed = raw.membersItemsAllowed !== 'false';
+      if (raw.f2pOnly != null) raw.f2pOnly = raw.f2pOnly === 'true' || raw.f2pOnly === '1';
+      for (const key of ['remainingBuyLimit', 'usedBuyLimit', 'blockedIds', 'skippedIds']) {
+        const v = q.get(key);
+        if (!v) continue;
+        try { raw[key] = JSON.parse(v); } catch { /* ignore bad query json */ }
+      }
+      reply(raw);
+      return;
+    }
+    let size = 0;
+    const chunks = [];
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > MAX_BODY_BYTES) { send(res, 413, { error: 'payload too large' }); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => {
+      if (!chunks.length) return reply({});
+      let body;
+      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+      catch { return send(res, 400, { error: 'invalid json' }); }
+      reply(body && typeof body === 'object' ? body : {});
+    });
     return;
   }
 
@@ -328,7 +395,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'POST' && req.url === '/v1/ingest') {
-    if (!authed(req)) return send(res, 401, { error: 'unauthorized' });
+    if (!ingestAuthed(req)) return send(res, 401, { error: 'unauthorized' });
     let size = 0;
     const chunks = [];
     req.on('data', (c) => {
@@ -355,4 +422,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`RuneAssist ingest server on :${PORT}  data=${DATA_DIR}  (schema v${SCHEMA_VERSION})`);
+  ensureMarketCache().catch((e) => console.error('market cache warmup failed:', e.message));
 });

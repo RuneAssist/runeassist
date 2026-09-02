@@ -1,26 +1,22 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.controller.ApiRequestHandler;
-import com.runeassist.flip.config.FlippingCopilotConfig;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.*;
+import com.runeassist.flip.ui.RuneAssistColors;
 import com.runeassist.flip.ui.Spinner;
 import com.runeassist.flip.ui.components.ItemSearchMultiSelect;
-import com.runeassist.flip.util.ProfitCalculator;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.GrandExchangeOfferState;
 import net.runelite.client.ui.ColorScheme;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.MouseEvent;
 import java.text.NumberFormat;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 import static com.runeassist.flip.util.DateUtil.formatEpoch;
 import static com.runeassist.flip.util.DateUtil.formatEpochOrNa;
@@ -31,8 +27,7 @@ public class MissedFlipsPanel extends JPanel {
 
     private static final NumberFormat GP_FORMAT = NumberFormat.getNumberInstance(Locale.US);
     private static final String[] COLUMN_NAMES = {
-            "First buy time", "Last sell time", "Item", "Status", "Bought", "Sold",
-            "Avg. buy price", "Avg. sell price", "Tax", "Profit", "Profit ea."
+            "Time", "Item", "Why", "Qty left", "Listed price", "Filled", "Listed qty"
     };
 
     private static final String SECTIONS_CARD = "sections";
@@ -44,10 +39,10 @@ public class MissedFlipsPanel extends JPanel {
     private final ItemController itemController;
     private final CopilotLoginRS copilotLoginRS;
     private final OsrsLoginRS osrsLoginRS;
-    private final ApiRequestHandler apiRequestHandler;
     private final ExecutorService executorService;
-    private final FlippingCopilotConfig config;
     private final GeHistoryStateRS geHistoryStateRS;
+    private final LocalFlipLedger localFlipLedger;
+    private final OfferManager offerManager;
 
     private final Spinner spinner;
     private final JPanel spinnerOverlay;
@@ -56,8 +51,8 @@ public class MissedFlipsPanel extends JPanel {
     private final CardLayout cardLayout;
     private final JPanel cardPanel;
 
-    private final Section disappearedSection;
-    private final Section ghostSection;
+    private final Section incompleteSection;
+    private final Section cancelledSection;
 
     private Set<Integer> filteredItems = new HashSet<>();
 
@@ -66,17 +61,17 @@ public class MissedFlipsPanel extends JPanel {
                             ItemController itemController,
                             CopilotLoginRS copilotLoginRS,
                             ExecutorService executorService,
-                            FlippingCopilotConfig config,
-                            ApiRequestHandler apiRequestHandler,
-                            GeHistoryStateRS geHistoryStateRS) {
+                            GeHistoryStateRS geHistoryStateRS,
+                            LocalFlipLedger localFlipLedger,
+                            OfferManager offerManager) {
         this.osrsLoginRS = osrsLoginRS;
         this.flipsManager = flipsManager;
         this.itemController = itemController;
         this.copilotLoginRS = copilotLoginRS;
         this.executorService = executorService;
-        this.config = config;
-        this.apiRequestHandler = apiRequestHandler;
         this.geHistoryStateRS = geHistoryStateRS;
+        this.localFlipLedger = localFlipLedger;
+        this.offerManager = offerManager;
 
         setLayout(new BorderLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -97,26 +92,28 @@ public class MissedFlipsPanel extends JPanel {
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         rightPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
         geHistoryStatusLabel = new JLabel();
-        geHistoryStatusLabel.setForeground(ColorScheme.BRAND_ORANGE);
+        geHistoryStatusLabel.setForeground(RuneAssistColors.ACCENT);
         geHistoryStatusLabel.setVisible(false);
         rightPanel.add(geHistoryStatusLabel);
         topPanel.add(rightPanel, BorderLayout.EAST);
 
         add(topPanel, BorderLayout.NORTH);
 
-        disappearedSection = new Section("Flips with potential missed transactions", true);
-        ghostSection = new Section("Full missed flips", false);
+        incompleteSection = new Section("Incomplete flips (unsold remainder)");
+        cancelledSection = new Section("Cancelled GE offers (leftover thrown away)");
 
         JPanel sectionsPanel = new JPanel(new GridLayout(2, 1, 0, 10));
         sectionsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        sectionsPanel.add(disappearedSection.container);
-        sectionsPanel.add(ghostSection.container);
+        sectionsPanel.add(incompleteSection.container);
+        sectionsPanel.add(cancelledSection.container);
 
         cardLayout = new CardLayout();
         cardPanel = new JPanel(cardLayout);
         cardPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
         cardPanel.add(sectionsPanel, SECTIONS_CARD);
-        cardPanel.add(DialogUi.centeredMessage("Log into the game to view missed flips", ColorScheme.DARK_GRAY_COLOR, true, 18f), LOGIN_PROMPT_CARD);
+        cardPanel.add(DialogUi.centeredMessage(
+                "Log into the game to view missed flips from this account's local ledger.",
+                ColorScheme.DARK_GRAY_COLOR, true, 18f), LOGIN_PROMPT_CARD);
 
         spinner = new Spinner();
         spinner.show();
@@ -159,307 +156,158 @@ public class MissedFlipsPanel extends JPanel {
         refresh();
     }
 
-    private Integer resolveAccountId() {
-        if (osrsLoginRS == null || osrsLoginRS.get() == null || !osrsLoginRS.get().loggedIn) {
+    private String resolveDisplayName() {
+        if (osrsLoginRS == null || osrsLoginRS.get() == null) {
             return null;
         }
         String displayName = osrsLoginRS.get().displayName;
-        if (displayName == null) {
-            return null;
-        }
+        return displayName == null || displayName.isEmpty() ? null : displayName;
+    }
+
+    private Integer resolveAccountId(String displayName) {
         Map<String, Integer> map = copilotLoginRS.get().displayNameToAccountId;
-        if (map == null) {
-            return null;
+        if (map != null && map.get(displayName) != null) {
+            return map.get(displayName);
         }
-        return map.get(displayName);
+        return LocalFlipLedger.accountIdFor(displayName);
     }
 
     private void refresh() {
         executorService.submit(() -> {
-            Integer accountId = resolveAccountId();
-            List<FlipV2> disappearedFlips;
-            List<FlipV2> ghostFlips;
-            if (accountId == null) {
-                disappearedFlips = Collections.emptyList();
-                ghostFlips = Collections.emptyList();
-            } else {
-                List<FlipV2> all = new ArrayList<>(flipsManager.getMissedFlipsForAccount(accountId));
+            String displayName = resolveDisplayName();
+            List<LocalMissedFlip> incomplete = new ArrayList<>();
+            List<LocalMissedFlip> cancelled = new ArrayList<>();
+            if (displayName != null) {
+                localFlipLedger.hydrate(displayName);
+                Integer accountId = resolveAccountId(displayName);
                 int cutoff = (int) (Instant.now().getEpochSecond() - MAX_AGE_SECONDS);
-                all.removeIf(f -> f.getUpdatedTime() < cutoff);
-                if (!filteredItems.isEmpty()) {
-                    all.removeIf(f -> !filteredItems.contains(f.getItemId()));
+                for (FlipV2 f : flipsManager.getIncompleteFlipsForAccount(accountId)) {
+                    if (f.getUpdatedTime() < cutoff && f.getOpenedTime() < cutoff) {
+                        continue;
+                    }
+                    if (!filteredItems.isEmpty() && !filteredItems.contains(f.getItemId())) {
+                        continue;
+                    }
+                    incomplete.add(fromIncomplete(f));
                 }
-                disappearedFlips = new ArrayList<>();
-                ghostFlips = new ArrayList<>();
-                for (FlipV2 f : all) {
-                    if (PortfolioId.isDisappeared(f.getPortfolioId())) {
-                        disappearedFlips.add(f);
-                    } else if (f.getPortfolioId() == PortfolioId.GHOST && f.getClosedQuantity() > 0) {
-                        ghostFlips.add(f);
+                Set<String> seen = new HashSet<>();
+                for (LocalFlipLedger.CancelledLeftover row : localFlipLedger.listCancelled(displayName)) {
+                    if (row.time > 0 && row.time < cutoff) {
+                        continue;
+                    }
+                    if (!filteredItems.isEmpty() && !filteredItems.contains(row.itemId)) {
+                        continue;
+                    }
+                    LocalMissedFlip m = fromCancelled(row);
+                    cancelled.add(m);
+                    seen.add(dedupeKey(m));
+                }
+                for (LocalMissedFlip live : liveCancelledSlots()) {
+                    if (!filteredItems.isEmpty() && !filteredItems.contains(live.getItemId())) {
+                        continue;
+                    }
+                    if (seen.add(dedupeKey(live))) {
+                        cancelled.add(live);
                     }
                 }
             }
-            boolean showLoginPrompt = accountId == null;
+            boolean showLoginPrompt = displayName == null;
             SwingUtilities.invokeLater(() -> {
                 cardLayout.show(cardPanel, showLoginPrompt ? LOGIN_PROMPT_CARD : SECTIONS_CARD);
-                disappearedSection.update(disappearedFlips);
-                ghostSection.update(ghostFlips);
+                incompleteSection.update(incomplete);
+                cancelledSection.update(cancelled);
             });
         });
     }
 
-    private void setSpinnerVisible(boolean visible) {
-        SwingUtilities.invokeLater(() -> {
-            spinnerOverlay.setVisible(visible);
-            disappearedSection.setTableEnabled(!visible);
-            ghostSection.setTableEnabled(!visible);
-        });
-    }
-
-    private void showFlipMenu(MouseEvent e, FlipV2 flip, boolean isDisappearedSection) {
-        JPopupMenu menu = new JPopupMenu();
-        if (isDisappearedSection) {
-            String flipOsrsDisplayName = copilotLoginRS.get().getDisplayName(flip.getAccountId());
-            if (!canAddMissedSell(flipOsrsDisplayName, flip)) {
-                return;
-            }
-            JMenuItem missedSellTransaction = new JMenuItem("Add missed sell transaction");
-            missedSellTransaction.addActionListener(evt -> promptAndSubmitMissedSell(flip));
-            menu.add(missedSellTransaction);
-        } else {
-            JMenuItem reviveFlip = new JMenuItem("Revive this flip");
-            reviveFlip.addActionListener(evt -> promptAndSubmitReviveGhost(flip));
-            menu.add(reviveFlip);
-        }
-        menu.show(e.getComponent(), e.getX(), e.getY());
-    }
-
-    private boolean canAddMissedSell(String flipOsrsDisplayName, FlipV2 flip) {
-        if (flipOsrsDisplayName == null) {
-            return false;
-        }
-        if (FlipStatus.FINISHED.equals(flip.getStatus())) {
-            return false;
-        }
-        if (flip.getOpenedQuantity() - flip.getClosedQuantity() <= 0) {
-            return false;
-        }
-        return osrsLoginRS.get().loggedIn && Objects.equals(flipOsrsDisplayName, osrsLoginRS.get().displayName);
-    }
-
-    private void promptAndSubmitMissedSell(FlipV2 flip) {
-        int qty = flip.getOpenedQuantity() - flip.getClosedQuantity();
-        long suggestedPrice = (long) (flip.getAvgBuyPrice() * 1.02);
-
-        List<GeHistoryRow> sellMatches = findGeHistorySellMatches(flip);
-
-        JPanel dialogPanel = new JPanel(new GridBagLayout());
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.gridx = 0; gbc.gridy = 0;
-        dialogPanel.add(new JLabel("Item:"), gbc);
-        gbc.gridx = 1;
-        dialogPanel.add(new JLabel(flip.getCachedItemName()), gbc);
-        gbc.gridx = 0; gbc.gridy = 1;
-        dialogPanel.add(new JLabel("Quantity:"), gbc);
-        gbc.gridx = 1;
-        dialogPanel.add(new JLabel(String.valueOf(qty)), gbc);
-        gbc.gridx = 0; gbc.gridy = 2;
-        dialogPanel.add(new JLabel("Sell Price:"), gbc);
-
-        JTextField priceField = new JTextField(String.valueOf(suggestedPrice), 10);
-        JComboBox<PriceOption> priceCombo = null;
-        if (!sellMatches.isEmpty()) {
-            priceCombo = new JComboBox<>();
-            for (GeHistoryRow row : sellMatches) {
-                priceCombo.addItem(new PriceOption(row.getPrice(), row.getQuantity(), false));
-            }
-            priceCombo.addItem(new PriceOption(0, 0, true));
-            gbc.gridx = 1;
-            dialogPanel.add(priceCombo, gbc);
-            gbc.gridx = 1; gbc.gridy = 3;
-            dialogPanel.add(priceField, gbc);
-
-            JComboBox<PriceOption> comboRef = priceCombo;
-            applyPriceOption((PriceOption) priceCombo.getSelectedItem(), priceField);
-            priceCombo.addActionListener(e -> applyPriceOption((PriceOption) comboRef.getSelectedItem(), priceField));
-        } else {
-            gbc.gridx = 1;
-            dialogPanel.add(priceField, gbc);
-        }
-
-        int result = JOptionPane.showConfirmDialog(this,
-                dialogPanel,
-                "Add Missed Sell Transaction",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.PLAIN_MESSAGE);
-
-        if (result != JOptionPane.YES_OPTION) {
-            return;
-        }
-
-        long price;
-        PriceOption selected = priceCombo == null ? null : (PriceOption) priceCombo.getSelectedItem();
-        if (selected != null && !selected.manual) {
-            price = selected.price;
-        } else {
-            try {
-                price = Long.parseLong(priceField.getText().trim());
-            } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(this,
-                        "Please enter a valid number for the price.",
-                        "Invalid Price",
-                        JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-        }
-        if (price <= 0) {
-            JOptionPane.showMessageDialog(this,
-                    "Price must be a positive number.",
-                    "Invalid Price",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        long avgBuy = flip.getAvgBuyPrice();
-        long estimatedProfit = (long) qty * (ProfitCalculator.getPostTaxPrice(flip.getItemId(), price) - avgBuy);
-        if (!validateProfit(estimatedProfit, flip, price)) {
-            return;
-        }
-
-        setSpinnerVisible(true);
-        log.info("Adding missed sale for flip {} qty={} price={}", flip.getId(), qty, price);
-
-        BiConsumer<Integer, List<FlipV2>> onSuccess = (userId, flips) -> {
-            flipsManager.mergeFlips(flips, userId);
-            setSpinnerVisible(false);
-            refresh();
-        };
-        Consumer<HttpResponseException> onFailure = (r) -> {
-            setSpinnerVisible(false);
-            JOptionPane.showMessageDialog(this,
-                    "Failed to add sell transaction. Please try again.",
-                    "Transaction Error",
-                    JOptionPane.ERROR_MESSAGE);
-        };
-        apiRequestHandler.asyncAddMissedSale(flip.getId(), price, qty, onSuccess, onFailure);
-    }
-
-    private List<GeHistoryRow> findGeHistorySellMatches(FlipV2 flip) {
-        GeHistoryState state = geHistoryStateRS.get();
-        if (state == null || !state.isLoaded() || state.getCapturedAt() <= flip.getUpdatedTime()) {
+    private List<LocalMissedFlip> liveCancelledSlots() {
+        Long accountHash = osrsLoginRS.get() != null ? osrsLoginRS.get().accountHash : null;
+        if (accountHash == null || offerManager == null) {
             return Collections.emptyList();
         }
-        List<GeHistoryRow> matches = new ArrayList<>();
-        for (GeHistoryRow row : state.getRows()) {
-            if (!row.isBuy() && row.getItemId() == flip.getItemId()) {
-                matches.add(row);
+        List<LocalMissedFlip> live = new ArrayList<>();
+        for (int slot = 0; slot < 8; slot++) {
+            SavedOffer offer = offerManager.loadOffer(accountHash, slot);
+            if (offer == null || offer.getItemId() <= 0) {
+                continue;
             }
-        }
-        return matches;
-    }
-
-    private static void applyPriceOption(PriceOption option, JTextField priceField) {
-        if (option == null) {
-            return;
-        }
-        if (option.manual) {
-            priceField.setEnabled(true);
-        } else {
-            priceField.setText(String.valueOf(option.price));
-            priceField.setEnabled(false);
-        }
-    }
-
-    private static class PriceOption {
-        final long price;
-        final int quantity;
-        final boolean manual;
-
-        PriceOption(long price, int quantity, boolean manual) {
-            this.price = price;
-            this.quantity = quantity;
-            this.manual = manual;
-        }
-
-        @Override
-        public String toString() {
-            if (manual) {
-                return "Manual...";
+            GrandExchangeOfferState state = offer.getState();
+            boolean buy = state == GrandExchangeOfferState.CANCELLED_BUY;
+            if (!buy && state != GrandExchangeOfferState.CANCELLED_SELL) {
+                continue;
             }
-            return String.format(Locale.US, "%,d gp (qty %d)", price, quantity);
+            int remaining = offer.getTotalQuantity() - offer.getQuantitySold();
+            if (remaining <= 0) {
+                continue;
+            }
+            LocalMissedFlip m = new LocalMissedFlip();
+            m.setKind(LocalMissedFlip.Kind.CANCELLED);
+            m.setItemId(offer.getItemId());
+            m.setItemName(itemController.getItemName(offer.getItemId()));
+            m.setWhy(buy ? "Cancelled buy (unfilled leftover)" : "Cancelled sell (unsold leftover)");
+            m.setTime((int) Instant.now().getEpochSecond());
+            m.setQtyLeft(remaining);
+            m.setFilledQty(offer.getQuantitySold());
+            m.setListedQty(offer.getTotalQuantity());
+            m.setListedPrice(offer.getPrice());
+            live.add(m);
         }
+        return live;
     }
 
-    private void promptAndSubmitReviveGhost(FlipV2 flip) {
-        int result = JOptionPane.showConfirmDialog(this,
-                "Revive this ghost flip into your copilot portfolio?\n"
-                        + "Item: " + flip.getCachedItemName(),
-                "Confirm Revive",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.QUESTION_MESSAGE);
-        if (result != JOptionPane.YES_OPTION) {
-            return;
-        }
-        setSpinnerVisible(true);
-        log.info("reviving ghost flip {}", flip.getId());
-        BiConsumer<Integer, List<FlipV2>> onSuccess = (userId, flips) -> {
-            flipsManager.mergeFlips(flips, userId);
-            setSpinnerVisible(false);
-            refresh();
-        };
-        Consumer<HttpResponseException> onFailure = (r) -> {
-            setSpinnerVisible(false);
-            JOptionPane.showMessageDialog(this,
-                    "Failed to revive flip. Please try again.",
-                    "Revive Error",
-                    JOptionPane.ERROR_MESSAGE);
-        };
-        apiRequestHandler.asyncReviveGhostFlip(flip.getId(), onSuccess, onFailure);
+    private LocalMissedFlip fromIncomplete(FlipV2 flip) {
+        LocalMissedFlip m = new LocalMissedFlip();
+        m.setKind(LocalMissedFlip.Kind.INCOMPLETE);
+        m.setItemId(flip.getItemId());
+        m.setItemName(flip.getCachedItemName());
+        m.setWhy("Unsold remainder");
+        m.setTime(flip.getUpdatedTime() > 0 ? flip.getUpdatedTime() : flip.getOpenedTime());
+        m.setQtyLeft(flip.getOpenedQuantity() - flip.getClosedQuantity());
+        m.setFilledQty(flip.getClosedQuantity());
+        m.setListedQty(flip.getOpenedQuantity());
+        m.setListedPrice(flip.getAvgBuyPrice());
+        m.setSourceFlip(flip);
+        return m;
     }
 
-    private boolean validateProfit(long profit, FlipV2 flip, long price) {
-        long absProfit = Math.abs(profit);
-        long avgBuyPrice = flip.getAvgBuyPrice();
-        if (absProfit > 10_000_000L || (avgBuyPrice > 0 && price > avgBuyPrice * 5L)) {
-            JOptionPane.showMessageDialog(this,
-                    "The estimated profit/loss (" + GP_FORMAT.format(absProfit) + " gp) is too large. " +
-                            "Please double-check the sell price.",
-                    "Profit Too Large",
-                    JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        return true;
+    private LocalMissedFlip fromCancelled(LocalFlipLedger.CancelledLeftover row) {
+        LocalMissedFlip m = new LocalMissedFlip();
+        m.setKind(LocalMissedFlip.Kind.CANCELLED);
+        m.setItemId(row.itemId);
+        m.setItemName(itemController.getItemName(row.itemId));
+        m.setWhy(row.reason != null ? row.reason : (row.buy ? "Cancelled buy" : "Cancelled sell"));
+        m.setTime(row.time);
+        m.setQtyLeft(row.remainingQty);
+        m.setFilledQty(row.filledQty);
+        m.setListedQty(row.listedQty);
+        m.setListedPrice(row.listedPrice);
+        return m;
     }
 
-    private Object[] toRow(FlipV2 flip) {
+    private static String dedupeKey(LocalMissedFlip m) {
+        return m.getItemId() + ":" + m.getQtyLeft() + ":" + m.getFilledQty() + ":" + m.getListedPrice() + ":" + m.getWhy();
+    }
+
+    private Object[] toRow(LocalMissedFlip row) {
         return new Object[]{
-                formatEpochOrNa(flip.getOpenedTime()),
-                formatEpochOrNa(flip.getClosedTime()),
-                flip.getCachedItemName(),
-                flip.getStatus().name(),
-                flip.getOpenedQuantity(),
-                flip.getClosedQuantity(),
-                FlipTableUtil.averageBuy(flip),
-                FlipTableUtil.averageSell(flip),
-                flip.getTaxPaid(),
-                flip.getProfit(),
-                FlipTableUtil.profitEach(flip)
+                formatEpochOrNa(row.getTime()),
+                row.getItemName(),
+                row.getWhy(),
+                row.getQtyLeft(),
+                row.getListedPrice(),
+                row.getFilledQty(),
+                row.getListedQty()
         };
     }
 
     private class Section {
         final JPanel container;
-        final PaginatedTablePanel<FlipV2> tablePanel;
-        final boolean isDisappearedSection;
-        List<FlipV2> currentFlips = new ArrayList<>();
-        String sortColumn = "Last sell time";
+        final PaginatedTablePanel<LocalMissedFlip> tablePanel;
+        List<LocalMissedFlip> currentRows = new ArrayList<>();
+        String sortColumn = "Time";
         SortDirection sortDirection = SortDirection.DESC;
 
-        Section(String title, boolean isDisappearedSection) {
-            this.isDisappearedSection = isDisappearedSection;
-
+        Section(String title) {
             tablePanel = new PaginatedTablePanel<>(COLUMN_NAMES, MissedFlipsPanel.this::toRow);
             tablePanel.setTopControlsVisible(false);
             tablePanel.installHeaderSort(
@@ -470,12 +318,9 @@ public class MissedFlipsPanel extends JPanel {
                         sortDirection = newDirection;
                         rerender();
                     });
-            tablePanel.installPopupHandler((e, row) ->
-                    showFlipMenu(e, tablePanel.row(row), Section.this.isDisappearedSection));
 
-            tablePanel.moneyColumns(GP_FORMAT, true, 6, 7, 8, 10);
-            tablePanel.profitColumns(GP_FORMAT, config, 9);
-            tablePanel.centerColumns(3, 4, 5);
+            tablePanel.moneyColumns(GP_FORMAT, true, 4);
+            tablePanel.centerColumns(3, 5, 6);
 
             JLabel titleLabel = new JLabel(title);
             titleLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
@@ -487,18 +332,26 @@ public class MissedFlipsPanel extends JPanel {
             container.add(tablePanel, BorderLayout.CENTER);
         }
 
-        void update(List<FlipV2> flips) {
-            currentFlips = new ArrayList<>(flips);
+        void update(List<LocalMissedFlip> rows) {
+            currentRows = new ArrayList<>(rows);
             rerender();
         }
 
-        void setTableEnabled(boolean enabled) {
-            tablePanel.table().setEnabled(enabled);
-        }
-
         private void rerender() {
-            FilterSortUtil.sort(currentFlips, FlipTableUtil.COMPARATORS, sortColumn, sortDirection);
-            tablePanel.setRows(new ArrayList<>(currentFlips));
+            FilterSortUtil.sort(currentRows, COMPARATORS, sortColumn, sortDirection);
+            tablePanel.setRows(new ArrayList<>(currentRows));
         }
+    }
+
+    private static final Map<String, Comparator<LocalMissedFlip>> COMPARATORS = new HashMap<>();
+
+    static {
+        COMPARATORS.put("Time", Comparator.comparingInt(LocalMissedFlip::getTime).reversed());
+        COMPARATORS.put("Item", Comparator.comparing(m -> m.getItemName() != null ? m.getItemName() : ""));
+        COMPARATORS.put("Why", Comparator.comparing(m -> m.getWhy() != null ? m.getWhy() : ""));
+        COMPARATORS.put("Qty left", Comparator.comparingInt(LocalMissedFlip::getQtyLeft));
+        COMPARATORS.put("Listed price", Comparator.comparingLong(LocalMissedFlip::getListedPrice));
+        COMPARATORS.put("Filled", Comparator.comparingInt(LocalMissedFlip::getFilledQty));
+        COMPARATORS.put("Listed qty", Comparator.comparingInt(LocalMissedFlip::getListedQty));
     }
 }

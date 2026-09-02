@@ -88,7 +88,7 @@ public class OfferEditor {
     }
 
     private void showQuantity(int quantity) {
-        text.setText(setActionText("Copilot quantity: " + quantity));
+        text.setText(setActionText("RuneAssist quantity: " + quantity));
         text.setAction(1, "Set quantity");
         setHoverListeners(text);
         text.setOnOpListener((JavaScriptCallback) ev ->
@@ -102,7 +102,7 @@ public class OfferEditor {
     }
 
     private void showPrice(long price, String warning) {
-        text.setText(setActionText("Copilot price: " + String.format("%,d", price) + " gp")
+        text.setText(setActionText("RuneAssist price: " + String.format("%,d", price) + " gp")
                 + (warning == null ? "" : ". " + warning));
         text.setAction(0, "Set price");
         setHoverListeners(text);

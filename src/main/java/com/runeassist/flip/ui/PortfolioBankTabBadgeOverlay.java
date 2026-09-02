@@ -25,7 +25,7 @@ public class PortfolioBankTabBadgeOverlay extends Overlay {
     private static final int BADGE_SIZE = 16;
     private static final int BADGE_MARGIN = 1;
     private static final BufferedImage BADGE_ICON = ImageUtil.resizeImage(
-            ImageUtil.loadImageResource(PortfolioBankTabBadgeOverlay.class, "/icon-small.png"), BADGE_SIZE, BADGE_SIZE);
+            ImageUtil.loadImageResource(PortfolioBankTabBadgeOverlay.class, "/runeassist-flip.png"), BADGE_SIZE, BADGE_SIZE);
 
     private final Client client;
     private final FlippingCopilotConfig config;

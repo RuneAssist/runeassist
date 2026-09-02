@@ -75,6 +75,16 @@ public class Data {
     public long sellPrice;
     public long buyPrice;
 
+    public boolean hasPriceSeries() {
+        return nonempty(high1hTimes) || nonempty(low1hTimes)
+                || nonempty(high5mTimes) || nonempty(low5mTimes)
+                || nonempty(highLatestTimes) || nonempty(lowLatestTimes);
+    }
+
+    private static boolean nonempty(int[] a) {
+        return a != null && a.length > 0;
+    }
+
 
     // every series is delta encoded, so a series that was not sent simply leaves its field null
     public static Data decodeProto(byte[] bytes) throws IOException {

@@ -31,6 +31,7 @@ public class GrandExchangeOfferEventHandler {
     private final GrandExchangeUncollectedManager grandExchangeUncollectedManager;
     private final OfferManager offerManager;
     private final SuggestionManager suggestionManager;
+    private final LocalFlipLedger localFlipLedger;
 
     // state
     private final Queue<Transaction> transactionsToProcess = new ConcurrentLinkedQueue<>();
@@ -82,6 +83,13 @@ public class GrandExchangeOfferEventHandler {
         }
         updateUncollected(accountHash, slot, o, prev, consistent);
         offerPersistence.saveOffer(accountHash, slot, o);
+        if (o.getState() == GrandExchangeOfferState.CANCELLED_BUY
+                || o.getState() == GrandExchangeOfferState.CANCELLED_SELL) {
+            String displayName = osrsLoginManager.getPlayerDisplayName();
+            if (displayName != null) {
+                localFlipLedger.recordCancelled(displayName, o);
+            }
+        }
 
         // Always fetch suggestion to ensure fast response for better UX
         suggestionManager.setSuggestionNeeded(true);

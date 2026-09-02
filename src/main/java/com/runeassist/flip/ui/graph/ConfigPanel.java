@@ -2,6 +2,7 @@ package com.runeassist.flip.ui.graph;
 
 import com.runeassist.flip.manager.PriceGraphConfigManager;
 import com.runeassist.flip.ui.graph.model.Config;
+import com.runeassist.flip.ui.RuneAssistColors;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
 
@@ -85,8 +86,7 @@ public class ConfigPanel extends JPanel {
 
         JButton applyButton = new JButton("Apply");
         applyButton.setFocusPainted(false);
-        applyButton.setBackground(ColorScheme.BRAND_ORANGE);
-        applyButton.setForeground(Color.WHITE);
+        RuneAssistColors.stylePrimaryButton(applyButton);
         applyButton.addActionListener(e -> {
             applySettings();
             if (onApplyCallback != null) {

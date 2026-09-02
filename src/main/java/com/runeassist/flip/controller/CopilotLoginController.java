@@ -51,14 +51,17 @@ public class CopilotLoginController {
         this.transactionManager = transactionManager;
         this.executorService = executorService;
         this.copilotLoginRS = copilotLoginRS;
-        flipManager.setCopilotUserId(copilotLoginRS.get().getUserId());
+        // RuneAssist fork: keep FlipManager userId at 0 so local GE fills can merge.
+        // An FC login still overwrites this in onLoginResponse.
         loadCopilotAccounts(0);
         copilotLoginRS.registerListener((s) -> {
             if(s.loginResponse == null) {
-                flipManager.reset();
+                // Do not flipManager.reset() — local flips are the source of truth after the fork.
                 suggestionManager.reset();
                 highlightController.removeAll();
-                mainPanel.refresh();
+                if (mainPanel != null) {
+                    mainPanel.refresh();
+                }
             }
         });
     }

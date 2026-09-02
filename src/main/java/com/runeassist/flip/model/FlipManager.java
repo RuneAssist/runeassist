@@ -118,6 +118,7 @@ public class FlipManager {
 
     private Stats calculateStatsAllAccounts(int startTime) {
         Stats stats = new Stats();
+        addOpenFlipsOpenedSince(stats, startTime, null);
         WeekAggregate w = getOrInitWeek(startTime);
         for (FlipV2 f : w.flipsAfter(startTime, false)) {
             stats.addFlip(f);
@@ -130,6 +131,7 @@ public class FlipManager {
 
     private Stats calculateStatsForAccount(int startTime, int accountId) {
         Stats stats = new Stats();
+        addOpenFlipsOpenedSince(stats, startTime, accountId);
         WeekAggregate w = getOrInitWeek(startTime);
         for (FlipV2 f : w.flipsAfterForAccount(startTime, accountId)) {
             stats.addFlip(f);
@@ -138,6 +140,26 @@ public class FlipManager {
             stats.add(weeks.get(i).accountIdToStats.get(accountId));
         }
         return stats;
+    }
+
+    /**
+     * Open flips are stored in week 0 ({@code closedTime == 0}). Session/interval stats
+     * otherwise skip them, which left Profit/Flips at 0 while 8 slots were filling.
+     * ALL_TIME ({@code startTime <= 0}) already includes week 0 via {@link #getOrInitWeek}.
+     */
+    private void addOpenFlipsOpenedSince(Stats stats, int startTime, Integer accountId) {
+        if (startTime <= 0) {
+            return;
+        }
+        WeekAggregate openWeek = getOrInitWeek(0);
+        List<FlipV2> open = accountId == null
+                ? openWeek.flipsAfter(-1, false)
+                : openWeek.flipsAfterForAccount(-1, accountId);
+        for (FlipV2 f : open) {
+            if (f != null && !f.isClosed() && f.getOpenedTime() >= startTime) {
+                stats.addFlip(f);
+            }
+        }
     }
 
     public List<FlipV2> getPageFlips(int page, int pageSize) {
@@ -184,8 +206,35 @@ public class FlipManager {
         }
 
         int toSkip = (page -1) * pageSize;
-        WeekAggregate intervalWeek = getOrInitWeek(intervalStartTime);
         List<FlipV2> pageFlips = new ArrayList<>(pageSize == Integer.MAX_VALUE ? 0 : pageSize);
+
+        if (intervalStartTime > 0) {
+            WeekAggregate openWeek = getOrInitWeek(0);
+            List<FlipV2> open = accountId == null
+                    ? openWeek.flipsAfter(-1, false)
+                    : openWeek.flipsAfterForAccount(-1, accountId);
+            List<FlipV2> openInInterval = new ArrayList<>();
+            for (FlipV2 flip : open) {
+                if (flip != null && !flip.isClosed() && flip.getOpenedTime() >= intervalStartTime
+                        && isTrackedFlip(flip)) {
+                    openInInterval.add(flip);
+                }
+            }
+            openInInterval.sort(Comparator.comparingInt(FlipV2::getOpenedTime).reversed()
+                    .thenComparing(FlipV2::getId));
+            for (FlipV2 flip : openInInterval) {
+                if (pageFlips.size() == pageSize) {
+                    break;
+                }
+                if (toSkip > 0) {
+                    toSkip -= 1;
+                    continue;
+                }
+                pageFlips.add(flip);
+            }
+        }
+
+        WeekAggregate intervalWeek = getOrInitWeek(intervalStartTime);
         for(int i=weeks.size()-1; i >= intervalWeek.pos; i--) {
             if (weeks.get(i).weekEnd <= intervalStartTime || pageFlips.size() == pageSize) {
                 break;
@@ -232,6 +281,27 @@ public class FlipManager {
         }
         FlipV2 f = byId.get(flipId);
         return f != null && f.getPortfolioId() == PortfolioId.GHOST;
+    }
+
+    /**
+     * Local incomplete flips (bought more than sold) for the Missed flips tab.
+     * These stay in the personal portfolio; they are not FC ghost/disappeared rows.
+     */
+    public synchronized List<FlipV2> getIncompleteFlipsForAccount(Integer accountId) {
+        Map<UUID, FlipV2> byId = new LinkedHashMap<>();
+        aggregateFlips(0, accountId, true, f -> {
+            if (f != null && !f.isDeleted() && f.getOpenedQuantity() > f.getClosedQuantity()) {
+                FlipV2 existing = byId.get(f.getId());
+                if (existing == null || f.isNewer(existing)) {
+                    byId.put(f.getId(), f);
+                }
+            }
+        });
+        List<FlipV2> result = new ArrayList<>(byId.values());
+        if (itemController != null) {
+            result.forEach(f -> f.setCachedItemName(itemController.getItemName(f.getItemId())));
+        }
+        return result;
     }
 
     public synchronized List<FlipV2> getMissedFlipsForAccount(Integer accountId) {
@@ -314,7 +384,7 @@ public class FlipManager {
     }
 
     private boolean isInInterval(FlipV2 flip) {
-        return flip.getClosedTime() >= intervalStartTime && (intervalAccount == null || flip.getAccountId() == intervalAccount);
+        return flip.lastTransactionTime() >= intervalStartTime && (intervalAccount == null || flip.getAccountId() == intervalAccount);
     }
 
     private WeekAggregate getOrInitWeek(int closeTime) {

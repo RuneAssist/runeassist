@@ -4,48 +4,50 @@ import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.config.FlippingCopilotConfig;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.manager.PriceGraphConfigManager;
+import com.runeassist.flip.model.AckedTransaction;
 import com.runeassist.flip.model.FlipV2;
+import com.runeassist.flip.model.LocalFlipLedger;
 import com.runeassist.flip.model.VisualizeFlipResponse;
 import com.runeassist.flip.ui.graph.*;
+import com.runeassist.flip.ui.graph.model.Data;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.List;
 import java.util.function.Consumer;
 
 @Slf4j
 public class VisualizeFlipPanel extends JPanel {
 
-    // Dependencies
     private final ItemController itemController;
     private final ApiRequestHandler apiRequestHandler;
+    private final LocalFlipLedger localFlipLedger;
 
-    // UI Components
     private final JLabel errorLabel = new JLabel();
     private final GraphPanel graphPanel;
     private final FlipStatsPanel statsPanel;
     private final CardLayout contentCardLayout = new CardLayout();
 
-    // State
     private volatile FlipV2 currentFlip;
 
     public VisualizeFlipPanel(ItemController itemController,
                               PriceGraphConfigManager configManager,
                               FlippingCopilotConfig copilotConfig,
-                              ApiRequestHandler apiRequestHandler) {
+                              ApiRequestHandler apiRequestHandler,
+                              LocalFlipLedger localFlipLedger) {
         this.itemController = itemController;
         this.apiRequestHandler = apiRequestHandler;
+        this.localFlipLedger = localFlipLedger;
 
         setLayout(contentCardLayout);
         setBackground(ColorScheme.DARK_GRAY_COLOR);
-
 
         graphPanel = new GraphPanel(configManager);
         statsPanel = new FlipStatsPanel(configManager, copilotConfig);
         statsPanel.setBackground(configManager.getConfig().backgroundColor);
         statsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
 
         add(DialogUi.centeredMessage("Right click on a flip in the flips tab and select 'Visualize flip' option.", ColorScheme.DARK_GRAY_COLOR, true, 16f), Cards.LANDING_CARD.name());
         add(DialogUi.loadingCard("Loading price data...", ColorScheme.DARK_GRAY_COLOR), Cards.LOADING_CARD.name());
@@ -68,19 +70,25 @@ public class VisualizeFlipPanel extends JPanel {
         Consumer<String> onFailure = (String errorMessage) -> {
             SwingUtilities.invokeLater(() -> showErrorCard(errorMessage));
         };
-        Consumer<VisualizeFlipResponse> onSuccess = (VisualizeFlipResponse d) -> {
-            // the server sends a message and no graph data when it has no price history for the item
-            if (d.getGraphData() == null) {
-                String message = d.getMessage();
-                onFailure.accept(message == null || message.isEmpty() ? "No price data available for this item." : message);
-                return;
-            }
-            d.graphData.clearPredictionData();
-            SwingUtilities.invokeLater(() -> {
-                showGraphCard(new DataManager(d.getGraphData(), d), flip);
+        localFlipLedger.ensureHydrated(flip.getAccountId());
+        List<AckedTransaction> lots = localFlipLedger.transactionsForFlip(flip.getId());
+        apiRequestHandler.asyncGetRuneAssistGraph(flip.getItemId(),
+            (Data d) -> {
+                if (d == null || !d.hasPriceSeries()) {
+                    onFailure.accept("No price history for this item.");
+                    return;
+                }
+                d.clearPredictionData();
+                VisualizeFlipResponse overlay = VisualizeFlipResponse.fromLocalLots(d, flip, lots);
+                SwingUtilities.invokeLater(() -> showGraphCard(new DataManager(overlay.getGraphData(), overlay), flip));
+            },
+            (Throwable e) -> {
+                String detail = e != null && e.getMessage() != null && !e.getMessage().isEmpty()
+                        ? e.getMessage()
+                        : "check your connection and try again";
+                log.warn("visualize flip graph failed for item {}", flip.getItemId(), e);
+                onFailure.accept("Could not load price history from RuneAssist (" + detail + ").");
             });
-        };
-        apiRequestHandler.asyncGetVisualizeFlipData(flip.getId(), onSuccess, onFailure);
     }
 
     private void showErrorCard(String errorMessage) {

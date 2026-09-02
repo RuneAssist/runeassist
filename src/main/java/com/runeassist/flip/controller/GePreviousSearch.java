@@ -79,7 +79,7 @@ public class GePreviousSearch {
             if (text == null) {
                 continue;
             }
-            if(text.startsWith("Copilot item:") || text.startsWith("Waiting for dumps...")) {
+            if(text.startsWith("RuneAssist:") || text.startsWith("Waiting for dumps...")) {
                 return true;
             }
         }
@@ -97,7 +97,7 @@ public class GePreviousSearch {
         previousSearch.revalidate();
 
         Widget previousSearchText = searchResults.getChild(1);
-        previousSearchText.setText("Copilot item:");
+        previousSearchText.setText("RuneAssist:");
         previousSearchText.setOriginalWidth(95);
         previousSearchText.setXTextAlignment(WidgetTextAlignment.LEFT);
         previousSearchText.revalidate();
@@ -177,7 +177,7 @@ public class GePreviousSearch {
     private void createPreviousSearchTextWidget() {
         Widget parentWidget = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
         Widget widget = parentWidget.createChild(1, WidgetType.TEXT);
-        widget.setText("Copilot item:");
+        widget.setText("RuneAssist:");
         widget.setFontId(495);
         widget.setOriginalX(114);
         widget.setOriginalY(0);

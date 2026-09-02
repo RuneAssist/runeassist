@@ -31,35 +31,64 @@ public class SessionManager {
     private Instant lastSessionUpdateTime;
 
     public synchronized SessionData getCachedSessionData() {
-        SessionData sd = getSessionData(osrsLoginManager.getPlayerDisplayName());
+        String displayName = osrsLoginManager.getPlayerDisplayName();
+        if (displayName == null) {
+            return new SessionData((int) Instant.now().getEpochSecond(), 0, 0);
+        }
+        SessionData sd = getSessionData(displayName);
         return new SessionData(sd.startTime,  sd.durationMillis, sd.averageCash);
+    }
+
+    /**
+     * Begin or resume the flipping session for the logged-in OSRS account.
+     * RuneAssist fork: FC started this on Copilot email login; we key off RSN instead.
+     */
+    public synchronized void startOrResume() {
+        String displayName = osrsLoginManager.getPlayerDisplayName();
+        if (displayName == null) {
+            return;
+        }
+        getSessionData(displayName);
+        if (lastSessionUpdateTime == null) {
+            lastSessionUpdateTime = Instant.now();
+        }
     }
 
     public synchronized void resetSession() {
         String displayName = osrsLoginManager.getPlayerDisplayName();
+        if (displayName == null) {
+            lastSessionUpdateTime = Instant.now();
+            return;
+        }
         SessionData sd = getSessionData(displayName);
         sd.startTime = (int) Instant.now().getEpochSecond();
         sd.averageCash = 0;
         sd.durationMillis = 0;
+        lastSessionUpdateTime = Instant.now();
         saveAsync(displayName);
     }
 
     public synchronized boolean updateSessionStats(boolean currentlyFlipping, long cashStack) {
         String displayName = osrsLoginManager.getPlayerDisplayName();
-        if (!currentlyFlipping || displayName == null) {
+        if (displayName == null) {
             lastSessionUpdateTime = null;
             return false;
         } else if (lastSessionUpdateTime == null) {
             lastSessionUpdateTime = Instant.now();
-            return false;
+            return true;
         } else {
             SessionData sd = getSessionData(displayName);
             Instant now = Instant.now();
             long duration = Duration.between(lastSessionUpdateTime, now).toMillis();
-            long newAverageCashStack = (cashStack * duration + sd.durationMillis * sd.averageCash) / (sd.durationMillis + duration);
-            sd.durationMillis = sd.durationMillis + duration;
+            if (duration < 0) {
+                duration = 0;
+            }
+            long total = sd.durationMillis + duration;
+            if (currentlyFlipping && total > 0) {
+                sd.averageCash = (cashStack * duration + sd.durationMillis * sd.averageCash) / total;
+            }
+            sd.durationMillis = total;
             lastSessionUpdateTime = now;
-            sd.averageCash = newAverageCashStack;
             saveAsync(displayName);
             return true;
         }

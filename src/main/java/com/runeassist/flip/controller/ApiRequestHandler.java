@@ -32,7 +32,7 @@ public class ApiRequestHandler {
     private static final MediaType PROTO_MEDIA_TYPE = MediaType.get("application/protobuf");
     private static final String API_VERSION_PREFIX = "/v2";
     private static final byte[] EMPTY_BODY = new byte[0];
-    public static final String DEFAULT_COPILOT_PRICE_ERROR_MESSAGE = "Unable to fetch price copilot price (possible server update)";
+    public static final String DEFAULT_COPILOT_PRICE_ERROR_MESSAGE = "Unable to fetch RuneAssist price (possible server update)";
     public static final String DEFAULT_PREMIUM_INSTANCE_ERROR_MESSAGE = "Error loading premium instance data (possible server update)";
     public static final String UNKNOWN_ERROR = "Unknown error";
     public static final int UNAUTHORIZED_CODE = 401;

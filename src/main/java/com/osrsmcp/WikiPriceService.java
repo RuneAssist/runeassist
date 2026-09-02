@@ -33,7 +33,7 @@ public class WikiPriceService
     @Inject private OkHttpClient httpClient;
     @Inject private Gson gson;
 
-    // id -> { name, examine, limit, highalch, lowalch }
+    // id -> { name, examine, limit, members, highalch, lowalch }
     private final Map<Integer, ItemMeta> itemMeta  = new ConcurrentHashMap<>();
     // id -> { high, low, highTime, lowTime }
     private final Map<Integer, PriceData>  priceCache    = new ConcurrentHashMap<>();
@@ -58,6 +58,7 @@ public class WikiPriceService
         public String name;
         public String examine;
         public int    limit;
+        public boolean members;
         public int    highalch;
         public int    lowalch;
     }

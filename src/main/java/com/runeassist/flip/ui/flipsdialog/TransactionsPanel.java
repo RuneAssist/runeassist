@@ -47,6 +47,8 @@ public class TransactionsPanel extends JPanel {
     private final ApiRequestHandler apiRequestHandler;
     private final OsrsLoginManager osrsLoginManager;
     private final FlipManager flipManager;
+    private final TransactionManager transactionManager;
+    private final LocalFlipLedger localFlipLedger;
 
     // ui components
     private final Paginator paginatorPanel;
@@ -70,13 +72,17 @@ public class TransactionsPanel extends JPanel {
                              ApiRequestHandler apiRequestHandler,
                              OsrsLoginManager osrsLoginManager,
                              FlippingCopilotConfig config,
-                             FlipManager flipManager) {
+                             FlipManager flipManager,
+                             TransactionManager transactionManager,
+                             LocalFlipLedger localFlipLedger) {
         this.copilotLoginRS = copilotLoginRS;
         this.itemController = itemController;
         this.executorService = executorService;
         this.apiRequestHandler = apiRequestHandler;
         this.osrsLoginManager = osrsLoginManager;
         this.flipManager = flipManager;
+        this.transactionManager = transactionManager;
+        this.localFlipLedger = localFlipLedger;
 
         setLayout(new BorderLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -212,19 +218,23 @@ public class TransactionsPanel extends JPanel {
         }
         setSpinnerVisible(true);
         errorLabel.setVisible(false);
-        apiRequestHandler.asyncLoadTransactionsData(
-                displayName,
-                transactionsData -> SwingUtilities.invokeLater(() -> {
+        executorService.submit(() -> {
+            try {
+                transactionManager.hydrateLocal(displayName);
+                byte[] data = localFlipLedger.encodeAckedTransactionsRaw(displayName);
+                SwingUtilities.invokeLater(() -> {
                     setSpinnerVisible(false);
-                    transactionDataWrapper = new TransactionDataWrapper(transactionsData);
+                    transactionDataWrapper = new TransactionDataWrapper(data);
                     applyFilters(true);
-                }),
-                error -> SwingUtilities.invokeLater(() -> {
+                });
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() -> {
                     setSpinnerVisible(false);
                     errorLabel.setVisible(true);
-                    log.error("Failed to load transactions: {}", error);
-                })
-        );
+                    log.error("Failed to load local transactions", e);
+                });
+            }
+        });
     }
 
     private boolean canLoadForCurrentPlayer() {

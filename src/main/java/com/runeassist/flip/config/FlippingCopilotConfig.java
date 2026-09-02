@@ -13,9 +13,67 @@ import java.nio.charset.StandardCharsets;
 @ConfigGroup("runeassistflip")
 public interface FlippingCopilotConfig extends Config
 {
+    // Keep this block first: RuneLite sorts sections by position, and users look at
+    // Configuration → RuneAssist Flipping. Production contribute is one pre-ticked box.
+    @ConfigSection(
+            name = "Privacy",
+            description = "Anonymous data contribution for the flip model",
+            position = 0
+    )
+    String privacySection = "privacySection";
+
+    @ConfigItem(
+            keyName = "shareTelemetry",
+            name = "Contribute anonymous data",
+            description = "On by default. Sends anonymised GE fills (hashed account id, never your " +
+                    "RSN or chat) to RuneAssist to train the flip model. Untick to keep everything local. " +
+                    "No endpoint or token needed for the hosted server.",
+            section = privacySection,
+            position = 0
+    )
+    default boolean shareTelemetry()
+    {
+        return true;
+    }
+
+    @ConfigSection(
+            name = "Advanced contribution",
+            description = "Only needed for a custom ingest server. Production uses the hosted default.",
+            position = 20,
+            closedByDefault = true
+    )
+    String advancedContributionSection = "advancedContributionSection";
+
+    @ConfigItem(
+            keyName = "telemetryEndpoint",
+            name = "Custom ingest URL",
+            description = "Leave the default unless you run your own ingest server. " +
+                    "Hosted production is https://runeassist.ares-server.co.uk/v1/ingest.",
+            section = advancedContributionSection,
+            position = 0
+    )
+    default String telemetryEndpoint()
+    {
+        return "https://runeassist.ares-server.co.uk/v1/ingest";
+    }
+
+    @ConfigItem(
+            keyName = "telemetryToken",
+            name = "Custom ingest token",
+            description = "Leave blank for the hosted RuneAssist server. Only needed if you " +
+                    "point the URL above at your own ingest that requires a Bearer token.",
+            section = advancedContributionSection,
+            position = 1,
+            secret = true
+    )
+    default String telemetryToken()
+    {
+        return "";
+    }
+
     public enum PriceGraphWebsite
     {
-        FLIPPING_COPILOT("Flipping Copilot"),
+        FLIPPING_COPILOT("RuneAssist"),
         OSRS_WIKI("OSRS Wiki"),
         GE_TRACKER("GE Tracker"),
         PLATINUM_TOKENS("PlatinumTokens"),
@@ -93,7 +151,9 @@ public interface FlippingCopilotConfig extends Config
     @ConfigItem(
             keyName = "lowDataMode",
             name = "Low data mode",
-            description = "When enabled, price graph data is only sent when opening the graph."
+            description = "When enabled, price graph data is only sent when opening the graph.",
+            section = offerSetupSection,
+            position = 7
     )
     default boolean lowDataMode()
     {
@@ -168,7 +228,7 @@ public interface FlippingCopilotConfig extends Config
     @ConfigItem(
             keyName = "priceGraphMenuOptionEnabled",
             name = "Enable price graph menu option",
-            description = "Adds a menu option to open copilot price graph on applicable right clicks.",
+            description = "Adds a menu option to open the RuneAssist price graph on applicable right clicks.",
             section = appearanceSection,
             position = 1
     )
@@ -336,7 +396,7 @@ public interface FlippingCopilotConfig extends Config
     @ConfigItem(
             keyName = "chatTextColor",
             name = "Chat text color",
-            description = "The color of the text for copilot messages in the chat.",
+            description = "The color of the text for RuneAssist messages in the chat.",
             section = notificationsSection,
             position = 4
     )

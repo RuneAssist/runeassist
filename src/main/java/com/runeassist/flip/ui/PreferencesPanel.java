@@ -22,7 +22,7 @@ import java.util.List;
 @Singleton
 public class PreferencesPanel extends JPanel {
     private static final Option[] MIN_PREDICTED_PROFIT_OPTIONS = new Option[]{
-            new Option("Auto", null),
+            new Option("Auto (off)", null),
             new Option("20K", 20_000L),
             new Option("50K", 50_000L),
             new Option("100K", 100_000L),
@@ -76,7 +76,6 @@ public class PreferencesPanel extends JPanel {
     public PreferencesPanel(
             SuggestionManager suggestionManager,
             SuggestionPreferencesManager preferencesManager,
-            PremiumInstanceController premiumInstanceController,
             ItemController itemController,
             AccountSuggestionPreferencesRS accountPreferences,
             DumpsStreamController dumpsStreamController) {
@@ -247,7 +246,11 @@ public class PreferencesPanel extends JPanel {
             preferencesManager.setMinPredictedProfit(option == null || option.value == null ? null : option.value.longValue());
             suggestionManager.setSuggestionNeeded(true);
         });
-        preferencesContent.add(formRow("Min. predicted profit", minPredictedProfitDropdown));
+        JPanel minProfitRow = formRow("Min. predicted profit", minPredictedProfitDropdown);
+        String minProfitTip = "Auto means no floor (filter off). Other values drop suggestions below that profit.";
+        minPredictedProfitDropdown.setToolTipText(minProfitTip);
+        minProfitRow.setToolTipText(minProfitTip);
+        preferencesContent.add(minProfitRow);
         addVerticalGap(preferencesContent, 3);
 
         // Dump alerts dropdown
@@ -284,13 +287,7 @@ public class PreferencesPanel extends JPanel {
         preferencesContent.add(formRow("Reserved slots", reservedSlotsDropdown));
         addVerticalGap(preferencesContent, 6);
 
-        // Premium instances panel - moved to the bottom
-        JButton manageButton = new JButton("manage");
-        manageButton.addActionListener(e -> {
-            premiumInstanceController.loadAndOpenPremiumInstanceDialog();
-        });
-        preferencesContent.add(formRow("Premium accounts:", manageButton));
-        addVerticalGap(preferencesContent, 3);
+        // RuneAssist fork: FC premium-instance UI requires a cloud JWT; hide it.
     }
 
 

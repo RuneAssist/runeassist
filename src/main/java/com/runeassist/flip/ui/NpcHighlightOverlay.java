@@ -13,7 +13,7 @@ import java.util.function.Supplier;
 public class NpcHighlightOverlay extends Overlay {
     private static final int OUTLINE_BORDER_WIDTH = 4;
     private static final int OUTLINE_FEATHER = 4;
-    private static final BufferedImage ICON = ImageUtil.loadImageResource(NpcHighlightOverlay.class, "/icon-small.png");
+    private static final BufferedImage ICON = ImageUtil.loadImageResource(NpcHighlightOverlay.class, "/runeassist-flip.png");
 
     private final NPC npc;
     private final Supplier<Color> colorSupplier;

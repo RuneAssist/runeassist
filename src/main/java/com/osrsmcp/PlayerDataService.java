@@ -2001,30 +2001,63 @@ public class PlayerDataService
         }
 
         List<Map<String, Object>> rows = new ArrayList<>();
+        final int TIMEFRAME_MIN = 5; // MCP path: size qty to ~5 minutes of volume, not the full GE limit
+        long nowSec = System.currentTimeMillis() / 1000L;
         for (WikiPriceService.ItemMeta m : allMeta.values())
         {
+            if (m.limit <= 0) continue; // unknown buy limit — never invent a quantity
+            if (m.name != null)
+            {
+                String n = m.name.toLowerCase();
+                if (n.contains("placeholder") || n.startsWith("broken ") || n.contains("(nz)")) continue;
+            }
             WikiPriceService.PriceData  pd = wikiPriceService.getPrice(m.id);
             WikiPriceService.VolumeData v  = wikiPriceService.getVolume1h(m.id);
-            if (pd == null || v == null) continue;
-            int buy = pd.low, sell = pd.high;
-            if (buy <= 0 || sell <= 0 || sell <= buy) continue;
+            WikiPriceService.VolumeData v5 = wikiPriceService.getVolume5m(m.id);
+            if (v == null) continue;
             int vol = v.totalVol();
             if (vol < MIN_VOLUME) continue;
+            if (Math.min(v.highVol, v.lowVol) < 150) continue;
+
+            int buy, sell;
+            if (v5 != null && v5.avgLow > 0 && v5.avgHigh > v5.avgLow)
+            {
+                buy = v5.avgLow; sell = v5.avgHigh;
+            }
+            else if (v.avgLow > 0 && v.avgHigh > v.avgLow)
+            {
+                buy = v.avgLow; sell = v.avgHigh;
+            }
+            else if (pd != null && pd.low > 0 && pd.high > pd.low
+                && nowSec - pd.highTime <= 90 * 60 && nowSec - pd.lowTime <= 90 * 60)
+            {
+                buy = pd.low; sell = pd.high;
+            }
+            else continue;
 
             long tax = GeTax.taxAmount(m.id, sell);
             int margin = (int) (sell - buy - tax);
             if (margin < MIN_MARGIN) continue;
             double marginPct = margin * 100.0 / buy;
+            if (marginPct > 12) continue; // wide spread = stale/odd, not a real flip
 
-            int limit   = m.limit;
+            double imbalance = Math.abs(v.highVol - v.lowVol) / (double) vol;
+            if (imbalance > 0.55) continue;
+
             int perHour = Math.max(1, Math.min(v.highVol, v.lowVol)); // bottleneck side
-            int qtyCap  = limit > 0 ? limit : Math.max(1, perHour);
+            double perMinute = perHour / 60.0;
+            if (v5 != null)
+            {
+                int side5 = Math.max(0, Math.min(v5.highVol, v5.lowVol));
+                if (side5 > 0) perMinute = side5 / 5.0;
+            }
+            int liqQty = Math.max(1, (int) Math.floor(perMinute * TIMEFRAME_MIN));
+            int qtyCap = Math.min(m.limit, liqQty);
             if (capital > 0) qtyCap = (int) Math.min(qtyCap, capital / buy);
             if (qtyCap < 1) continue; // can't afford even one within the capital budget
             double fillHrs = (double) qtyCap / perHour;
 
-            double imbalance  = Math.abs(v.highVol - v.lowVol) / (double) vol;
-            double spreadRisk = marginPct > 25 ? 0.5 : 0;
+            double spreadRisk = marginPct > 15 ? 0.35 : 0;
             double liqRisk    = vol < MIN_VOLUME * 4 ? 0.4 : 0;
             double risk       = Math.min(0.9, imbalance * 0.6 + spreadRisk + liqRisk);
             double turnover   = 1.0 / Math.max(0.25, fillHrs);
@@ -2043,7 +2076,7 @@ public class PlayerDataService
             s.put("margin_post_tax", margin);
             s.put("margin_pct", Math.round(marginPct * 10) / 10.0);
             s.put("volume_1h", vol);
-            s.put("ge_limit", limit);
+            s.put("ge_limit", m.limit);
             s.put("est_fill_hours", Math.round(fillHrs * 100) / 100.0);
             s.put("suggested_qty", qtyCap);
             s.put("cost", (long) buy * qtyCap);

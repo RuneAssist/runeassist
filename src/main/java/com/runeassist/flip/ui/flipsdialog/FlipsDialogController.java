@@ -7,10 +7,11 @@ import com.runeassist.flip.manager.PriceGraphConfigManager;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.*;
 import com.runeassist.flip.ui.graph.model.PriceLine;
+import com.runeassist.flip.ui.RuneAssistColors;
+import com.runeassist.flip.ui.RuneAssistTabbedPaneUI;
 import com.google.inject.name.Named;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.util.LinkBrowser;
 
 import javax.inject.Inject;
@@ -38,6 +39,9 @@ public class FlipsDialogController {
     private final BankStateRS bankStateRS;
     private final GeHistoryStateRS geHistoryStateRS;
     private final ClientThread clientThread;
+    private final TransactionManager transactionManager;
+    private final LocalFlipLedger localFlipLedger;
+    private final OfferManager offerManager;
 
     public PriceGraphPanel priceGraphPanel;
     private JTabbedPane tabbedPane;
@@ -61,7 +65,10 @@ public class FlipsDialogController {
             PortfolioStateRS portfolioStateRS,
             BankStateRS bankStateRS,
             GeHistoryStateRS geHistoryStateRS,
-            ClientThread clientThread) {
+            ClientThread clientThread,
+            TransactionManager transactionManager,
+            LocalFlipLedger localFlipLedger,
+            OfferManager offerManager) {
         this.itemController = itemController;
         this.flipsManager = flipsManager;
         this.executorService = executorService;
@@ -76,25 +83,33 @@ public class FlipsDialogController {
         this.bankStateRS = bankStateRS;
         this.geHistoryStateRS = geHistoryStateRS;
         this.clientThread = clientThread;
+        this.transactionManager = transactionManager;
+        this.localFlipLedger = localFlipLedger;
+        this.offerManager = offerManager;
     }
 
     public void initDialog(Window windowAncestor) {
         SwingUtilities.invokeLater(() -> {
             tabbedPane = new JTabbedPane();
-            tabbedPane.setBackground(ColorScheme.DARK_GRAY_COLOR);
+            tabbedPane.setBackground(RuneAssistColors.SHELL);
+            tabbedPane.setForeground(RuneAssistColors.ACCENT);
+            tabbedPane.setOpaque(true);
+            tabbedPane.setUI(new RuneAssistTabbedPaneUI());
+            tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
 
             visualizeFlipPanel = new VisualizeFlipPanel(
                     itemController,
                     priceGraphConfigManager,
                     config,
-                    apiRequestHandler
+                    apiRequestHandler,
+                    localFlipLedger
             );
             flipsPanel = new FlipsPanel(flipsManager, itemController, copilotLoginRS,
                     executorService, config, apiRequestHandler, (f) -> {
                 showVisualizeFlip(f);
             });
             missedFlipsPanel = new MissedFlipsPanel(osrsLoginRS, flipsManager, itemController, copilotLoginRS,
-                    executorService, config, apiRequestHandler, geHistoryStateRS);
+                    executorService, geHistoryStateRS, localFlipLedger, offerManager);
             ItemAggregatePanel itemsPanel = new ItemAggregatePanel(flipsManager, itemController,
                     copilotLoginRS, executorService, config);
             AccountsAggregatePanel accountsPanel = new AccountsAggregatePanel(copilotLoginRS,
@@ -113,7 +128,8 @@ public class FlipsDialogController {
                     itemId -> showPriceGraphTab(itemId, false, null)
             );
             TransactionsPanel transactionsPanel = new TransactionsPanel(copilotLoginRS, itemController,
-                    executorService, apiRequestHandler, osrsLoginManager, config, flipsManager);
+                    executorService, apiRequestHandler, osrsLoginManager, config, flipsManager,
+                    transactionManager, localFlipLedger);
             priceGraphPanel = new PriceGraphPanel(
                     itemController,
                     priceGraphConfigManager,
@@ -134,7 +150,7 @@ public class FlipsDialogController {
 
 
             JDialog dialog = new JDialog(windowAncestor);
-            dialog.setTitle("Flipping Copilot");
+            dialog.setTitle("RuneAssist Flipping");
             dialog.setResizable(true);
             dialog.setMinimumSize(new Dimension(800, 600));
 
