@@ -42,6 +42,7 @@ public class GameUiChangesHandler {
     private final SlotProfitColorizer slotProfitColorizer;
     private final HeldItemSyncStateRS heldItemSyncStateRS;
     private final FlippingCopilotConfig config;
+    private final com.osrsmcp.TelemetryService telemetry;
     // state
     boolean quantityOrPriceChatboxOpen;
     boolean itemSearchChatboxOpen = false;
@@ -156,6 +157,9 @@ public class GameUiChangesHandler {
                 suggestion.actionedTick = client.getTickCount();
                 suggestionManager.setSuggestionItemIdOnOfferSubmitted(suggestion.getItemId());
                 suggestionManager.setSuggestionOfferStatusOnOfferSubmitted(suggestionOfferStatus(suggestion));
+                Player p = client.getLocalPlayer();
+                String rsn = p != null ? p.getName() : null;
+                telemetry.logSuggestionDecision(rsn, suggestion, "acted", suggestion.getPickSource());
             } else {
                 suggestionManager.setSuggestionItemIdOnOfferSubmitted(-1);
                 suggestionManager.setSuggestionOfferStatusOnOfferSubmitted(null);

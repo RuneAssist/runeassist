@@ -28,6 +28,12 @@ public class Suggestion {
     private String name;
     private int id;
     private String message = "";
+    /**
+     * One-line honest reason this pick was chosen, from the scorer and live client
+     * state (qty, price, stamped remaining limit, fill estimate, flags). Empty for
+     * WAIT — those use {@link #message}.
+     */
+    private String why = "";
     private Double expectedProfit;
     private Double expectedDuration;
     @SerializedName("is_hold")
@@ -36,6 +42,20 @@ public class Suggestion {
     private List<PortfolioItem> portfolioItems;
     private Data graphData;
     private Instant timeIssued;
+    /** Wiki GE buy-limit; 0 if unknown. */
+    private int geLimit;
+    /**
+     * Remaining 4h buy-limit from live fills observed this window.
+     * {@code -1} if unknown — do not treat as a reconstructed full limit.
+     */
+    private int remainingLimit = -1;
+    /**
+     * True only when {@link #geLimit} is known and remaining comes from live fills
+     * (or pending offers already exhaust the wiki cap). False = guessing / unknown.
+     */
+    private boolean limitKnown;
+    /** {@code ares} or {@code local} — which scorer produced this pick. Telemetry only. */
+    private String pickSource = "";
 
     @Setter
     @Getter
@@ -208,7 +228,7 @@ public class Suggestion {
 
     public String toMessage() {
         NumberFormat formatter = NumberFormat.getNumberInstance();
-        String string = isDumpAlert ? "DUMP ALERT!! " : "Flipping Copilot: ";
+        String string = isDumpAlert ? "DUMP ALERT!! " : "RuneAssist: ";
         if (type == null) {
             return string + "Unknown suggestion type";
         }
@@ -334,6 +354,15 @@ public class Suggestion {
                         break;
                     case 19:
                         suggestion.isHold = input.readBool();
+                        break;
+                    case 20:
+                        suggestion.geLimit = input.readInt32();
+                        break;
+                    case 21:
+                        suggestion.remainingLimit = input.readInt32();
+                        break;
+                    case 22:
+                        suggestion.limitKnown = input.readBool();
                         break;
                     default:
                         input.skipField(tag);

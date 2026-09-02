@@ -22,7 +22,7 @@ public final class PatchNotesPopup {
     public static final int LATEST_VERSION = 1;
 
     public static void show(Component parent) {
-        JLabel heading = new JLabel("Flipping Copilot has been updated to v1.8.0");
+        JLabel heading = new JLabel("RuneAssist Flipping has been updated");
         heading.setForeground(Color.WHITE);
         heading.setFont(heading.getFont().deriveFont(Font.BOLD, 16f));
 
@@ -48,7 +48,7 @@ public final class PatchNotesPopup {
         JOptionPane.showMessageDialog(
                 parent,
                 panel,
-                "Flipping Copilot Update",
+                "RuneAssist Flipping Update",
                 JOptionPane.PLAIN_MESSAGE,
                 buildLogoIcon()
         );
@@ -72,7 +72,8 @@ public final class PatchNotesPopup {
             doc.insertString(doc.getLength(),
                     "- Hold items for bigger margins instead of selling immediately\n"
                             + "- Earn passive GP on holds while your GE slots stay free for active flips\n"
-                            + "- Get sell suggestions when a held item is ready to flip",
+                            + "- Get sell suggestions when a held item is ready to flip\n"
+                            + "\nBased on Flipping Copilot (BSD-2).",
                     null);
         } catch (BadLocationException e) {
             throw new IllegalStateException(e);
@@ -80,7 +81,7 @@ public final class PatchNotesPopup {
     }
 
     private static Icon buildLogoIcon() {
-        BufferedImage logo = ImageUtil.loadImageResource(PatchNotesPopup.class, "/logo.png");
+        BufferedImage logo = ImageUtil.loadImageResource(PatchNotesPopup.class, "/runeassist-flip.png");
         Image resizedLogo = new ImageIcon(logo).getImage().getScaledInstance(LOGO_WIDTH, LOGO_HEIGHT, Image.SCALE_SMOOTH);
         return new ImageIcon(resizedLogo);
     }

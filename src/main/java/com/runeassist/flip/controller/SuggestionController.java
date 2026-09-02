@@ -52,6 +52,7 @@ public class SuggestionController {
     private final GePreviousSearch gePreviousSearch;
     // RuneAssist fork: our local suggestion source replaces FC's backend.
     private final com.runeassist.flip.RuneAssistSuggestionSource runeAssistSource;
+    private final com.osrsmcp.TelemetryService telemetry;
 
 
     private MainPanel mainPanel;
@@ -61,6 +62,11 @@ public class SuggestionController {
 
     public void skipSuggestion() {
         if (accountStatusManager.skipCurrentSuggestion()) {
+            clientThread.invokeLater(() -> {
+                if (!suggestionManager.isSuggestionRequestInProgress()) {
+                    getSuggestionAsync();
+                }
+            });
             if (suggestionPanel != null) {
                 suggestionPanel.refresh();
             }
@@ -139,6 +145,10 @@ public class SuggestionController {
     }
 
     public void getSuggestionAsync() {
+        if (suggestionManager.isSuggestionRequestInProgress()) {
+            suggestionManager.setSuggestionNeeded(true);
+            return;
+        }
         suggestionManager.setSuggestionNeeded(false);
         // RuneAssist fork: no FC account required — only the OSRS login must be valid.
         if (!osrsLoginManager.isValidLoginState()) {
@@ -229,6 +239,7 @@ public class SuggestionController {
         suggestionManager.setSuggestionError(null);
         suggestionManager.setSuggestionRequestInProgress(false);
         log.debug("Received suggestion: {}", newSuggestion.toString());
+        logSuggestionDecision(oldSuggestion, newSuggestion);
         accountStatusManager.resetSkipSuggestion();
         offerManager.setOfferJustPlaced(false);
         suggestionPanel.refresh();
@@ -304,7 +315,7 @@ public class SuggestionController {
 
     private void showChatNotifications(Suggestion newSuggestion, AccountStatus accountStatus) {
         if (accountStatus.isCollectNeeded(newSuggestion, grandExchange.isSetupOfferOpen())) {
-            clientThread.invokeLater(() -> showChatNotification("Flipping Copilot: Collect items"));
+            clientThread.invokeLater(() -> showChatNotification("RuneAssist: Collect items"));
         }
         clientThread.invokeLater(() -> showChatNotification(newSuggestion.toMessage()));
     }
@@ -314,5 +325,26 @@ public class SuggestionController {
                 .append(config.chatTextColor(), message)
                 .build();
         client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", chatMessage, "");
+    }
+
+    private void logSuggestionDecision(Suggestion oldSuggestion, Suggestion newSuggestion) {
+        try {
+            String rsn = osrsLoginManager.getLastDisplayName();
+            if (oldSuggestion != null && newSuggestion != null
+                    && !newSuggestion.equals(oldSuggestion)
+                    && !oldSuggestion.isWaitSuggestion()
+                    && oldSuggestion.actionedTick == -1) {
+                telemetry.logSuggestionDecision(rsn, oldSuggestion, "ignored",
+                    oldSuggestion.getPickSource());
+            }
+            if (newSuggestion != null
+                    && (oldSuggestion == null || !newSuggestion.equals(oldSuggestion))) {
+                String outcome = newSuggestion.isAbortSuggestion() ? "abort" : "shown";
+                telemetry.logSuggestionDecision(rsn, newSuggestion, outcome,
+                    newSuggestion.getPickSource());
+            }
+        } catch (RuntimeException e) {
+            log.debug("suggestion_decision log failed", e);
+        }
     }
 }

@@ -67,7 +67,7 @@ public class MenuHandler {
             String menuTarget = event.getTarget();
             client.getMenu()
                     .createMenuEntry(-1)
-                    .setOption("Copilot graph")
+                    .setOption("RuneAssist graph")
                     .setTarget(menuTarget)
                     .onClick((MenuEntry e) -> {
                         GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
@@ -104,7 +104,7 @@ public class MenuHandler {
             int graphItemId = toUnnotedItemId(itemId);
             client.getMenu()
                     .createMenuEntry(-1)
-                    .setOption("Copilot graph")
+                    .setOption("RuneAssist graph")
                     .setTarget(menuTarget)
                     .onClick((MenuEntry e) -> flipsDialogController.showPriceGraphTab(graphItemId, false, null));
         }

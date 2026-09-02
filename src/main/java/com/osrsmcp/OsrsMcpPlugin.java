@@ -58,6 +58,7 @@ public class OsrsMcpPlugin extends Plugin
     @Inject private OsrsMcpChatPanel chatPanel;
     @Inject private CompanionAgent companionAgent;
     @Inject private TelemetryService telemetry;
+    @Inject private GeHistoryDump geHistoryDump;
     @Inject private NudgeService nudgeService;
     @Inject private RuneAssistOverlay runeAssistOverlay;
     @Inject private GeOffersOverlay geOffersOverlay;
@@ -122,6 +123,8 @@ public class OsrsMcpPlugin extends Plugin
         // overlayManager.add(geSlotProfitOverlay);
         // overlayManager.add(geInventoryCostOverlay);
         // geKeybindHandler.register();
+        if (!flippingOwnsGeContribution())
+            telemetry.onUploadSettingsChanged();
     }
 
     @Override
@@ -172,6 +175,12 @@ public class OsrsMcpPlugin extends Plugin
         s.put("osrstcg",         isPluginEnabled("OSRS TCG"));
         s.put("inventorysetups", isPluginEnabled("Inventory Setups"));
         return s;
+    }
+
+    /** Flipping owns ge_offer / ge_history capture so contribution works with this plugin off. */
+    private boolean flippingOwnsGeContribution()
+    {
+        return isPluginEnabled("RuneAssist Flipping");
     }
 
     private boolean isPluginEnabled(String name)
@@ -240,6 +249,8 @@ public class OsrsMcpPlugin extends Plugin
             // Start a fresh session baseline for get_session_summary.
             sessionTracker.onLogin();
             nudgeService.onLogin();
+            if (!flippingOwnsGeContribution())
+                geHistoryDump.onLogin();
         }
         else
         {
@@ -284,6 +295,11 @@ public class OsrsMcpPlugin extends Plugin
 
         // Keep the coin cache warm so the Flips panel can auto-size its budget off-thread.
         playerDataService.refreshCoinsCache();
+
+        // Backfill completed GE history into ingest/local JSONL when the history UI is open.
+        // Flipping owns this when that plugin is enabled (so contribution works with MCP off).
+        if (!flippingOwnsGeContribution())
+            geHistoryDump.onGameTick();
 
         // Refresh the Flips action card's live offer state a few times a minute.
         if (gameTickCounter % 10 == 0) pushGeOffers();
@@ -407,8 +423,11 @@ public class OsrsMcpPlugin extends Plugin
     {
         GrandExchangeOffer o = e.getOffer();
         if (o == null) return;
-        telemetry.logGeOffer(rsn(), e.getSlot(), o.getState().name(), o.getItemId(),
-            o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
+        if (!flippingOwnsGeContribution())
+        {
+            telemetry.logGeOffer(rsn(), e.getSlot(), o.getState().name(), o.getItemId(),
+                o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
+        }
         flipTracker.onOffer(e.getSlot(), o.getState(), o.getItemId(),
             o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
         pushGeOffers();
@@ -472,10 +491,25 @@ public class OsrsMcpPlugin extends Plugin
     }
 
     @Subscribe
+    public void onWidgetLoaded(net.runelite.api.events.WidgetLoaded event)
+    {
+        if (event.getGroupId() == com.runeassist.flip.rs.GeHistoryStateRS.GE_HISTORY_GROUP
+            && !flippingOwnsGeContribution())
+            geHistoryDump.onHistoryWidgetLoaded();
+    }
+
+    @Subscribe
     public void onConfigChanged(ConfigChanged event)
     {
         if (!event.getGroup().equals("osrsmcp")) return;
-        if (!event.getKey().equals("connectionMode")) return;
+        String key = event.getKey();
+        if ("shareTelemetry".equals(key) || "telemetryEndpoint".equals(key) || "telemetryToken".equals(key))
+        {
+            if (!flippingOwnsGeContribution())
+                telemetry.onUploadSettingsChanged();
+            return;
+        }
+        if (!"connectionMode".equals(key)) return;
 
         // Update panel sections immediately when mode changes -- no restart needed
         panel.refreshSectionsForMode(config.connectionMode());

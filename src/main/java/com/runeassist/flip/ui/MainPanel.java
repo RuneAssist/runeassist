@@ -1,20 +1,13 @@
 package com.runeassist.flip.ui;
 
-import com.runeassist.flip.rs.CopilotLoginRS;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
-import net.runelite.client.util.ImageUtil;
-import net.runelite.client.util.LinkBrowser;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.image.BufferedImage;
-
-import static com.runeassist.flip.ui.UIUtilities.buildButton;
 
 @Singleton
 @Slf4j
@@ -22,102 +15,61 @@ public class MainPanel extends PluginPanel {
 
     public static final int CONTENT_WIDTH = 242 - 12;
 
-    // dependencies
     public final LoginPanel loginPanel;
     public final CopilotPanel copilotPanel;
-    private final CopilotLoginRS copilotLoginRS;
 
-    // UI components
     private final CardLayout cardLayout = new CardLayout();
 
     @Inject
     public MainPanel(CopilotPanel copilotPanel,
-                     LoginPanel loginPanel,
-                     CopilotLoginRS copilotLoginRS) {
+                     LoginPanel loginPanel) {
         super(false);
-        this.copilotLoginRS = copilotLoginRS;
         this.copilotPanel = copilotPanel;
         this.loginPanel = loginPanel;
 
         setLayout(cardLayout);
         setBorder(BorderFactory.createEmptyBorder(5, 6, 5, 6));
-        add(buildView(true, copilotPanel), "logged-in");
-        add(buildView(false, loginPanel), "logged-out");
-        cardLayout.show(this, "logged-in"); // RuneAssist fork: no FC login screen
+        setBackground(RuneAssistColors.SHELL);
+        add(buildView(copilotPanel), "logged-in");
+        cardLayout.show(this, "logged-in");
     }
 
-    private JPanel buildView(boolean isLoggedIn, JComponent content) {
+    private JPanel buildView(JComponent content) {
         JPanel wrapper = new JPanel();
+        wrapper.setOpaque(true);
+        wrapper.setBackground(RuneAssistColors.SHELL);
         wrapper.setLayout(new BorderLayout());
-        wrapper.add(constructTopBar(isLoggedIn), BorderLayout.NORTH);
+        wrapper.add(constructTopBar(), BorderLayout.NORTH);
         wrapper.add(content, BorderLayout.CENTER);
         return wrapper;
     }
 
     public void refresh() {
         if (!UIUtilities.ensureEdt(this::refresh)) return;
-        // RuneAssist fork: always show the flip view (no FC account).
-        showLoggedInView();
+        cardLayout.show(this, "logged-in");
         copilotPanel.refresh();
     }
 
-    private void showLoggedOutView() {
-        loginPanel.showLoginErrorMessage("");
-        cardLayout.show(this, "logged-out");
-        revalidate();
-        repaint();
-    }
+    private JPanel constructTopBar() {
+        JPanel container = new JPanel(new BorderLayout());
+        container.setBackground(RuneAssistColors.SHELL);
+        container.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 2, 0, RuneAssistColors.ACCENT),
+                new EmptyBorder(2, 0, 8, 0)));
 
-    private void showLoggedInView() {
-        cardLayout.show(this, "logged-in");
-        revalidate();
-        repaint();
-    }
+        JLabel title = new JLabel("RuneAssist Flipping");
+        title.setForeground(RuneAssistColors.ACCENT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 13f));
+        title.setToolTipText("BSD-2");
 
-    private JPanel constructTopBar(boolean isLoggedIn) {
-        JPanel container = new JPanel();
-        container.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        container.setLayout(new BorderLayout());
+        JLabel attribution = new JLabel("BSD-2");
+        attribution.setForeground(RuneAssistColors.MUTED);
+        attribution.setFont(attribution.getFont().deriveFont(10f));
+        attribution.setToolTipText("Based on Flipping Copilot (BSD-2)");
+        attribution.setHorizontalAlignment(SwingConstants.RIGHT);
 
-        JPanel topBar = new JPanel();
-        topBar.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        int columns = isLoggedIn ? 4 : 3;
-        topBar.setLayout(new GridLayout(1, columns));
-
-        JLabel reddit = buildTopBarUriButton(UIUtilities.redditIcon,
-                "Flipping Copilot reddit",
-                "https://www.reddit.com/r/FlippingCopilot/");
-        topBar.add(reddit);
-
-        JLabel discord = buildTopBarUriButton(UIUtilities.discordIcon,
-                "Flipping Copilot Discord",
-                "https://discord.gg/UyQxA4QJAq");
-        topBar.add(discord);
-
-        JLabel website = buildTopBarUriButton(UIUtilities.internetIcon,
-                "Flipping Copilot website",
-                "https://flippingcopilot.com");
-        topBar.add(website);
-
-
-        if (isLoggedIn) {
-            BufferedImage icon = ImageUtil.loadImageResource(getClass(), UIUtilities.logoutIcon);
-            JLabel logout = buildButton(icon, "Log out", () -> {
-                copilotLoginRS.clear();
-                showLoggedOutView();
-            });
-            topBar.add(logout);
-        }
-
-        container.add(topBar);
-        container.setBorder(new EmptyBorder(3, 0, 6, 0));
+        container.add(title, BorderLayout.WEST);
+        container.add(attribution, BorderLayout.EAST);
         return container;
-    }
-
-    private JLabel buildTopBarUriButton(String iconPath, String tooltip, String uriString) {
-        BufferedImage icon = ImageUtil.loadImageResource(getClass(), iconPath);
-        return buildButton(icon, tooltip, () -> {
-            LinkBrowser.browse(uriString);
-        });
     }
 }

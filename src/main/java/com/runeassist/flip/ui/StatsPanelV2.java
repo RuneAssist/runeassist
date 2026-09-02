@@ -39,8 +39,8 @@ public class StatsPanelV2 extends JPanel {
     public final Icon FLIPS_DIALOG = new ImageIcon(FLIPS_DIALOG_ICON);
     public final Icon HIGHLIGHTED_FLIPS_DIALOG = new ImageIcon(ImageUtil.luminanceScale(FLIPS_DIALOG_ICON, BUTTON_HOVER_LUMINANCE));
 
-    private static final int SESSION_TIME_ROW = 4;
-    private static final int HOURLY_PROFIT_ROW = 5;
+    private JPanel sessionTimeRow;
+    private JPanel hourlyProfitRow;
 
     // dependencies
     private final CopilotLoginRS copilotLoginRS;
@@ -93,6 +93,7 @@ public class StatsPanelV2 extends JPanel {
         this.flipsDialogController = flipsDialogController;
         this.portfolioStateRS = portfolioStateRS;
         setLayout(new BorderLayout());
+        setBackground(RuneAssistColors.SHELL);
 
         setupTimeIntervalDropdown();
         setupProfitAndSubInfoPanel();
@@ -100,35 +101,41 @@ public class StatsPanelV2 extends JPanel {
         setupFlipsDialogButton();
 
         flipsPanel.setLayout(new BoxLayout(flipsPanel, BoxLayout.Y_AXIS));
-        flipsPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        flipsPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        flipsPanel.setBackground(RuneAssistColors.CARD);
+        flipsPanel.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
 
         JScrollPane scrollPane = new JScrollPane(flipsPanel);
-        scrollPane.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        scrollPane.setBackground(RuneAssistColors.CARD);
         scrollPane.getVerticalScrollBar().setPreferredSize(new Dimension(2, 0));
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setBorder(null);
 
-        // Create a main panel with vertical layout
-        JPanel mainPanel = UIUtilities.verticalPanel(ColorScheme.DARKER_GRAY_COLOR);
+        JPanel mainPanel = UIUtilities.verticalPanel(RuneAssistColors.SHELL);
 
         JPanel timeIntervalDropdownWrapper = new JPanel(new BorderLayout(0, 0));
-        timeIntervalDropdownWrapper.setBorder(BorderFactory.createEmptyBorder()); // No border
+        timeIntervalDropdownWrapper.setOpaque(false);
+        timeIntervalDropdownWrapper.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, 0));
         timeIntervalDropdownWrapper.add(intervalDropdown, BorderLayout.CENTER);
         timeIntervalDropdownWrapper.add(sessionResetButton, BorderLayout.EAST);
         timeIntervalDropdownWrapper.setMaximumSize(new Dimension(Integer.MAX_VALUE, timeIntervalDropdownWrapper.getPreferredSize().height));
 
-        JPanel intervalRsAccountDropdownWrapper = new JPanel(new BorderLayout(0, 0));
         accountDropdown = new AccountDropdown(
                 () -> copilotLoginRS.get().displayNameToAccountId,
                 flipManager::setIntervalAccount,
                 AccountDropdown.ALL_ACCOUNTS_DROPDOWN_OPTION
         );
-        intervalRsAccountDropdownWrapper.setMaximumSize(new Dimension(Integer.MAX_VALUE, intervalRsAccountDropdownWrapper.getPreferredSize().height));
-        intervalRsAccountDropdownWrapper.add(timeIntervalDropdownWrapper, BorderLayout.NORTH);
-        intervalRsAccountDropdownWrapper.add(accountDropdown, BorderLayout.SOUTH);
+        accountDropdown.setMaximumSize(new Dimension(Integer.MAX_VALUE, accountDropdown.getPreferredSize().height));
 
-        mainPanel.add(intervalRsAccountDropdownWrapper);
+        mainPanel.add(timeIntervalDropdownWrapper);
+        mainPanel.add(accountDropdown);
         mainPanel.add(profitAndSubInfoPanel);
+
+        JPanel flipsHeader = new JPanel(new BorderLayout());
+        flipsHeader.setOpaque(false);
+        flipsHeader.setBorder(BorderFactory.createEmptyBorder(8, 2, 4, 0));
+        flipsHeader.add(RuneAssistColors.kicker("RECENT FLIPS"), BorderLayout.WEST);
+        flipsHeader.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
+        mainPanel.add(flipsHeader);
         mainPanel.add(scrollPane);
 
         add(mainPanel, BorderLayout.CENTER);
@@ -136,7 +143,7 @@ public class StatsPanelV2 extends JPanel {
         paginator = new Paginator((i) -> refresh(true, lastValidState));
 
         JPanel bottomPanel = new JPanel(new BorderLayout());
-        bottomPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        bottomPanel.setBackground(RuneAssistColors.SHELL);
         bottomPanel.add(paginator, BorderLayout.CENTER);
         bottomPanel.add(flipsDialogButton, BorderLayout.EAST);
 
@@ -151,7 +158,7 @@ public class StatsPanelV2 extends JPanel {
         flipsDialogButton.setEnabled(true);
         flipsDialogButton.setFocusable(true);
         flipsDialogButton.setBorder(BorderFactory.createEmptyBorder(0,0,0,5));
-        flipsDialogButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        flipsDialogButton.setBackground(RuneAssistColors.SHELL);
         flipsDialogButton.setToolTipText("Open flips dialog");
 
         flipsDialogButton.addMouseListener(new MouseAdapter() {
@@ -175,13 +182,18 @@ public class StatsPanelV2 extends JPanel {
                 clientThread.invoke(() -> {
                     if (osrsLoginManager.isValidLoginState()) {
                         String displayName = osrsLoginManager.getPlayerDisplayName();
-                        Integer accountId = copilotLoginRS.get().getAccountId(displayName);
-                        if(accountId != null && accountId != -1) {
+                        Integer accountId = displayName == null
+                                ? null
+                                : copilotLoginRS.get().getAccountId(displayName);
+                        if (accountId == null || accountId == -1) {
+                            accountId = displayName == null ? null : LocalFlipLedger.accountIdFor(displayName);
+                        }
+                        if (accountId != null && accountId != -1 && displayName != null) {
                             webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, true);
-                            sessionManager.resetSession();
-                            if (IntervalTimeUnit.SESSION.equals(intervalDropdown.getSelectedIntervalTimeUnit())) {
-                                flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
-                            }
+                        }
+                        sessionManager.resetSession();
+                        if (IntervalTimeUnit.SESSION.equals(intervalDropdown.getSelectedIntervalTimeUnit())) {
+                            flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
                         }
                         refresh(true, osrsLoginManager.isValidLoginState());
                     }
@@ -201,141 +213,79 @@ public class StatsPanelV2 extends JPanel {
         intervalDropdown.resetToSession();
     }
 
-    private JPanel buildSubInfoPanelItem(String key, JLabel value, Color valueColor) {
-        return buildSubInfoPanelItem(key, value, valueColor, null);
-    }
-
-    private JPanel buildSubInfoPanelItem(String key, JLabel value, Color valueColor, Runnable onClick) {
-        JPanel item = new JPanel(new BorderLayout());
-        item.setBorder(new EmptyBorder(SUB_INFO_ROW_VERTICAL_PADDING, 2, SUB_INFO_ROW_VERTICAL_PADDING, 2));
-        item.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        JLabel keyLabel = new JLabel(key);
-        keyLabel.setFont(FontManager.getRunescapeSmallFont());
-        item.add(keyLabel, BorderLayout.WEST);
+    private JPanel metricCell(String caption, JLabel value, Color valueColor) {
+        JPanel cell = UIUtilities.verticalPanel(RuneAssistColors.CARD);
+        cell.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+        JLabel cap = RuneAssistColors.caption(caption);
         value.setFont(FontManager.getRunescapeSmallFont());
         value.setForeground(valueColor);
-        item.add(value, BorderLayout.EAST);
-        item.setMaximumSize(new Dimension(Integer.MAX_VALUE, SUB_INFO_ROW_HEIGHT));
+        cell.add(cap);
+        cell.add(value);
+        cell.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+        return cell;
+    }
 
-        if (onClick != null) {
-            item.setToolTipText("Open portfolio");
-            keyLabel.setToolTipText("Open portfolio");
-            value.setToolTipText("Open portfolio");
-
-            MouseAdapter clickListener = new MouseAdapter() {
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    onClick.run();
-                }
-
-                @Override
-                public void mouseEntered(MouseEvent e) {
-                    item.setBackground(ColorScheme.DARKER_GRAY_COLOR.brighter());
-                    item.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-                }
-
-                @Override
-                public void mouseExited(MouseEvent e) {
-                    item.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-                    item.setCursor(Cursor.getDefaultCursor());
-                }
-            };
-
-            item.addMouseListener(clickListener);
-            keyLabel.addMouseListener(clickListener);
-            value.addMouseListener(clickListener);
+    private JPanel metricCell(String caption, JLabel value, Color valueColor, Runnable onClick) {
+        JPanel cell = metricCell(caption, value, valueColor);
+        if (onClick == null) {
+            return cell;
         }
-
-        return item;
-    }
-
-    private JPanel buildSubInfoPanel() {
-        JPanel subInfoPanel = UIUtilities.verticalPanel(ColorScheme.DARKER_GRAY_COLOR);
-        subInfoPanel.add(buildSubInfoPanelItem("Unrealized profit:", unrealizedProfitVal, ColorScheme.LIGHT_GRAY_COLOR, flipsDialogController::showPortfolioTab));
-        subInfoPanel.add(buildSubInfoPanelItem("Flips made:", flipsMadeVal, ColorScheme.LIGHT_GRAY_COLOR));
-        subInfoPanel.add(buildSubInfoPanelItem("ROI:", roiVal, UIUtilities.TOMATO));
-        subInfoPanel.add(buildSubInfoPanelItem("Session time:", sessionTimeVal, ColorScheme.GRAND_EXCHANGE_ALCH));
-        subInfoPanel.add(buildSubInfoPanelItem("Hourly profit:", hourlyProfitVal, Color.WHITE));
-        subInfoPanel.add(buildSubInfoPanelItem("Portfolio value:", portfolioValueVal, ColorScheme.LIGHT_GRAY_COLOR, flipsDialogController::showPortfolioTab));
-        subInfoPanel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0,0,1,0, ColorScheme.DARK_GRAY_COLOR),
-                new EmptyBorder(2, 5, 5, 5)));
-        return subInfoPanel;
-    }
-
-    private void setupProfitAndSubInfoPanel() {
-        profitAndSubInfoPanel = UIUtilities.verticalPanel(ColorScheme.DARK_GRAY_COLOR);
-
-        // Create the header panel that can be clicked to expand/collapse sub info
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        headerPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(1,0,1,0, ColorScheme.DARK_GRAY_COLOR),
-                new EmptyBorder(4, 0, 4, 0)));
-
-        final JLabel profitTitle = new JLabel("Profit: ");
-        profitTitle.setFont(FontManager.getRunescapeBoldFont());
-
-        totalProfitVal.setForeground(ColorScheme.GRAND_EXCHANGE_PRICE);
-        totalProfitVal.setFont(FontManager.getRunescapeBoldFont().deriveFont(24f));
-        totalProfitVal.setHorizontalAlignment(SwingConstants.CENTER);
-
-        // Use a panel to stack the profitTitle and totalProfitVal vertically
-        JPanel profitTextPanel = new JPanel();
-        profitTextPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        profitTextPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        profitTextPanel.add(profitTitle);
-        UIUtilities.addHorizontalGap(profitTextPanel, 5); // Spacing between title and value
-        profitTextPanel.add(totalProfitVal);
-        profitTextPanel.setBorder(BorderFactory.createEmptyBorder(1,4,1,4));
-
-        // Arrow label
-        JLabel arrowLabel = new JLabel(OPEN_ICON);
-        arrowLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        arrowLabel.setVerticalAlignment(SwingConstants.CENTER);
-        arrowLabel.setPreferredSize(new Dimension(16, 16)); // Adjust size as needed
-
-        // Add components to headerPanel
-        headerPanel.add(profitTextPanel, BorderLayout.CENTER);
-        headerPanel.add(arrowLabel, BorderLayout.EAST);
-
-        // Create the sub-info panel
-        subInfoPanel = buildSubInfoPanel();
-
-        headerPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 70));
-        profitAndSubInfoPanel.add(headerPanel);
-        profitAndSubInfoPanel.add(subInfoPanel);
-
-        // Mouse listener to handle expand/collapse and hover effects
-        MouseAdapter headerMouseListener = new MouseAdapter() {
+        cell.setToolTipText("Open portfolio");
+        MouseAdapter clickListener = new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                boolean isExpanded = subInfoPanel.isVisible();
-                subInfoPanel.setVisible(!isExpanded);
-                arrowLabel.setIcon(isExpanded ? OPEN_ICON : CLOSE_ICON);
-                log.debug("profit and sub info panel clicked");
+                onClick.run();
             }
 
             @Override
             public void mouseEntered(MouseEvent e) {
-                headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR.brighter());
-                profitTextPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR.brighter());
-                headerPanel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                cell.setBackground(RuneAssistColors.CARD.brighter());
+                cell.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             }
 
             @Override
             public void mouseExited(MouseEvent e) {
-                headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-                profitTextPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-                headerPanel.setCursor(Cursor.getDefaultCursor());
+                cell.setBackground(RuneAssistColors.CARD);
+                cell.setCursor(Cursor.getDefaultCursor());
             }
         };
-
-        // Add mouse listener to header components
-        headerPanel.addMouseListener(headerMouseListener);
-        totalProfitVal.addMouseListener(headerMouseListener);
-        profitTitle.addMouseListener(headerMouseListener);
-
+        cell.addMouseListener(clickListener);
+        return cell;
     }
+
+    private JPanel buildSubInfoPanel() {
+        JPanel subInfoPanel = new JPanel(new GridLayout(3, 2, 4, 2));
+        subInfoPanel.setBackground(RuneAssistColors.CARD);
+        sessionTimeRow = metricCell("Session", sessionTimeVal, ColorScheme.GRAND_EXCHANGE_ALCH);
+        hourlyProfitRow = metricCell("Per hour", hourlyProfitVal, Color.WHITE);
+        subInfoPanel.add(metricCell("Unrealized", unrealizedProfitVal, ColorScheme.LIGHT_GRAY_COLOR, flipsDialogController::showPortfolioTab));
+        subInfoPanel.add(metricCell("Flips", flipsMadeVal, ColorScheme.LIGHT_GRAY_COLOR));
+        subInfoPanel.add(metricCell("Portfolio", portfolioValueVal, ColorScheme.LIGHT_GRAY_COLOR, flipsDialogController::showPortfolioTab));
+        subInfoPanel.add(metricCell("ROI", roiVal, UIUtilities.TOMATO));
+        subInfoPanel.add(sessionTimeRow);
+        subInfoPanel.add(hourlyProfitRow);
+        subInfoPanel.setBorder(BorderFactory.createEmptyBorder(4, 0, 0, 0));
+        return subInfoPanel;
+    }
+
+    private void setupProfitAndSubInfoPanel() {
+        profitAndSubInfoPanel = UIUtilities.verticalPanel(RuneAssistColors.CARD);
+        profitAndSubInfoPanel.setBorder(RuneAssistColors.cardBorder());
+
+        JLabel profitKicker = RuneAssistColors.kicker("PROFIT");
+        totalProfitVal.setForeground(ColorScheme.GRAND_EXCHANGE_PRICE);
+        totalProfitVal.setFont(FontManager.getRunescapeBoldFont().deriveFont(22f));
+        totalProfitVal.setHorizontalAlignment(SwingConstants.LEFT);
+
+        profitAndSubInfoPanel.add(profitKicker);
+        UIUtilities.addVerticalGap(profitAndSubInfoPanel, 2);
+        profitAndSubInfoPanel.add(totalProfitVal);
+
+        subInfoPanel = buildSubInfoPanel();
+        profitAndSubInfoPanel.add(subInfoPanel);
+        profitAndSubInfoPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 168));
+    }
+
 
     // called when:
     //
@@ -347,6 +297,10 @@ public class StatsPanelV2 extends JPanel {
     // - plugin config changed (Client thread)
     // - page changed (Swing EDT thread)
     //
+    public void refresh() {
+        refresh(true, lastValidState);
+    }
+
     public void refresh(boolean flipsMaybeChanged, boolean validLoginState) {
         if (!UIUtilities.ensureEdt(() -> refresh(flipsMaybeChanged, validLoginState))) return;
         lastValidState = validLoginState;
@@ -360,7 +314,7 @@ public class StatsPanelV2 extends JPanel {
             portfolioValueVal.setText("0 gp");
             flipsPanel.removeAll();
             paginator.setTotalPages(1);
-            setSessionStatsVisible(IntervalTimeUnit.SESSION.equals(intervalDropdown.getSelectedIntervalTimeUnit()));
+            setSessionStatsVisible(false);
             accountDropdown.setVisible(false);
             return;
         }
@@ -383,6 +337,7 @@ public class StatsPanelV2 extends JPanel {
             flipsMadeVal.setText(String.format("%d", stats.flipsMade));
             totalProfitVal.setText(UIUtilities.formatProfit(stats.profit));
             totalProfitVal.setForeground(UIUtilities.getProfitColor(stats.profit, config));
+            totalProfitVal.setToolTipText("Realized profit from closed sells. Open buys stay at 0 until you sell.");
             log.debug("populating flips took {}ms", (System.nanoTime() - s) / 1000_000);
         }
 
@@ -393,23 +348,21 @@ public class StatsPanelV2 extends JPanel {
         unrealizedProfitVal.setText(UIUtilities.formatProfit(unrealizedProfit));
         unrealizedProfitVal.setForeground(UIUtilities.getProfitColor(unrealizedProfit, config));
 
-        // 'Session time' and 'Hourly profit' should only be set if 'Session' is select in the dropdown
-        if (IntervalTimeUnit.SESSION.equals(intervalDropdown.getSelectedIntervalTimeUnit())) {
-            setSessionStatsVisible(true);
-            long seconds = sd.durationMillis / 1000;
-            float hoursFloat = (((float) seconds) / 3600.0f);
-            long hourlyProfit = hoursFloat == 0 ? 0 : (long) (stats.profit / hoursFloat);
-            String sessionTime = String.format("%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60);
-            sessionTimeVal.setText(sessionTime);
-            hourlyProfitVal.setText(UIUtilities.formatProfitWithoutGp(hourlyProfit) + " gp/hr");
-            hourlyProfitVal.setForeground(UIUtilities.getProfitColor(hourlyProfit, config));
-        } else {
-            setSessionStatsVisible(false);
-        }
+        long seconds = Math.max(0L, sd.durationMillis / 1000);
+        sessionTimeVal.setText(String.format("%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60));
+        float hoursFloat = (((float) seconds) / 3600.0f);
+        long hourlyProfit = hoursFloat == 0 ? 0 : (long) (stats.profit / hoursFloat);
+        hourlyProfitVal.setText(UIUtilities.formatProfitWithoutGp(hourlyProfit) + " gp/hr");
+        hourlyProfitVal.setForeground(UIUtilities.getProfitColor(hourlyProfit, config));
+        setSessionStatsVisible(true);
     }
 
     private void setSessionStatsVisible(boolean visible) {
-        subInfoPanel.getComponent(SESSION_TIME_ROW).setVisible(visible);
-        subInfoPanel.getComponent(HOURLY_PROFIT_ROW).setVisible(visible);
+        if (sessionTimeRow != null) {
+            sessionTimeRow.setVisible(visible);
+        }
+        if (hourlyProfitRow != null) {
+            hourlyProfitRow.setVisible(visible);
+        }
     }
 }

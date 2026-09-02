@@ -2,10 +2,12 @@ package com.runeassist.flip.ui;
 
 import com.runeassist.flip.config.FlippingCopilotConfig;
 import com.runeassist.flip.model.FlipV2;
-import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.ui.FontManager;
 
+import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.SwingConstants;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -13,30 +15,34 @@ import java.awt.event.MouseEvent;
 import static com.runeassist.flip.util.DateUtil.formatEpoch;
 
 public class FlipPanel extends JPanel {
-    private static final Color HOVER_BACKGROUND = ColorScheme.DARKER_GRAY_COLOR.brighter();
+    private static final Color HOVER_BACKGROUND = RuneAssistColors.CARD.brighter();
 
     public FlipPanel(FlipV2 flip, FlippingCopilotConfig config, Runnable onClick) {
         setLayout(new BorderLayout());
-        setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        setBackground(RuneAssistColors.CARD);
+        setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, RuneAssistColors.HAIRLINE),
+                BorderFactory.createEmptyBorder(4, 2, 4, 2)));
 
-        JLabel itemQuantity = new JLabel(String.format("%d x ", flip.getClosedQuantity()));
-        itemQuantity.setForeground(Color.WHITE);
+        JLabel itemNameLabel = new JLabel(UIUtilities.truncateString(flip.getCachedItemName(), 22));
+        itemNameLabel.setForeground(Color.WHITE);
+        itemNameLabel.setFont(FontManager.getRunescapeSmallFont());
 
-        JLabel itemNameLabel = new JLabel(UIUtilities.truncateString(flip.getCachedItemName(), 19));
+        JLabel qtyLabel = new JLabel(flip.getClosedQuantity() + " closed");
+        qtyLabel.setForeground(RuneAssistColors.MUTED);
+        qtyLabel.setFont(FontManager.getRunescapeSmallFont());
 
-        // Create a sub-panel for the left side
-        JPanel leftPanel = new JPanel();
-        leftPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        leftPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        leftPanel.add(itemQuantity);
+        JPanel leftPanel = UIUtilities.verticalPanel(RuneAssistColors.CARD);
         leftPanel.add(itemNameLabel);
+        leftPanel.add(qtyLabel);
 
         JLabel profitLabel = new JLabel(UIUtilities.formatProfitWithoutGp(flip.getProfit()));
         profitLabel.setForeground(UIUtilities.getProfitColor(flip.getProfit(), config));
+        profitLabel.setFont(FontManager.getRunescapeSmallFont());
+        profitLabel.setVerticalAlignment(SwingConstants.TOP);
 
-        // Add the sub-panel to the LINE_START position
-        add(leftPanel, BorderLayout.LINE_START);
-        add(profitLabel, BorderLayout.LINE_END);
+        add(leftPanel, BorderLayout.CENTER);
+        add(profitLabel, BorderLayout.EAST);
         setMaximumSize(new Dimension(Integer.MAX_VALUE, getPreferredSize().height));
 
         String closeLabel = flip.getClosedQuantity() == flip.getOpenedQuantity() ? "Close time" : "Partial close time";
@@ -62,12 +68,12 @@ public class FlipPanel extends JPanel {
                 formatEpoch(flip.getClosedTime()));
         setToolTipText(tooltipText);
         leftPanel.setToolTipText(tooltipText);
-        itemQuantity.setToolTipText(tooltipText);
+        qtyLabel.setToolTipText(tooltipText);
         itemNameLabel.setToolTipText(tooltipText);
         profitLabel.setToolTipText(tooltipText);
 
         if (onClick != null) {
-            Component[] clickableComponents = {this, leftPanel, itemQuantity, itemNameLabel, profitLabel};
+            Component[] clickableComponents = {this, leftPanel, qtyLabel, itemNameLabel, profitLabel};
             MouseAdapter clickListener = new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
@@ -85,8 +91,8 @@ public class FlipPanel extends JPanel {
 
                 @Override
                 public void mouseExited(MouseEvent e) {
-                    setBackground(ColorScheme.DARKER_GRAY_COLOR);
-                    leftPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+                    setBackground(RuneAssistColors.CARD);
+                    leftPanel.setBackground(RuneAssistColors.CARD);
                     for (Component component : clickableComponents) {
                         component.setCursor(Cursor.getDefaultCursor());
                     }

@@ -165,6 +165,17 @@ public class DataManager {
         return b;
     }
 
+    private static final int[] EMPTY_INT = new int[0];
+    private static final long[] EMPTY_LONG = new long[0];
+
+    private static int[] ints(int[] a) {
+        return a == null ? EMPTY_INT : a;
+    }
+
+    private static long[] longs(long[] a) {
+        return a == null ? EMPTY_LONG : a;
+    }
+
     private void addPriceDatapoints(List<Datapoint> target,
                                     int[] latestTimes,
                                     long[] latestPrices,
@@ -173,7 +184,8 @@ public class DataManager {
                                     int[] hourTimes,
                                     long[] hourPrices,
                                     boolean isLow) {
-        for (int i = 0; i < latestTimes.length; i++) {
+        int nLatest = Math.min(latestTimes.length, latestPrices.length);
+        for (int i = 0; i < nLatest; i++) {
             target.add(new Datapoint(latestTimes[i], latestPrices[i], isLow, Datapoint.Type.INSTA_SELL_BUY));
         }
         int fiveMinCut = removeBeforeNextBucket(target, Constants.FIVE_MIN_SECONDS);
@@ -198,7 +210,11 @@ public class DataManager {
                                      int cut,
                                      boolean isLow,
                                      Datapoint.Type type) {
-        for (int i = times.length - 1; i >= 0; i--) {
+        if (times == null || prices == null) {
+            return;
+        }
+        int n = Math.min(times.length, prices.length);
+        for (int i = n - 1; i >= 0; i--) {
             if (times[i] < cut) {
                 target.add(0, new Datapoint(times[i], prices[i], isLow, type));
             }
@@ -218,14 +234,10 @@ public class DataManager {
         // transition into the 5min points that transition into the latest points. So we get increasingly finer granularity.
         // We truncate the points correctly at the boundaries to ensure no overlap.
 
-        if (data.lowLatestTimes == null) {
-            return;
-        }
-
-        addPriceDatapoints(lowDatapoints, data.lowLatestTimes, data.lowLatestPrices,
-                data.low5mTimes, data.low5mPrices, data.low1hTimes, data.low1hPrices, true);
-        addPriceDatapoints(highDatapoints, data.highLatestTimes, data.highLatestPrices,
-                data.high5mTimes, data.high5mPrices, data.high1hTimes, data.high1hPrices, false);
+        addPriceDatapoints(lowDatapoints, ints(data.lowLatestTimes), longs(data.lowLatestPrices),
+                ints(data.low5mTimes), longs(data.low5mPrices), ints(data.low1hTimes), longs(data.low1hPrices), true);
+        addPriceDatapoints(highDatapoints, ints(data.highLatestTimes), longs(data.highLatestPrices),
+                ints(data.high5mTimes), longs(data.high5mPrices), ints(data.high1hTimes), longs(data.high1hPrices), false);
 
 
         if(data.predictionTimes != null) {
@@ -247,19 +259,29 @@ public class DataManager {
             }
         }
 
-        for (int i = data.volume1hLows.length-1; i >= 0; i--) {
-            volumes.add(0, Datapoint.newVolumeDatapoint(data.volume1hTimes[i], data.volume1hLows[i], data.volume1hHighs[i]));
-        }
-        int current1hTime = data.volume1hTimes[data.volume1hTimes.length-1] + Constants.HOUR_SECONDS;
-        int currentHourLowVolume = 0;
-        int currentHoursHighVolume =0;
-        for (int i = data.volume5mLows.length-1; i >= 0; i--) {
-            if (data.volume5mTimes[i] >= current1hTime) {
-                currentHourLowVolume += data.volume5mLows[i];
-                currentHoursHighVolume += data.volume5mHighs[i];
+        int[] volume1hTimes = ints(data.volume1hTimes);
+        int[] volume1hLows = ints(data.volume1hLows);
+        int[] volume1hHighs = ints(data.volume1hHighs);
+        int[] volume5mTimes = ints(data.volume5mTimes);
+        int[] volume5mLows = ints(data.volume5mLows);
+        int[] volume5mHighs = ints(data.volume5mHighs);
+        if (volume1hTimes.length > 0 && volume1hTimes.length == volume1hLows.length
+                && volume1hLows.length == volume1hHighs.length) {
+            for (int i = volume1hLows.length - 1; i >= 0; i--) {
+                volumes.add(0, Datapoint.newVolumeDatapoint(volume1hTimes[i], volume1hLows[i], volume1hHighs[i]));
             }
+            int current1hTime = volume1hTimes[volume1hTimes.length - 1] + Constants.HOUR_SECONDS;
+            int currentHourLowVolume = 0;
+            int currentHoursHighVolume = 0;
+            int n5 = Math.min(volume5mTimes.length, Math.min(volume5mLows.length, volume5mHighs.length));
+            for (int i = n5 - 1; i >= 0; i--) {
+                if (volume5mTimes[i] >= current1hTime) {
+                    currentHourLowVolume += volume5mLows[i];
+                    currentHoursHighVolume += volume5mHighs[i];
+                }
+            }
+            volumes.add(Datapoint.newVolumeDatapoint(current1hTime, currentHourLowVolume, currentHoursHighVolume));
         }
-        volumes.add(Datapoint.newVolumeDatapoint(current1hTime, currentHourLowVolume, currentHoursHighVolume));
 
         minEntryTime = Integer.MAX_VALUE;
         maxCloseTime = 0;

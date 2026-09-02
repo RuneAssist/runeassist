@@ -1,6 +1,7 @@
 package com.runeassist.flip.ui.components;
 
 import com.runeassist.flip.model.ItemIdName;
+import com.runeassist.flip.ui.RuneAssistColors;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
 
@@ -59,7 +60,7 @@ public class ItemSearchBox extends JComboBox<ItemIdName> {
                     JLabel label = (JLabel) c;
                     ItemIdName item = (ItemIdName) value;
                     label.setText(item.name);
-                    label.setBackground(isSelected ? ColorScheme.BRAND_ORANGE : ColorScheme.DARK_GRAY_COLOR);
+                    label.setBackground(isSelected ? RuneAssistColors.ACCENT_MUTED : ColorScheme.DARK_GRAY_COLOR);
                     label.setForeground(isSelected ? Color.WHITE : ColorScheme.LIGHT_GRAY_COLOR);
                     label.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
                 }

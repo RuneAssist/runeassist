@@ -85,11 +85,26 @@ public class LoginPanel extends JPanel {
 
     public JPanel buildLogo() {
         JPanel container = new JPanel();
-        ImageIcon icon = new ImageIcon(ImageUtil.loadImageResource(getClass(), "/logo.png"));
+        container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
+        ImageIcon icon = new ImageIcon(ImageUtil.loadImageResource(getClass(), "/runeassist-flip.png"));
         Image resizedLogo = icon.getImage().getScaledInstance(50, 45, Image.SCALE_SMOOTH);
         JLabel logoLabel = new JLabel(new ImageIcon(resizedLogo));
+        logoLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         logoLabel.setSize(50, 45);
-        container.add(logoLabel, BorderLayout.CENTER);
+        JLabel title = new JLabel("RuneAssist Flipping");
+        title.setForeground(RuneAssistColors.ACCENT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 14f));
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel attribution = new JLabel("BSD-2");
+        attribution.setForeground(ColorScheme.MEDIUM_GRAY_COLOR);
+        attribution.setFont(attribution.getFont().deriveFont(10f));
+        attribution.setToolTipText("Based on Flipping Copilot (BSD-2)");
+        attribution.setAlignmentX(Component.CENTER_ALIGNMENT);
+        container.add(logoLabel);
+        container.add(Box.createVerticalStrut(6));
+        container.add(title);
+        container.add(Box.createVerticalStrut(2));
+        container.add(attribution);
         container.setBorder(new EmptyBorder(10, 0, 10, 0));
         container.setAlignmentX(Component.LEFT_ALIGNMENT);
         return container;
@@ -149,7 +164,7 @@ public class LoginPanel extends JPanel {
         signUpButton.setPreferredSize(new Dimension((PAGE_WIDTH - 8) / 2, 36));
         signUpButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         signUpButton.addActionListener((ActionEvent a) -> {
-            LinkBrowser.browse("https://flippingcopilot.com/signup");
+            LinkBrowser.browse("https://github.com/nickbeddows-ctrl/osrs-mcp-plugin");
         });
         loginButton.setPreferredSize(new Dimension((PAGE_WIDTH - 8) / 2, 36));
         loginButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));

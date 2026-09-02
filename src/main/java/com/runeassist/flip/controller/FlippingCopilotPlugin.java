@@ -20,6 +20,7 @@ import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ClientShutdown;
 import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.events.PluginChanged;
 import net.runelite.client.plugins.*;
 import net.runelite.client.plugins.banktags.BankTagsPlugin;
 import net.runelite.client.ui.ClientToolbar;
@@ -38,8 +39,8 @@ import java.util.concurrent.*;
 // or FC servers. Kept as its own RuneLite plugin so FC's Guice @Provides + wiring stay intact.
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
-		description = "Grand Exchange flip assistant (RuneAssist)",
-		tags = {"runeassist", "flipping", "ge", "grand exchange", "money"}
+		description = "Grand Exchange flip assistant. Based on Flipping Copilot (BSD-2). Contribute is under Configuration → Privacy (on by default).",
+		tags = {"runeassist", "flipping", "ge", "grand exchange", "money", "privacy", "contribute"}
 )
 // RuneAssist fork: dropped @PluginDependency(BankTagsPlugin.class) -- a sideloaded plugin
 // depending on a core plugin makes RuneLite silently refuse to load it.
@@ -132,6 +133,10 @@ public class FlippingCopilotPlugin extends Plugin {
 	private PlayerLocationController playerLocationController;
 	@Inject
 	private com.runeassist.flip.HeldCostTracker heldCostTracker;
+	@Inject
+	private com.osrsmcp.TelemetryService telemetry;
+	@Inject
+	private com.osrsmcp.GeHistoryDump geHistoryDump;
 
 	// We use our own ThreadPool since the default ScheduledExecutorService only has a single thread and we don't want to block it
 	@Provides
@@ -184,19 +189,21 @@ public class FlippingCopilotPlugin extends Plugin {
 		SwingUtilities.invokeLater(() -> patchNotesController.maybeShowOnStartup(mainPanel, hadExistingInstallation));
 
 		if(osrsLoginManager.getInvalidStateDisplayMessage() == null) {
-			flipManager.setIntervalAccount(null);
-			flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
+			bindOsrsSession(osrsLoginManager.getPlayerDisplayName());
 		}
 		flipsDialogController.initDialog(SwingUtilities.getWindowAncestor(mainPanel));
+		telemetry.onUploadSettingsChanged();
 		executorService.scheduleAtFixedRate(() ->
 			clientThread.invoke(() -> {
 				boolean loginValid = osrsLoginManager.isValidLoginState();
 				if (loginValid) {
+					sessionManager.startOrResume();
 					AccountStatus accStatus = accountStatusManager.getAccountStatus();
 					boolean isFlipping = accStatus != null && accStatus.currentlyFlipping();
 					long cashStack = accStatus == null ? 0 : accStatus.currentCashStack();
-					if(sessionManager.updateSessionStats(isFlipping, cashStack)) {
-						mainPanel.copilotPanel.statsPanel.refresh(false, osrsLoginManager.isValidLoginState());
+					sessionManager.updateSessionStats(isFlipping, cashStack);
+					if (statsPanel != null) {
+						statsPanel.refresh(false, true);
 					}
 				}
 			})
@@ -221,6 +228,7 @@ public class FlippingCopilotPlugin extends Plugin {
 			}
 		}
 		keybindHandler.unregister();
+		telemetry.shutdown();
 	}
 
 	@Provides
@@ -236,6 +244,10 @@ public class FlippingCopilotPlugin extends Plugin {
 		net.runelite.api.GrandExchangeOffer o = event.getOffer();
 		if (o != null) {
 			heldCostTracker.onOffer(event.getSlot(), o.getState(), o.getItemId(),
+				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
+			net.runelite.api.Player p = client.getLocalPlayer();
+			String rsn = p != null ? p.getName() : "anon";
+			telemetry.logGeOffer(rsn, event.getSlot(), o.getState().name(), o.getItemId(),
 				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
 		}
 		clientThread.invokeLater(() -> highlightController.redraw());
@@ -265,10 +277,36 @@ public class FlippingCopilotPlugin extends Plugin {
 		return bank != null && !bank.isHidden();
 	}
 
+	/** Wire session clock + local flip stats to the logged-in OSRS account (not FC email). */
+	private void bindOsrsSession(String name) {
+		if (name == null || name.isEmpty()) {
+			flipManager.setIntervalAccount(null);
+			return;
+		}
+		sessionManager.startOrResume();
+		transactionManager.hydrateLocal(name);
+		transactionManager.seedLiveOffers(name, client.getGrandExchangeOffers());
+		int accountId = LocalFlipLedger.accountIdFor(name);
+		copilotLoginRS.addAccountIfMissing(accountId, name, LocalFlipLedger.LOCAL_USER_ID);
+		flipManager.setCopilotUserId(LocalFlipLedger.LOCAL_USER_ID);
+		flipManager.setIntervalAccount(accountId);
+		if (statsPanel != null) {
+			statsPanel.resetIntervalDropdownToSession();
+		}
+		flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
+		if (statsPanel != null) {
+			statsPanel.refresh(true, osrsLoginManager.isValidLoginState());
+		}
+		if (mainPanel != null) {
+			mainPanel.refresh();
+		}
+	}
+
 	@Subscribe
 	public void onGameTick(GameTick event) {
 		bankStateRS.onGameTick();
 		geHistoryStateRS.onGameTick(client);
+		geHistoryDump.onGameTick();
 		grandExchangeOpenRS.set(grandExchange.isOpen());
 
 		suggestionController.onGameTick();
@@ -305,6 +343,9 @@ public class FlippingCopilotPlugin extends Plugin {
 	@Subscribe
 	public void onWidgetLoaded(WidgetLoaded event) {
 		gameUiChangesHandler.onWidgetLoaded(event);
+		if (event.getGroupId() == GeHistoryStateRS.GE_HISTORY_GROUP) {
+			geHistoryDump.onHistoryWidgetLoaded();
+		}
 	}
 
 	@Subscribe
@@ -343,6 +384,7 @@ public class FlippingCopilotPlugin extends Plugin {
 				osrsLoginRS.set(osrsLoginRS.get().nextState(client));
 				break;
 			case LOGGED_IN:
+				geHistoryDump.onLogin();
 				// we want to update the flips panel on login but unfortunately the display name
 				// is not available immediately so schedule what we need to do here for in the future
 				// todo: move to just using the accountHash which is available immediately to simply things
@@ -354,16 +396,7 @@ public class FlippingCopilotPlugin extends Plugin {
 					if(name == null) {
 						return false;
 					}
-					statsPanel.resetIntervalDropdownToSession();
-					Integer accountId = copilotLoginRS.get().getAccountId(name);
-					if (accountId != null && accountId != -1) {
-						flipManager.setIntervalAccount(accountId);
-					} else {
-						flipManager.setIntervalAccount(null);
-					}
-					flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
-					statsPanel.refresh(true, osrsLoginManager.isValidLoginState());
-					mainPanel.refresh();
+					bindOsrsSession(name);
 					if(copilotLoginRS.get().isLoggedIn()) {
 						transactionManager.scheduleSyncIn(0, name);
 					}
@@ -391,6 +424,16 @@ public class FlippingCopilotPlugin extends Plugin {
 	}
 
 	@Subscribe
+	public void onPluginChanged(PluginChanged event) {
+		if (com.runeassist.flip.HubFlippingCopilot.isHubPlugin(event.getPlugin())) {
+			suggestionManager.setSuggestionNeeded(true);
+			if (mainPanel != null && mainPanel.copilotPanel != null) {
+				clientThread.invokeLater(() -> suggestionController.getSuggestionAsync());
+			}
+		}
+	}
+
+	@Subscribe
 	public void onConfigChanged(ConfigChanged event) {
 		if (event.getGroup().equals("runeassistflip")) {
 			log.debug("copilot config changed event received");
@@ -409,6 +452,11 @@ public class FlippingCopilotPlugin extends Plugin {
 					slotProfitColorizer.updateAllSlots();
 					highlightController.redraw();
 				});
+			}
+			if ("shareTelemetry".equals(event.getKey())
+					|| "telemetryEndpoint".equals(event.getKey())
+					|| "telemetryToken".equals(event.getKey())) {
+				telemetry.onUploadSettingsChanged();
 			}
 			// RuneAssist fork: BankTags portfolio-tag feature disabled.
 			// if (event.getKey().equals("portfolioBankTag")) {

@@ -17,6 +17,7 @@ import java.util.function.Supplier;
 public class UIUtilities {
     public static final String redditIcon = "/reddit-icon.png";
     public static final String discordIcon = "/discord.png";
+    public static final String githubIcon = "/github.png";
     public static final String logoutIcon = "/logout.png";
     public static final String internetIcon = "/internet.png";
 

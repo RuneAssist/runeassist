@@ -8,4 +8,8 @@ public class GeHistoryRow {
     int quantity;
     long price;
     boolean buy;
+    /** Item name from the history widget, if present. */
+    String name;
+    /** Fill time in epoch millis when the widget exposes one; otherwise null. */
+    Long fillTs;
 }

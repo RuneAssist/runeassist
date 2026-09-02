@@ -31,10 +31,22 @@ public class AccountStatusManager {
     private final HeldItemSyncStateRS heldItemSyncStateRS;
     private final ItemController itemController;
     private final SuggestionManager suggestionManager;
+    private final com.osrsmcp.TelemetryService telemetry;
+
+    /** Skip lasts 45 minutes so an abort/skip does not loop the same item, then it can surface again. */
+    private static final long SKIP_TTL_MS = 45L * 60L * 1000L;
+    /** After we suggest BUY/SELL, do not ABORT that item for this long (list-then-abort). */
+    private static final long PROTECT_ABORT_TTL_MS = 10L * 60L * 1000L;
 
     // state
     @Setter
     private int skipSuggestion = -1;
+    /** itemId -> expire-at epoch millis. Same skip set as the Skip button. */
+    private final Map<Integer, Long> skippedItemUntil = new HashMap<>();
+    /** User Skip only: do not ABORT/MODIFY this item (leave the live offer). */
+    private final Map<Integer, Long> skipOfferUntil = new HashMap<>();
+    /** itemId -> expire-at: listings we suggested, protected from immediate ABORT. */
+    private final Map<Integer, Long> protectAbortUntil = new HashMap<>();
 
     public synchronized AccountStatus getAccountStatus() {
         Long accountHash =  osrsLoginManager.getAccountHash();
@@ -142,21 +154,98 @@ public class AccountStatusManager {
         skipSuggestion = -1;
     }
 
+    /**
+     * Skip button: record the current suggestion's item and request a new pick.
+     * Must not touch {@link Client} — the button runs on the Swing EDT, and Client
+     * access from the wrong thread is swallowed by {@code buildButton}.
+     */
     public synchronized boolean skipCurrentSuggestion() {
         Suggestion suggestion = suggestionManager.getSuggestion();
         if (suggestion == null) {
             return false;
         }
 
-        suggestion.actionedTick = client.getTickCount();
-        skipSuggestion = suggestion.getId();
-        log.info("skipping suggestion {}", skipSuggestion);
+        // 0 is always in the past vs the live tick, so a GE slot being open does not
+        // block the follow-up fetch for a full tick.
+        suggestion.actionedTick = 0;
+        int itemId = suggestion.getItemId();
+        if (itemId <= 0) {
+            itemId = suggestion.getId();
+        }
+        skipItem(itemId);
+        skipOffer(itemId);
+        skipSuggestion = itemId;
+        if (itemId <= 0) {
+            log.warn("Skip clicked but suggestion has no item id (type={})", suggestion.getType());
+        } else {
+            log.info("skipping suggestion item {}", itemId);
+        }
+        telemetry.logSuggestionDecision(null, suggestion, "skip", suggestion.getPickSource());
         suggestionManager.setSuggestionRefreshPending(true);
         suggestionManager.setSuggestionNeeded(true);
         return true;
     }
 
-    public void reset() {
+    /**
+     * Session-skip an item so BUY/SELL will not re-pick it until the TTL expires.
+     * Used by the Skip button and when we suggest ABORT, so aborting a dead offer
+     * does not immediately list the same item again.
+     */
+    public synchronized void skipItem(int itemId) {
+        if (itemId <= 0) {
+            return;
+        }
+        skippedItemUntil.put(itemId, System.currentTimeMillis() + SKIP_TTL_MS);
+    }
+
+    /**
+     * User Skip (not auto-abort): do not ABORT/MODIFY this item either — leave the
+     * offer and suggest something else.
+     */
+    public synchronized void skipOffer(int itemId) {
+        if (itemId <= 0) {
+            return;
+        }
+        skipOfferUntil.put(itemId, System.currentTimeMillis() + SKIP_TTL_MS);
+    }
+
+    /**
+     * We suggested BUY/SELL for this item — do not ABORT it on the next tick for
+     * dead-margin. MODIFY is still allowed.
+     */
+    public synchronized void protectListing(int itemId) {
+        if (itemId <= 0) {
+            return;
+        }
+        protectAbortUntil.put(itemId, System.currentTimeMillis() + PROTECT_ABORT_TTL_MS);
+    }
+
+    public synchronized Set<Integer> getSkippedItemIds() {
+        pruneExpiredSkips();
+        return new HashSet<>(skippedItemUntil.keySet());
+    }
+
+    public synchronized Set<Integer> getSkipOfferItemIds() {
+        pruneExpiredSkips();
+        return new HashSet<>(skipOfferUntil.keySet());
+    }
+
+    public synchronized Set<Integer> getProtectAbortItemIds() {
+        pruneExpiredSkips();
+        return new HashSet<>(protectAbortUntil.keySet());
+    }
+
+    private void pruneExpiredSkips() {
+        long now = System.currentTimeMillis();
+        skippedItemUntil.entrySet().removeIf(e -> e.getValue() <= now);
+        skipOfferUntil.entrySet().removeIf(e -> e.getValue() <= now);
+        protectAbortUntil.entrySet().removeIf(e -> e.getValue() <= now);
+    }
+
+    public synchronized void reset() {
         skipSuggestion = -1;
+        skippedItemUntil.clear();
+        skipOfferUntil.clear();
+        protectAbortUntil.clear();
     }
 }

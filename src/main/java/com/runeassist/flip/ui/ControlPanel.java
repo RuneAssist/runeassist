@@ -43,8 +43,8 @@ public class ControlPanel extends JPanel
     private boolean suppressTimeframeSliderEvents;
     private boolean customExplicitlySelected;
 
-    private static final Color RISK_LOW_SELECTED_COLOR = ColorScheme.GRAND_EXCHANGE_PRICE;
-    private static final Color RISK_HIGH_SELECTED_COLOR = Color.red;
+    private static final Color RISK_LOW_SELECTED_COLOR = RuneAssistColors.RISK_LOW;
+    private static final Color RISK_HIGH_SELECTED_COLOR = RuneAssistColors.RISK_HIGH;
     private static final String RISK_LOW_LABEL = "Low";
     private static final String RISK_MEDIUM_LABEL = "Med";
     private static final String RISK_HIGH_LABEL = "High";
@@ -73,25 +73,27 @@ public class ControlPanel extends JPanel
         this.preferencesManager = preferencesManager;
 
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-        setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
+        setBackground(RuneAssistColors.CARD);
+        setBorder(RuneAssistColors.cardBorder());
 
         // --- Timeframe buttons ---
         timeframePanel = new JPanel();
         timeframePanel.setLayout(new BoxLayout(timeframePanel, BoxLayout.Y_AXIS));
         timeframePanel.setOpaque(false);
 
-        JLabel timeframeLabel = new JLabel("How often do you adjust offers?");
+        JLabel timeframeLabel = RuneAssistColors.kicker("VOLUME WINDOW");
         timeframeLabel.setHorizontalAlignment(SwingConstants.LEFT);
-        timeframeLabel.setMaximumSize(timeframeLabel.getPreferredSize());
+        timeframeLabel.setToolTipText("Sizes how much 5m/1h volume each offer covers. This is not a reprice timer.");
+        timeframeLabel.setAlignmentX(LEFT_ALIGNMENT);
 
         JPanel labelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         labelPanel.setOpaque(false);
         labelPanel.add(timeframeLabel);
 
         JPanel buttonPanel = new JPanel();
-        buttonPanel.setLayout(new GridLayout(1, 5, 0, 0));
+        buttonPanel.setLayout(new GridLayout(1, 5, 4, 0));
         buttonPanel.setOpaque(false);
+        buttonPanel.setToolTipText("Sizes how much 5m/1h volume each offer covers. This is not a reprice timer.");
 
         ButtonGroup timeframeButtonGroup = new ButtonGroup();
 
@@ -99,7 +101,7 @@ public class ControlPanel extends JPanel
         btn30m    = createPresetButton("30m",  PRESET_30M);
         btn2h     = createPresetButton("2h",   PRESET_2H);
         btn8h     = createPresetButton("8h",   PRESET_8H);
-        btnCustom = createCustomButton("...");
+        btnCustom = createCustomButton("Custom");
 
         timeframeButtonGroup.add(btn5m);
         timeframeButtonGroup.add(btn30m);
@@ -160,7 +162,7 @@ public class ControlPanel extends JPanel
         valueEditor.setMaximumSize(fixed);
         valueEditor.setBackground(ColorScheme.DARK_GRAY_COLOR);
         valueEditor.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        valueEditor.setCaretColor(ColorScheme.BRAND_ORANGE);
+        valueEditor.setCaretColor(RuneAssistColors.ACCENT);
         valueEditor.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(ColorScheme.DARKER_GRAY_COLOR),
                 BorderFactory.createEmptyBorder(0, 4, 0, 4)));
@@ -234,13 +236,19 @@ public class ControlPanel extends JPanel
         timeframePanel.add(customPanel);
 
         UIUtilities.addVerticalGap(timeframePanel, 10);
+        JSeparator riskRule = new JSeparator();
+        riskRule.setForeground(RuneAssistColors.HAIRLINE);
+        riskRule.setBackground(RuneAssistColors.HAIRLINE);
+        riskRule.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
+        timeframePanel.add(riskRule);
+        UIUtilities.addVerticalGap(timeframePanel, 8);
 
-        JLabel riskLabel = new JLabel("Risk level: ");
+        JLabel riskLabel = RuneAssistColors.kicker("RISK");
         riskLabel.setHorizontalAlignment(SwingConstants.LEFT);
-        riskLabel.setMaximumSize(riskLabel.getPreferredSize());
+        riskLabel.setAlignmentX(LEFT_ALIGNMENT);
 
         JPanel riskButtonPanel = new JPanel();
-        riskButtonPanel.setLayout(new GridLayout(1, 3, 0, 0));
+        riskButtonPanel.setLayout(new GridLayout(1, 3, 6, 0));
         riskButtonPanel.setOpaque(false);
 
         ButtonGroup riskButtonGroup = new ButtonGroup();
@@ -263,15 +271,13 @@ public class ControlPanel extends JPanel
         riskButtonPanel.add(btnRiskMedium);
         riskButtonPanel.add(btnRiskHigh);
 
-        JPanel riskRow = new JPanel();
-        riskRow.setLayout(new BoxLayout(riskRow, BoxLayout.X_AXIS));
-        riskRow.setOpaque(false);
-        riskRow.add(riskLabel);
-        UIUtilities.addHorizontalGap(riskRow, 10);
-        riskRow.add(riskButtonPanel);
-        riskRow.add(Box.createHorizontalGlue());
+        JPanel riskHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        riskHeader.setOpaque(false);
+        riskHeader.add(riskLabel);
 
-        timeframePanel.add(riskRow);
+        timeframePanel.add(riskHeader);
+        UIUtilities.addVerticalGap(timeframePanel, 4);
+        timeframePanel.add(riskButtonPanel);
 
         updateRiskButtons(initialRiskLevel);
         add(timeframePanel);
@@ -524,36 +530,23 @@ public class ControlPanel extends JPanel
 
     private void applyRiskButtonStyle(JToggleButton button, String label, RiskLevel level, boolean selected)
     {
-        Color background;
-        Color textColor;
-
-        if (selected)
+        Color accent;
+        switch (level)
         {
-            switch (level)
-            {
-                case LOW:
-                    background = RISK_LOW_SELECTED_COLOR;
-                    textColor = Color.BLACK;
-                    break;
-                case HIGH:
-                    background = RISK_HIGH_SELECTED_COLOR;
-                    textColor = Color.WHITE;
-                    break;
-                case MEDIUM:
-                default:
-                    background = ColorScheme.BRAND_ORANGE;
-                    textColor = Color.BLACK;
-                    break;
-            }
+            case LOW:
+                accent = RISK_LOW_SELECTED_COLOR;
+                break;
+            case HIGH:
+                accent = RISK_HIGH_SELECTED_COLOR;
+                break;
+            case MEDIUM:
+            default:
+                accent = RuneAssistColors.ACCENT;
+                break;
         }
-        else
-        {
-            background = ColorScheme.DARKER_GRAY_COLOR;
-            textColor = ColorScheme.TEXT_COLOR;
-        }
-
-        button.setBackground(background);
-        button.setText(String.format("<html><font color='%s'>%s</font></html>", UIUtilities.colorHex(textColor), label));
+        RuneAssistColors.styleChip(button, selected, accent);
+        button.setText(label);
+        button.setForeground(selected ? accent : RuneAssistColors.MUTED);
     }
 
     // ---------- UI wiring ----------
@@ -648,19 +641,22 @@ public class ControlPanel extends JPanel
     private JToggleButton createToggleButton()
     {
         JToggleButton button = new JToggleButton();
-        button.setMargin(new Insets(2, 4, 2, 4));
+        button.setMargin(new Insets(3, 4, 3, 4));
         button.setFocusPainted(false);
         button.setOpaque(true);
-        button.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        button.setForeground(ColorScheme.TEXT_COLOR);
+        button.setBorderPainted(true);
+        button.setContentAreaFilled(true);
+        button.setUI(new javax.swing.plaf.basic.BasicToggleButtonUI());
+        RuneAssistColors.styleChip(button, false, RuneAssistColors.ACCENT);
         return button;
     }
 
     private void applyTimeframeButtonStyle(JToggleButton button, String label)
     {
         boolean selected = button.isSelected();
-        button.setBackground(selected ? ColorScheme.BRAND_ORANGE : ColorScheme.DARKER_GRAY_COLOR);
-        button.setText(String.format("<html><font color='%s'>%s</font></html>", selected ? "black" : "rgb(198, 198, 198)", label));
+        RuneAssistColors.styleChip(button, selected, RuneAssistColors.ACCENT);
+        button.setText(label);
+        button.setForeground(selected ? RuneAssistColors.ACCENT : RuneAssistColors.MUTED);
     }
 
     private JToggleButton createRiskButton(String label, RiskLevel level)

@@ -85,13 +85,18 @@ public class CopilotLoginRS extends ReactiveStateImpl<CopilotLoginState> {
 
     public void addAccountIfMissing(Integer accountId, String displayName, int copilotUserId) {
         update((s) -> {
-            if (!s.accountIdToDisplayName.containsKey(accountId) && s.getUserId() == copilotUserId) {
-                CopilotLoginState updated = s.copy();
-                updated.displayNameToAccountId.put(displayName, accountId);
-                updated.accountIdToDisplayName.put(accountId, displayName);
-                return updated;
+            if (accountId == null || displayName == null || s.accountIdToDisplayName.containsKey(accountId)) {
+                return s;
             }
-            return s;
+            // RuneAssist fork: local GE fills register an account without an FC login.
+            if (s.isLoggedIn() && s.getUserId() != copilotUserId
+                    && copilotUserId != 0) {
+                return s;
+            }
+            CopilotLoginState updated = s.copy();
+            updated.displayNameToAccountId.put(displayName, accountId);
+            updated.accountIdToDisplayName.put(accountId, displayName);
+            return updated;
         });
     }
 }

@@ -10,8 +10,9 @@ collected data directly.
 
 ## What it stores (and doesn't)
 
-- **Stores:** `ge_offer`, `account_snapshot`, `xp_gain` records — each with a **hashed** RSN
-  (`acct`), never a real username.
+- **Stores:** `ge_offer`, `ge_history`, `account_snapshot`, `xp_gain` records — each with a **hashed** RSN
+  (`acct`), never a real username. `ge_history` is the GE-history-UI backfill (completed
+  offers; `source=ge_history`); `ge_offer` is live slot telemetry.
 - **Never stores:** the `advice` record. The plugin does not upload it, so players' raw chat
   questions never reach the server.
 

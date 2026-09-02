@@ -5,6 +5,7 @@ import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.*;
+import com.runeassist.flip.ui.RuneAssistColors;
 import com.runeassist.flip.ui.UIUtilities;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
@@ -123,7 +124,7 @@ public class PortfolioPanel extends JPanel {
         JPanel bottomRightWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         bottomRightWrap.setOpaque(false);
         autoSyncInfoLabel = new JLabel();
-        autoSyncInfoLabel.setForeground(ColorScheme.BRAND_ORANGE);
+        autoSyncInfoLabel.setForeground(RuneAssistColors.ACCENT);
         autoSyncInfoLabel.setFont(FontManager.getRunescapeFont());
         autoSyncInfoLabel.setHorizontalAlignment(SwingConstants.LEFT);
         bottomRightWrap.add(autoSyncInfoLabel);

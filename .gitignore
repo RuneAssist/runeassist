@@ -24,3 +24,6 @@ gradle-app.setting
 # WOM/ML crawled data outputs (do not commit bulk data)
 research/*.jsonl
 .claude/worktrees/
+
+# Offline fill-time ML caches (wiki-archive copies, ingest dumps). Do not commit.
+tools/.cache/

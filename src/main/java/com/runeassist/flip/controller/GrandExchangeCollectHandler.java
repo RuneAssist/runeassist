@@ -24,6 +24,7 @@ public class GrandExchangeCollectHandler {
     private final SuggestionManager suggestionManager;
     private final Client client;
     private final HeldItemSyncStateRS heldItemSyncStateRS;
+    private final com.osrsmcp.TelemetryService telemetry;
 
     @Setter
     private SuggestionPanel suggestionPanel;
@@ -31,6 +32,14 @@ public class GrandExchangeCollectHandler {
     public void handleCollect(MenuOptionClicked event, int slot) {
         String menuOption = event.getMenuOption();
         Widget widget = event.getWidget();
+        if (menuOption != null && menuOption.contains("Collect")) {
+            Suggestion suggestion = suggestionManager.getSuggestion();
+            if (suggestion != null && suggestion.isAbortSuggestion() && suggestion.actionedTick == -1) {
+                suggestion.actionedTick = client.getTickCount();
+                telemetry.logSuggestionDecision(osrsLoginManager.getLastDisplayName(), suggestion,
+                    "acted", suggestion.getPickSource());
+            }
+        }
         if (widget != null) {
             handleCollectAll(menuOption, widget);
             handleCollectWithSlotOpen(menuOption, widget, slot);

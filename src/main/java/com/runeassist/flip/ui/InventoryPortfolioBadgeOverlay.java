@@ -26,7 +26,7 @@ public class InventoryPortfolioBadgeOverlay extends WidgetItemOverlay {
     private static final int BADGE_SIZE = 12;
     private static final int BADGE_MARGIN = 1;
     private static final BufferedImage BADGE_ICON = ImageUtil.resizeImage(
-            ImageUtil.loadImageResource(InventoryPortfolioBadgeOverlay.class, "/icon-small.png"), BADGE_SIZE, BADGE_SIZE);
+            ImageUtil.loadImageResource(InventoryPortfolioBadgeOverlay.class, "/runeassist-flip.png"), BADGE_SIZE, BADGE_SIZE);
 
     private final FlippingCopilotConfig config;
     private final ItemController itemController;
