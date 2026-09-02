@@ -49,6 +49,13 @@ public class FlipScorer
     private static final String MAP    = "https://prices.runescape.wiki/api/v1/osrs/mapping";
     private static final long PRICE_TTL = 60_000;
     private static final long STALE_TRADE_SEC = 90 * 60; // last-trade older than this is ignored
+    // Sensibility floor applied regardless of what the caller passes, so a forgotten/zero
+    // minPredictedProfit never lets trivial-value "odd" flips (e.g. 25 units * 111gp) through.
+    private static final long MIN_PROJECTED_PROFIT = 3_000L;
+    // Only offer a FRACTION of the estimated tradeable liquidity in the timeframe, not all of
+    // it -- suggesting 100% of the visible order-book volume reads as "always max" and leaves
+    // no room for other buyers/sellers.
+    private static final double LIQUIDITY_FRACTION = 0.5;
 
     private static final double TAX_RATE = 0.02;
     private static final long   TAX_CAP  = 5_000_000L;
@@ -204,7 +211,8 @@ public class FlipScorer
             if (budget > 0) qtyCap = Math.min(qtyCap, budget / buy);
             if (qtyCap < 1) continue;
             long projected = margin * qtyCap;
-            if (minPredictedProfit > 0 && projected < minPredictedProfit) continue;
+            long effectiveMinProfit = Math.max(minPredictedProfit, MIN_PROJECTED_PROFIT);
+            if (projected < effectiveMinProfit) continue;
             double fillHrs = (double) qtyCap / perHour;
 
             double spreadRisk = marginPct > 15 ? 0.35 : 0;
@@ -492,7 +500,11 @@ public class FlipScorer
         return new long[]{ low, high };
     }
 
-    /** Units expected to fill within the user's timeframe, from the bottleneck side's volume. */
+    /**
+     * Units expected to fill within the user's timeframe, from the bottleneck side's volume,
+     * scaled down to {@link #LIQUIDITY_FRACTION} of that estimate so a suggestion never asks
+     * the player to absorb the entire visible market in one go.
+     */
     private static int liquidityQty(int timeframeMinutes, int perHour, int[] v5)
     {
         double perMinute = perHour / 60.0;
@@ -501,7 +513,7 @@ public class FlipScorer
             int side5 = Math.max(0, Math.min(v5[0], v5[1]));
             if (side5 > 0) perMinute = side5 / 5.0;
         }
-        return Math.max(1, (int) Math.floor(perMinute * timeframeMinutes));
+        return Math.max(1, (int) Math.floor(perMinute * timeframeMinutes * LIQUIDITY_FRACTION));
     }
 
     private static boolean isOddName(String name)
@@ -537,15 +549,19 @@ public class FlipScorer
 
         static RiskProfile of(RiskLevel level)
         {
+            // Raised from 2000/400/30 -- odd, near-worthless niche items (seeds, unf potions,
+            // low-tier food) were clearing the old floors with only a few thousand gp of
+            // total profit on offer.
             if (level == RiskLevel.LOW)
             {
-                return new RiskProfile(2000, 400, 30, 8, 0.45);
+                return new RiskProfile(3000, 500, 40, 8, 0.45);
             }
             if (level == RiskLevel.HIGH)
             {
                 return new RiskProfile(400, 50, 15, 20, 0.75);
             }
-            return new RiskProfile(800, 150, 20, 12, 0.55);
+            // Raised from 800/150/20 for the same reason -- this is the default tier.
+            return new RiskProfile(1500, 250, 30, 12, 0.55);
         }
     }
 

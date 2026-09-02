@@ -17,11 +17,20 @@ const TAX_EXEMPT = new Set([
   8794, 5329, 5343, 1735, 315, 952, 886, 808, 8013, 361, 8007, 5331,
 ]);
 
+// Mirrors FlipScorer.java's RiskProfile.of exactly -- keep in sync.
+// low/medium raised from 2000/400/30 and 800/150/20: odd, near-worthless niche items (seeds,
+// unf potions, low-tier food) were clearing the old floors with only a few thousand gp total
+// profit on offer.
 const RISK = {
-  low:    { minVolume: 2000, minSideVolume: 400, minMargin: 30, maxMarginPct: 8,  maxImbalance: 0.45 },
-  medium: { minVolume: 800,  minSideVolume: 150, minMargin: 20, maxMarginPct: 12, maxImbalance: 0.55 },
+  low:    { minVolume: 3000, minSideVolume: 500, minMargin: 40, maxMarginPct: 8,  maxImbalance: 0.45 },
+  medium: { minVolume: 1500, minSideVolume: 250, minMargin: 30, maxMarginPct: 12, maxImbalance: 0.55 },
   high:   { minVolume: 400,  minSideVolume: 50,  minMargin: 15, maxMarginPct: 20, maxImbalance: 0.75 },
 };
+
+// Sensibility floor applied regardless of what the caller passes (mirrors Java MIN_PROJECTED_PROFIT).
+const MIN_PROJECTED_PROFIT = 3000;
+// Only offer a fraction of estimated tradeable liquidity, not all of it (mirrors Java LIQUIDITY_FRACTION).
+const LIQUIDITY_FRACTION = 0.5;
 
 let meta = new Map();       // id -> { name, limit, members }
 let mappingAt = 0;
@@ -146,7 +155,7 @@ function liquidityQty(timeframeMinutes, perHour, v5) {
     const side5 = Math.max(0, Math.min(v5.highVol, v5.lowVol));
     if (side5 > 0) perMinute = side5 / 5;
   }
-  return Math.max(1, Math.floor(perMinute * timeframeMinutes));
+  return Math.max(1, Math.floor(perMinute * timeframeMinutes * LIQUIDITY_FRACTION));
 }
 
 function asIntMap(obj) {
@@ -260,7 +269,8 @@ function scoreUniverse(c) {
     if (qtyCap < 1) continue;
 
     const projected = margin * qtyCap;
-    if (c.minPredictedProfit > 0 && projected < c.minPredictedProfit) continue;
+    const effectiveMinProfit = Math.max(c.minPredictedProfit, MIN_PROJECTED_PROFIT);
+    if (projected < effectiveMinProfit) continue;
 
     const fillHrs = qtyCap / perHour;
     const spreadRisk = marginPct > 15 ? 0.35 : 0;
