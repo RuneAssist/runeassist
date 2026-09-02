@@ -546,7 +546,7 @@ public class ControlPanel extends JPanel
         }
         RuneAssistColors.styleChip(button, selected, accent);
         button.setText(label);
-        button.setForeground(selected ? accent : RuneAssistColors.MUTED);
+        button.setForeground(selected ? accent : RuneAssistColors.CHIP_TEXT_UNSELECTED);
     }
 
     // ---------- UI wiring ----------
@@ -656,7 +656,7 @@ public class ControlPanel extends JPanel
         boolean selected = button.isSelected();
         RuneAssistColors.styleChip(button, selected, RuneAssistColors.ACCENT);
         button.setText(label);
-        button.setForeground(selected ? RuneAssistColors.ACCENT : RuneAssistColors.MUTED);
+        button.setForeground(selected ? RuneAssistColors.ACCENT : RuneAssistColors.CHIP_TEXT_UNSELECTED);
     }
 
     private JToggleButton createRiskButton(String label, RiskLevel level)

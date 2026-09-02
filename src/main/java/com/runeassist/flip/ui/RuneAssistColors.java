@@ -27,6 +27,12 @@ public final class RuneAssistColors {
     public static final Color SHELL = ColorScheme.DARK_GRAY_COLOR;
     public static final Color TEXT = ColorScheme.LIGHT_GRAY_COLOR;
     public static final Color MUTED = ColorScheme.MEDIUM_GRAY_COLOR;
+    /**
+     * Unselected-chip text (Volume Window / Risk toggle buttons). MUTED (rgb 77,77,77) on
+     * CARD (rgb 30,30,30) measures ~1.9:1 contrast -- well under the WCAG AA minimum of
+     * 4.5:1 for normal text, and was reported hard to read. This measures ~5.5:1.
+     */
+    public static final Color CHIP_TEXT_UNSELECTED = new Color(150, 150, 150);
     public static final Color HAIRLINE = new Color(0x3A3A3A);
     public static final Color RISK_LOW = ColorScheme.GRAND_EXCHANGE_PRICE;
     public static final Color RISK_HIGH = new Color(0xE05252);
@@ -88,7 +94,7 @@ public final class RuneAssistColors {
         Color accent = selectedColor != null ? selectedColor : ACCENT;
         button.setOpaque(true);
         button.setBackground(CARD);
-        button.setForeground(selected ? accent : MUTED);
+        button.setForeground(selected ? accent : CHIP_TEXT_UNSELECTED);
         button.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 2, 0, selected ? accent : HAIRLINE),
                 BorderFactory.createEmptyBorder(4, 6, 3, 6)));
