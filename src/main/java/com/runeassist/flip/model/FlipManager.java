@@ -200,60 +200,62 @@ public class FlipManager {
         }
     }
 
+    /**
+     * Open and closed flips within the interval, merged and sorted by most-recent-activity
+     * (last buy or sell touch), not "every open position first, then closed ones." A flip
+     * that just closed -- especially a loss worth noticing -- now surfaces immediately
+     * instead of being buried below whatever's still open.
+     */
     public synchronized List<FlipV2> getPageFlips(int page, int pageSize, int intervalStartTime, Integer accountId) {
         if (Objects.equals(accountId,-1)) {
             return new ArrayList<>();
         }
 
-        int toSkip = (page -1) * pageSize;
-        List<FlipV2> pageFlips = new ArrayList<>(pageSize == Integer.MAX_VALUE ? 0 : pageSize);
+        List<FlipV2> all = new ArrayList<>();
 
         if (intervalStartTime > 0) {
             WeekAggregate openWeek = getOrInitWeek(0);
             List<FlipV2> open = accountId == null
                     ? openWeek.flipsAfter(-1, false)
                     : openWeek.flipsAfterForAccount(-1, accountId);
-            List<FlipV2> openInInterval = new ArrayList<>();
             for (FlipV2 flip : open) {
                 if (flip != null && !flip.isClosed() && flip.getOpenedTime() >= intervalStartTime
                         && isTrackedFlip(flip)) {
-                    openInInterval.add(flip);
+                    all.add(flip);
                 }
-            }
-            openInInterval.sort(Comparator.comparingInt(FlipV2::getOpenedTime).reversed()
-                    .thenComparing(FlipV2::getId));
-            for (FlipV2 flip : openInInterval) {
-                if (pageFlips.size() == pageSize) {
-                    break;
-                }
-                if (toSkip > 0) {
-                    toSkip -= 1;
-                    continue;
-                }
-                pageFlips.add(flip);
             }
         }
 
         WeekAggregate intervalWeek = getOrInitWeek(intervalStartTime);
         for(int i=weeks.size()-1; i >= intervalWeek.pos; i--) {
-            if (weeks.get(i).weekEnd <= intervalStartTime || pageFlips.size() == pageSize) {
+            if (weeks.get(i).weekEnd <= intervalStartTime) {
                 break;
             }
             WeekAggregate w = weeks.get(i);
             List<FlipV2> weekFlips = accountId == null ? w.flipsAfter(intervalStartTime, true) : w.flipsAfterForAccount(intervalStartTime, accountId);
-            int n = weekFlips.size();
-            for(int ii=n-1; ii >= 0 && pageFlips.size() < pageSize; ii--) {
-                FlipV2 flip = weekFlips.get(ii);
-                if (!isTrackedFlip(flip)) {
-                    continue;
+            for (FlipV2 flip : weekFlips) {
+                if (isTrackedFlip(flip)) {
+                    all.add(flip);
                 }
-                if (toSkip > 0) {
-                    toSkip -= 1;
-                    continue;
-                }
-                pageFlips.add(flip);
             }
         }
+
+        all.sort(Comparator.comparingInt(FlipV2::getUpdatedTime).reversed()
+                .thenComparing(FlipV2::getId));
+
+        int toSkip = (page - 1) * pageSize;
+        List<FlipV2> pageFlips = new ArrayList<>(pageSize == Integer.MAX_VALUE ? Math.min(all.size(), 1024) : pageSize);
+        for (FlipV2 flip : all) {
+            if (pageFlips.size() == pageSize) {
+                break;
+            }
+            if (toSkip > 0) {
+                toSkip -= 1;
+                continue;
+            }
+            pageFlips.add(flip);
+        }
+
         if (itemController != null) {
             pageFlips.forEach(flip -> flip.setCachedItemName(itemController.getItemName(flip.getItemId())));
         }
