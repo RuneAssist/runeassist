@@ -56,6 +56,15 @@ public class FlipScorer
     // it -- suggesting 100% of the visible order-book volume reads as "always max" and leaves
     // no room for other buyers/sellers.
     private static final double LIQUIDITY_FRACTION = 0.5;
+    // Expected margin give-back from repricing one leg toward the live market, as % of buy
+    // price. Telemetry shows buys repriced up ~3% and sells down ~2% on roughly a third of
+    // listings; the quoted 5m avgLow -> avgHigh spread is never fully captured by passive offers.
+    static final double SLIPPAGE_PCT = 0.5;
+    // A flip is two passive legs and we only take LIQUIDITY_FRACTION of the bottleneck side's
+    // volume. The old qty / volume estimate was 4-12x too short against realised fills.
+    private static final int FILL_LEGS = 2;
+    // 5m average this far below the 1h average is a falling market.
+    static final double FALLING_DRIFT_PCT = -0.5;
 
     private static final double TAX_RATE = 0.02;
     private static final long   TAX_CAP  = 5_000_000L;
@@ -202,6 +211,15 @@ public class FlipScorer
             double marginPct = margin * 100.0 / buy;
             if (marginPct > risk.maxMarginPct) continue; // wide last-trade / 1h gap = odd / trap
 
+            // Rank and floor on what a passive flip realistically keeps, not the full quoted spread.
+            long expectedMargin = expectedMargin(buy, margin);
+            double expectedMarginPct = expectedMargin * 100.0 / buy;
+            if (expectedMarginPct < risk.minMarginPct) continue;
+
+            Double drift = driftPct(v5, v1);
+            // Falling faster than the whole margin: the sell target is already gone.
+            if (drift != null && drift < -marginPct) continue;
+
             double imbalance = vol > 0 ? Math.abs(highVol - lowVol) / (double) vol : 1;
             if (imbalance > risk.maxImbalance) continue;
 
@@ -222,21 +240,28 @@ public class FlipScorer
             long budget = capital > 0 ? Math.min(capital, capital / slots) : 0;
             if (budget > 0) qtyCap = Math.min(qtyCap, budget / buy);
             if (qtyCap < 1) continue;
-            long projected = margin * qtyCap;
+            long projected = expectedMargin * qtyCap;
             long effectiveMinProfit = Math.max(minPredictedProfit, MIN_PROJECTED_PROFIT);
             if (projected < effectiveMinProfit) continue;
-            double fillHrs = (double) qtyCap / perHour;
+            double fillHrs = expectedFillHours(qtyCap, perHour);
 
-            double spreadRisk = marginPct > 15 ? 0.35 : 0;
-            double liqRisk    = vol < risk.minVolume * 4 ? 0.4 : 0;
-            double riskScore  = Math.min(0.9, imbalance * 0.6 + spreadRisk + liqRisk);
-            double turnover   = 1.0 / Math.max(0.15, fillHrs);
-            long score        = Math.round(margin * qtyCap * turnover * (1 - riskScore));
+            double spreadRisk  = marginPct > 15 ? 0.35 : 0;
+            double liqRisk     = vol < risk.minVolume * 4 ? 0.4 : 0;
+            boolean falling    = drift != null && drift < FALLING_DRIFT_PCT;
+            double fallingRisk = falling ? 0.25 : 0;
+            // Thin-margin flips are the ones a single reprice turns into a loss; bulk-quantity
+            // items used to out-rank fatter margins purely on qty.
+            double marginRisk  = expectedMarginPct < risk.minMarginPct * 2 ? 0.2 : 0;
+            double riskScore   = Math.min(0.9, imbalance * 0.6 + spreadRisk + liqRisk + fallingRisk + marginRisk);
+            double turnover    = 1.0 / Math.max(0.15, fillHrs);
+            long score         = Math.round(projected * turnover * (1 - riskScore));
 
             List<String> flags = new ArrayList<>();
             if (imbalance > 0.5) flags.add("one-sided");
             if (spreadRisk > 0)  flags.add("wide-spread");
             if (liqRisk > 0)     flags.add("thin");
+            if (falling)         flags.add("falling");
+            if (marginRisk > 0)  flags.add("thin-margin");
 
             Map<String, Object> s = new LinkedHashMap<>();
             s.put("id", id);
@@ -244,6 +269,7 @@ public class FlipScorer
             s.put("buy_at", buy);
             s.put("sell_at", sell);
             s.put("margin_post_tax", margin);
+            s.put("margin_expected", expectedMargin);
             s.put("margin_pct", Math.round(marginPct * 10) / 10.0);
             s.put("suggested_qty", qtyCap);
             s.put("ge_limit", m.limit);
@@ -252,6 +278,7 @@ public class FlipScorer
             s.put("projected_profit", projected);
             s.put("flags", flags);
             s.put("score", score);
+            if (drift != null) s.put("drift_pct", Math.round(drift * 10) / 10.0);
             if (remainingKnown) s.put("limit_remaining", remaining);
             rows.add(s);
         }
@@ -512,6 +539,8 @@ public class FlipScorer
             if (vol < risk.minVolume * 4) flags.add("thin");
         }
         else viable = false;
+        Double drift = driftPct(v5, v1);
+        if (drift != null && drift < FALLING_DRIFT_PCT) flags.add("falling");
 
         Map<String, Object> s = new LinkedHashMap<>();
         s.put("id", itemId);
@@ -524,6 +553,7 @@ public class FlipScorer
         s.put("flags", flags);
         s.put("viable", viable);
         s.put("dead", dead);
+        if (drift != null) s.put("drift_pct", Math.round(drift * 10) / 10.0);
         if (dead)
         {
             String reason = odd ? "Odd / untradeable name."
@@ -681,6 +711,28 @@ public class FlipScorer
         return Math.max(1, (int) Math.floor(perMinute * timeframeMinutes * LIQUIDITY_FRACTION));
     }
 
+    /** Hours to buy then sell {@code qty} when we capture LIQUIDITY_FRACTION of the bottleneck side. */
+    static double expectedFillHours(long qty, int perHour)
+    {
+        double share = Math.max(1, perHour) * LIQUIDITY_FRACTION;
+        return (FILL_LEGS * Math.max(0L, qty)) / share;
+    }
+
+    /** Post-tax margin minus the expected reprice give-back on one leg. */
+    static long expectedMargin(long buy, long marginPostTax)
+    {
+        return marginPostTax - (long) Math.floor(buy * SLIPPAGE_PCT / 100.0);
+    }
+
+    /** 5m high average relative to the 1h high average, in %. null when either is missing. */
+    static Double driftPct(int[] v5, int[] v1)
+    {
+        if (v5 == null || v1 == null || v5.length < 3 || v1.length < 3) return null;
+        int avgHigh5 = v5[2], avgHigh1h = v1[2];
+        if (avgHigh5 <= 0 || avgHigh1h <= 0) return null;
+        return (avgHigh5 - avgHigh1h) * 100.0 / avgHigh1h;
+    }
+
     private static long gcd(long a, long b)
     {
         while (b != 0) { long t = b; b = a % b; a = t; }
@@ -706,18 +758,23 @@ public class FlipScorer
         final int minVolume;
         final int minSideVolume;
         final int minMargin;
+        /** Floor on the slippage-adjusted post-tax margin as a % of buy price. */
+        final double minMarginPct;
         final double maxMarginPct;
         final double maxImbalance;
 
-        RiskProfile(int minVolume, int minSideVolume, int minMargin, double maxMarginPct, double maxImbalance)
+        RiskProfile(int minVolume, int minSideVolume, int minMargin, double minMarginPct,
+                    double maxMarginPct, double maxImbalance)
         {
             this.minVolume = minVolume;
             this.minSideVolume = minSideVolume;
             this.minMargin = minMargin;
+            this.minMarginPct = minMarginPct;
             this.maxMarginPct = maxMarginPct;
             this.maxImbalance = maxImbalance;
         }
 
+        // Mirrors flip-scorer.mjs RISK exactly -- keep in sync.
         static RiskProfile of(RiskLevel level)
         {
             // Raised from 2000/400/30 -- odd, near-worthless niche items (seeds, unf potions,
@@ -725,14 +782,14 @@ public class FlipScorer
             // total profit on offer.
             if (level == RiskLevel.LOW)
             {
-                return new RiskProfile(3000, 500, 40, 8, 0.45);
+                return new RiskProfile(3000, 500, 40, 1.0, 8, 0.45);
             }
             if (level == RiskLevel.HIGH)
             {
-                return new RiskProfile(400, 50, 15, 20, 0.75);
+                return new RiskProfile(400, 50, 15, 0.3, 20, 0.75);
             }
             // Raised from 800/150/20 for the same reason -- this is the default tier.
-            return new RiskProfile(1500, 250, 30, 12, 0.55);
+            return new RiskProfile(1500, 250, 30, 0.6, 12, 0.55);
         }
     }
 
