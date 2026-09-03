@@ -116,12 +116,12 @@ public class RuneAssistSuggestionSource
             if (ExperimentService.isAllowed(displayName) && experimentService.hasActive(displayName))
             {
                 ExperimentService.Experiment exp = experimentService.get(displayName);
-                boolean hasOpenOfferForItem = hasOpenOfferFor(offersBySlot, exp.itemId, exp.buy);
+                boolean hasOpenOfferForItem = hasActiveOffer(offersBySlot, exp.itemId);
                 Suggestion expSuggestion = experimentService.buildSuggestion(displayName, flipScorer, hasOpenOfferForItem);
                 if (expSuggestion != null)
                 {
                     suggestion = expSuggestion;
-                    clientThread.invokeLater(() -> consumer.accept(suggestion));
+                    clientThread.invokeLater(() -> consumer.accept(expSuggestion));
                     return;
                 }
             }
