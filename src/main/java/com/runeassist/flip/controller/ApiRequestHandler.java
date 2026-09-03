@@ -21,14 +21,13 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 
-/** The plugin's HTTP surface against the copilot backend, all of it the v2 protobuf contract (servergolang/api-contract/api.proto). */
+/** HTTP to RuneAssist Ares (graphs) plus leftover Flipping Copilot v2 methods that are hard-disabled. */
 @Slf4j
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class ApiRequestHandler {
 
-    private static final String serverUrl = System.getProperty("flippingcopilot.api.host", "https://api.flippingcopilot.com");
-    private static final String serverFeUrl = serverUrl.replace("api.", "");
+    private static final String LEGACY_DISABLED = "Legacy copilot backend is disabled";
     private static final MediaType PROTO_MEDIA_TYPE = MediaType.get("application/protobuf");
     private static final String API_VERSION_PREFIX = "/v2";
     private static final byte[] EMPTY_BODY = new byte[0];
@@ -49,7 +48,9 @@ public class ApiRequestHandler {
     }
 
     private Request.Builder unauthed(String path) {
-        return new Request.Builder().url(serverUrl + API_VERSION_PREFIX + path);
+        // Leftover method bodies still construct a Request so they compile.
+        // enqueue never sends it.
+        return new Request.Builder().url("http://127.0.0.1/disabled" + API_VERSION_PREFIX + path);
     }
 
     private Request.Builder authed(String jwtToken, String path) {
@@ -83,7 +84,7 @@ public class ApiRequestHandler {
                          String label,
                          Consumer<HttpResponseException> onFailure,
                          CheckedResponseConsumer onSuccess) {
-        enqueue(client.newCall(request), jwtToken, label, onFailure, onSuccess);
+        rejectLegacy(label, onFailure);
     }
 
     private void enqueue(Call call,
@@ -91,30 +92,17 @@ public class ApiRequestHandler {
                          String label,
                          Consumer<HttpResponseException> onFailure,
                          CheckedResponseConsumer onSuccess) {
-        call.enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                log.warn("{} failed", label, e);
-                onFailure.accept(new HttpResponseException(-1, UNKNOWN_ERROR));
-            }
+        if (call != null) {
+            call.cancel();
+        }
+        rejectLegacy(label, onFailure);
+    }
 
-            @Override
-            public void onResponse(Call call, Response response) {
-                try {
-                    if (!response.isSuccessful()) {
-                        clearLoginIfUnauthorized(response, jwtToken);
-                        String errorMessage = extractErrorMessage(response);
-                        log.warn("{} failed status={} error={}", label, response.code(), errorMessage);
-                        onFailure.accept(new HttpResponseException(response.code(), errorMessage));
-                        return;
-                    }
-                    onSuccess.accept(response);
-                } catch (Exception e) {
-                    log.warn("error reading/parsing {} response", label, e);
-                    onFailure.accept(new HttpResponseException(-1, UNKNOWN_ERROR));
-                }
-            }
-        });
+    private void rejectLegacy(String label, Consumer<HttpResponseException> onFailure) {
+        log.debug("legacy copilot HTTP disabled: {}", label);
+        if (onFailure != null) {
+            onFailure.accept(new HttpResponseException(-1, LEGACY_DISABLED));
+        }
     }
 
     private Consumer<HttpResponseException> stringFailure(Consumer<String> onFailure) {
@@ -144,55 +132,9 @@ public class ApiRequestHandler {
     public Call discordLoginAsync(Consumer<String> oathUrlConsumer,
                                   Consumer<LoginResponse> loginResponseConsumer,
                                   Consumer<HttpResponseException>  onFailure) {
-        log.debug("sending request to login via discord");
-        Request r = new Request.Builder()
-                .url(serverFeUrl + "/v1/plugin-discord-login")
-                .get().build();
-
-        Call call = client.newBuilder()
-                .readTimeout(0, TimeUnit.MILLISECONDS)
-                .callTimeout(0, TimeUnit.MILLISECONDS)
-                .build()
-                .newCall(r);
-
-        call.enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                log.warn("login via discord call failed", e);
-                clientThread.invoke(() -> onFailure.accept(new HttpResponseException(-1, UNKNOWN_ERROR)));
-            }
-            @Override
-            public void onResponse(Call call, Response response) {
-                try {
-                    if (!response.isSuccessful()) {
-                        if(response.code() == UNAUTHORIZED_CODE) {
-                            copilotLoginRS.clear();
-                        }
-                        log.warn("login via discord call failed with http status code {}", response.code());
-                        clientThread.invoke(() -> onFailure.accept(new HttpResponseException(response.code(), extractJsonErrorMessage(response))));
-                        return;
-                    }
-                    if (response.body() == null) {
-                        throw new IOException("empty discord login response");
-                    }
-                    try(DataInputStream is = new DataInputStream(new BufferedInputStream(response.body().byteStream()))) {
-                        PluginDiscordLoginInitResponse initResponse = PluginDiscordLoginInitResponse.fromRaw(is);
-                        clientThread.invoke(() -> oathUrlConsumer.accept(initResponse.getUrl()));
-                        LoginResponse loginResponse = LoginResponse.fromRaw(is);
-                        if (loginResponse.getError() != null && !loginResponse.getError().isEmpty()) {
-                            clientThread.invoke(() -> onFailure.accept(new HttpResponseException(-1, loginResponse.getError())));
-                        } else {
-                            clientThread.invoke(() -> loginResponseConsumer.accept(loginResponse));
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warn("error reading/parsing discord login response body", e);
-                    clientThread.invoke(() -> onFailure.accept(new HttpResponseException(-1, UNKNOWN_ERROR)));
-                }
-            }
-        });
-
-        return call;
+        log.debug("legacy copilot discord login is disabled");
+        clientThread.invoke(() -> onFailure.accept(new HttpResponseException(-1, LEGACY_DISABLED)));
+        return null;
     }
 
     /**
@@ -563,44 +505,8 @@ public class ApiRequestHandler {
 
     // the response is a long-lived stream of length-prefixed DumpAlert frames, so it is handed to the caller open
     public Call asyncConsumeDumpAlerts(String displayName, Consumer<Response> onSuccess, Consumer<HttpResponseException> onFailure) {
-        String jwtToken = copilotLoginRS.get().getJwtToken();
-        byte[] body = ProtoUtils.encodeMessage(out -> out.writeString(1, displayName));
-        Request request = authed(jwtToken, "/dump-alerts")
-                .post(protoBody(body))
-                .build();
-
-        Call call = client.newBuilder()
-                .readTimeout(10, TimeUnit.SECONDS)
-                .callTimeout(0, TimeUnit.MILLISECONDS)
-                .build()
-                .newCall(request);
-
-        call.enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                log.warn("error consuming dump alerts", e);
-                onFailure.accept(new HttpResponseException(-1, UNKNOWN_ERROR));
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) {
-                if (!response.isSuccessful()) {
-                    clearLoginIfUnauthorized(response, jwtToken);
-                    String errorMessage = extractErrorMessage(response);
-                    response.close();
-                    onFailure.accept(new HttpResponseException(response.code(), errorMessage));
-                    return;
-                }
-                if (response.body() == null) {
-                    response.close();
-                    onFailure.accept(new HttpResponseException(-1, UNKNOWN_ERROR));
-                    return;
-                }
-                onSuccess.accept(response);
-            }
-        });
-
-        return call;
+        rejectLegacy("dump alerts", onFailure);
+        return null;
     }
 
     private static byte[] encodeUuidRequest(UUID id) {
