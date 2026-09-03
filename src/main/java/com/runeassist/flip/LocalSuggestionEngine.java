@@ -7,6 +7,7 @@ import com.runeassist.flip.util.ProfitCalculator;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -22,6 +23,9 @@ import java.util.Set;
  * drives FC's GE UI/overlays.</p>
  */
 public final class LocalSuggestionEngine {
+
+    private static final List<String> CHIP_FLAGS = Arrays.asList(
+            "thin", "one-sided", "wide-spread", "falling", "thin-margin");
 
     private LocalSuggestionEngine() {
     }
@@ -734,6 +738,7 @@ public final class LocalSuggestionEngine {
         if (s == null || s.getType() == null) {
             return;
         }
+        s.setFlags(extractChipFlags(flip));
         String why;
         switch (s.getType()) {
             case BUY:
@@ -848,6 +853,25 @@ public final class LocalSuggestionEngine {
             return "~" + h + " hr fill";
         }
         return "~" + Math.round(hours) + " hr fill";
+    }
+
+    /** Scorer flags the panel shows as chips. Order follows the flip map list. */
+    private static List<String> extractChipFlags(Map<String, Object> flip) {
+        if (flip == null || !flip.containsKey("flags")) {
+            return new ArrayList<>();
+        }
+        Object raw = flip.get("flags");
+        if (!(raw instanceof List)) {
+            return new ArrayList<>();
+        }
+        List<String> out = new ArrayList<>();
+        for (Object o : (List<?>) raw) {
+            String flag = String.valueOf(o);
+            if (CHIP_FLAGS.contains(flag) && !out.contains(flag)) {
+                out.add(flag);
+            }
+        }
+        return out;
     }
 
     /**
