@@ -295,19 +295,30 @@ public class LocalSuggestionEngineTest {
         LocalSuggestionEngine.Input in = baseInput();
         in.offersBySlot = new long[8][];
         in.offersBySlot[0] = offer(RUBY_NECKLACE, false, 2_100, 0, 1_000, 0L);
+        in.held.put(RUBY_NECKLACE, new long[]{1_000, 2_025});
 
         Map<String, Object> market = flip(RUBY_NECKLACE, "Ruby necklace", 1_850, 2_000, 150_000);
-        Map<String, Object> heldCost = flip(RUBY_NECKLACE, "Ruby necklace", 2_025, 2_000, -25_000);
-        heldCost.put("side", "sell");
-        heldCost.put("dead", Boolean.TRUE);
-        heldCost.put("dead_reason", "Margin gone after tax.");
         in.scoredFlips = new ArrayList<>();
         in.scoredFlips.add(market);
-        in.scoredFlips.add(heldCost);
 
         Suggestion s = LocalSuggestionEngine.next(in);
         assertTrue(s.getType() != SuggestionType.MODIFY_SELL);
         assertTrue(s.getItemId() != RUBY_NECKLACE);
+    }
+
+    @Test
+    public void repricesSellWhenTargetRemainsAboveHeldCostBasis() {
+        LocalSuggestionEngine.Input in = baseInput();
+        in.offersBySlot = new long[8][];
+        in.offersBySlot[0] = offer(RUBY_NECKLACE, false, 2_100, 0, 1_000, 0L);
+        in.held.put(RUBY_NECKLACE, new long[]{1_000, 1_900});
+        in.scoredFlips = new ArrayList<>();
+        in.scoredFlips.add(flip(RUBY_NECKLACE, "Ruby necklace", 1_850, 2_000, 150_000));
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertEquals(SuggestionType.MODIFY_SELL, s.getType());
+        assertEquals(RUBY_NECKLACE, s.getItemId());
+        assertEquals(2_000, s.getPrice());
     }
 
     @Test

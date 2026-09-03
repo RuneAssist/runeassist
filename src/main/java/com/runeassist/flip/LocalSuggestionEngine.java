@@ -3,6 +3,7 @@ package com.runeassist.flip;
 import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.model.SuggestionType;
 import com.runeassist.flip.util.Constants;
+import com.runeassist.flip.util.ProfitCalculator;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -230,7 +231,8 @@ public final class LocalSuggestionEngine {
                     }
                 } else {
                     long sellAt = getLong(quote, "sell_at");
-                    if (clearlyMispriced(offerPrice, sellAt, inModifyGrace)) {
+                    if (clearlyMispriced(offerPrice, sellAt, inModifyGrace)
+                            && sellRepriceAboveCostBasis(offerItemId, sellAt, held)) {
                         Suggestion s = build(SuggestionType.MODIFY_SELL, slot, offerItemId,
                                 sellAt, remaining, name, profit, hours);
                         applyLimit(s, quote, remainingLimit);
@@ -479,6 +481,9 @@ public final class LocalSuggestionEngine {
         if (target <= 0 && !foundOnGe) {
             return null;
         }
+        if (!buy && !sellRepriceAboveCostBasis(itemId, target, in.held)) {
+            return null;
+        }
         if (qty <= 0) {
             qty = 1;
         }
@@ -669,6 +674,17 @@ public final class LocalSuggestionEngine {
 
     private static boolean belowMinProfit(Double profit, long minPredictedProfit) {
         return minPredictedProfit > 0 && (profit == null || profit < minPredictedProfit);
+    }
+
+    static boolean sellRepriceAboveCostBasis(int itemId, long sellAt, Map<Integer, long[]> held) {
+        if (sellAt <= 0 || held == null) {
+            return true;
+        }
+        long[] entry = held.get(itemId);
+        if (entry == null || entry.length < 2 || entry[1] <= 0) {
+            return true;
+        }
+        return ProfitCalculator.getPostTaxPrice(itemId, sellAt) > entry[1];
     }
 
     private static Suggestion build(SuggestionType type, int boxId, int itemId,
