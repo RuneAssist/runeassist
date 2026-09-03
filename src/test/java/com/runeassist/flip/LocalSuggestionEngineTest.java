@@ -311,6 +311,62 @@ public class LocalSuggestionEngineTest {
         assertEquals(4L * 60L * 60L * 1000L, LocalSuggestionEngine.staleAfterMs(60));
     }
 
+    @Test
+    public void slotsFullWaitDoesNotSellHeldStock() {
+        LocalSuggestionEngine.Input in = fullBoardInput();
+        in.held.put(RUBY_NECKLACE, new long[]{1813, 1900});
+        Map<String, Object> rubySell = flip(RUBY_NECKLACE, "Ruby necklace", 1900, 2025, 226_000);
+        rubySell.put("side", "sell");
+        in.scoredFlips.add(0, rubySell);
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertEquals(SuggestionType.WAIT, s.getType());
+        assertEquals(LocalSuggestionEngine.WAIT_SLOTS_FULL, s.getMessage());
+        assertTrue(s.getWhy() != null && s.getWhy().contains("held"));
+    }
+
+    @Test
+    public void slotsFullWaitMentionsCollectableFinishedOffer() {
+        LocalSuggestionEngine.Input in = fullBoardInput();
+        // Slot 7 is a finished SOLD box (not filling, remaining 0).
+        in.offersBySlot[7] = new long[]{RUBY_NECKLACE, 0, 2025, 10, 10, 0, 0L};
+        in.held.put(RUBY_NECKLACE, new long[]{10, 1900});
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertEquals(SuggestionType.WAIT, s.getType());
+        assertEquals(LocalSuggestionEngine.WAIT_SLOTS_FULL, s.getMessage());
+        assertTrue(s.getWhy() != null && s.getWhy().contains("collect finished offer"));
+        assertTrue(s.getWhy().contains("held"));
+    }
+
+    @Test
+    public void freeSlotSellsHeldBeforeBuying() {
+        LocalSuggestionEngine.Input in = baseInput();
+        in.offersBySlot = new long[8][];
+        in.offersBySlot[0] = offer(BLACK_CHINCHOMPA, true, 800, 10, 200, 0L);
+        in.coins = 50_000_000L;
+        in.held.put(RUBY_NECKLACE, new long[]{50, 1900});
+        Map<String, Object> rubySell = flip(RUBY_NECKLACE, "Ruby necklace", 1900, 2025, 6_250);
+        rubySell.put("side", "sell");
+        in.scoredFlips.add(0, rubySell);
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertEquals(SuggestionType.SELL, s.getType());
+        assertEquals(RUBY_NECKLACE, s.getItemId());
+    }
+
+    private static LocalSuggestionEngine.Input fullBoardInput() {
+        LocalSuggestionEngine.Input in = baseInput();
+        in.offersBySlot = new long[8][];
+        in.coins = 50_000_000L;
+        // Item ids with no market row so step-1 MODIFY does not fire — the
+        // screenshot case is "slots full, prices look fine, wait."
+        for (int i = 0; i < 8; i++) {
+            in.offersBySlot[i] = offer(90_000 + i, true, 1858, 10, 100, 0L);
+        }
+        return in;
+    }
+
     private static final int VAMPYRE_DUST = 3325;
     private static final int BLACK_CHINCHOMPA = 11959;
 

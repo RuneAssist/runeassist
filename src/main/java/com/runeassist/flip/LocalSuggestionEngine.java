@@ -390,7 +390,7 @@ public final class LocalSuggestionEngine {
 
         return wait(waitReason(slotsFull, anyUnblocked, anyWithLimitLeft, anyAffordable,
                 sawLimitExhausted, sawBlocked, sawPriced, sawBelowMinProfit, sawBuyRow,
-                in.minPredictedProfit, coins), offersBySlot, maxSlots, scoredFlips);
+                in.minPredictedProfit, coins), offersBySlot, maxSlots, scoredFlips, held);
     }
 
     /**
@@ -527,17 +527,17 @@ public final class LocalSuggestionEngine {
     /** Fallback Wait with a specific reason + slot numbers. Never uses {@link #WAIT_GENERIC}. */
     static Suggestion waitFallback(String message, long[][] offersBySlot, int maxSlots) {
         return wait(message == null || message.isEmpty() ? WAIT_NO_MARGIN : message,
-                offersBySlot, maxSlots, null);
+                offersBySlot, maxSlots, null, null);
     }
 
     private static Suggestion wait(String message, long[][] offersBySlot, int maxSlots,
-                                   List<Map<String, Object>> scoredFlips) {
+                                   List<Map<String, Object>> scoredFlips, Map<Integer, long[]> held) {
         Suggestion wait = new Suggestion();
         wait.setType(SuggestionType.WAIT);
         wait.setBoxId(-1);
         wait.setName("");
         wait.setMessage(message);
-        String why = waitWhy(offersBySlot, maxSlots, scoredFlips);
+        String why = waitWhy(offersBySlot, maxSlots, scoredFlips, held);
         if (why != null && !why.isEmpty()) {
             wait.setWhy(why);
         }
@@ -546,15 +546,23 @@ public final class LocalSuggestionEngine {
 
     /** Slot count plus the furthest-along filling offer, so the south card is not blank. */
     private static String waitWhy(long[][] offersBySlot, int maxSlots,
-                                  List<Map<String, Object>> scoredFlips) {
+                                  List<Map<String, Object>> scoredFlips, Map<Integer, long[]> held) {
         int cap = maxSlots > 0 ? maxSlots : 8;
         int used = countUsedSlots(offersBySlot);
         StringBuilder sb = new StringBuilder();
         sb.append(used).append("/").append(cap).append(" slots");
         long[] best = null;
+        boolean finishedCollectable = false;
         if (offersBySlot != null) {
             for (long[] offer : offersBySlot) {
-                if (offer == null || offer.length < 6 || offer[O_FILLING_IS_1] != 1L) {
+                if (offer == null || offer.length < 6) {
+                    continue;
+                }
+                int remaining = (int) Math.max(0L, offer[O_TOTAL] - offer[O_SOLD]);
+                if (offer[O_FILLING_IS_1] != 1L) {
+                    if ((int) offer[O_ITEM_ID] > 0 && remaining <= 0) {
+                        finishedCollectable = true;
+                    }
                     continue;
                 }
                 if (offer[O_SOLD] <= 0L || offer[O_TOTAL] <= 0L) {
@@ -581,7 +589,29 @@ public final class LocalSuggestionEngine {
                     .append(compact(best[O_SOLD])).append("/")
                     .append(compact(best[O_TOTAL])).append(" filling");
         }
+        if (finishedCollectable && used >= cap) {
+            sb.append(" · collect finished offer");
+        }
+        int heldKinds = countHeldKinds(held);
+        if (heldKinds > 0 && used >= cap) {
+            sb.append(" · ").append(heldKinds)
+                    .append(heldKinds == 1 ? " held item" : " held items")
+                    .append(" waiting for a slot");
+        }
         return sb.toString();
+    }
+
+    private static int countHeldKinds(Map<Integer, long[]> held) {
+        if (held == null || held.isEmpty()) {
+            return 0;
+        }
+        int n = 0;
+        for (long[] h : held.values()) {
+            if (h != null && h.length > 0 && h[0] > 0L) {
+                n++;
+            }
+        }
+        return n;
     }
 
     private static Double modifyProfit(Map<String, Object> quote, int remaining) {
