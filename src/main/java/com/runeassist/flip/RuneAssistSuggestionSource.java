@@ -121,7 +121,7 @@ public class RuneAssistSuggestionSource
                 if (expSuggestion != null)
                 {
                     suggestion = expSuggestion;
-                    clientThread.invokeLater(() -> consumer.accept(suggestion));
+                    clientThread.invokeLater(() -> consumer.accept(expSuggestion));
                     return;
                 }
             }
@@ -855,12 +855,23 @@ public class RuneAssistSuggestionSource
         return decantProfit > normalProfit;
     }
 
+    /** Filling offers with remaining qty only — finished BOUGHT/SOLD boxes do not block SELL. */
     private static boolean hasActiveOffer(long[][] offersBySlot, int itemId)
+    {
+        return hasOpenOfferFor(offersBySlot, itemId, true)
+                || hasOpenOfferFor(offersBySlot, itemId, false);
+    }
+
+    private static boolean hasOpenOfferFor(long[][] offersBySlot, int itemId, boolean buy)
     {
         if (offersBySlot == null) return false;
         for (long[] o : offersBySlot)
         {
-            if (o != null && o.length > 0 && (int) o[0] == itemId) return true;
+            if (o == null || o.length < 6 || (int) o[0] != itemId) continue;
+            if ((o[1] == 1L) != buy) continue;
+            boolean filling = o[5] == 1L;
+            int remaining = (int) Math.max(0L, o[4] - o[3]);
+            if (filling && remaining > 0) return true;
         }
         return false;
     }
