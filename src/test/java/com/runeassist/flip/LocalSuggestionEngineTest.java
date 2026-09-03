@@ -64,6 +64,41 @@ public class LocalSuggestionEngineTest {
     }
 
     @Test
+    public void completedBoughtSlotDoesNotBlockSellOfHeldRunes() {
+        LocalSuggestionEngine.Input in = baseInput();
+        in.offersBySlot = new long[8][];
+        // Slot 0 is a finished buy awaiting collect — not filling, remaining 0.
+        in.offersBySlot[0] = new long[]{AIR_RUNE, 1, 5, 10_000, 10_000, 0};
+        in.held = new LinkedHashMap<>();
+        in.held.put(AIR_RUNE, new long[]{10_000, 5});
+        in.coins = 50_000_000L;
+        in.scoredFlips = new ArrayList<>();
+        in.scoredFlips.add(sellFlip(AIR_RUNE, "Air rune", 5, 6, 10_000));
+        in.scoredFlips.add(flip(DRAGON_ARROWS, "Dragon arrow(p++)", 1770, 1900, 421_000));
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertEquals(SuggestionType.SELL, s.getType());
+        assertEquals(AIR_RUNE, s.getItemId());
+    }
+
+    @Test
+    public void fillingBuyStillBlocksSellOfSameItem() {
+        LocalSuggestionEngine.Input in = baseInput();
+        in.offersBySlot = new long[8][];
+        in.offersBySlot[0] = offer(AIR_RUNE, true, 5, 100, 10_000, 0L);
+        in.held = new LinkedHashMap<>();
+        in.held.put(AIR_RUNE, new long[]{100, 5});
+        in.coins = 50_000_000L;
+        in.scoredFlips = new ArrayList<>();
+        in.scoredFlips.add(sellFlip(AIR_RUNE, "Air rune", 5, 6, 100));
+        in.scoredFlips.add(flip(DRAGON_ARROWS, "Dragon arrow(p++)", 1770, 1900, 421_000));
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertEquals(SuggestionType.BUY, s.getType());
+        assertEquals(DRAGON_ARROWS, s.getItemId());
+    }
+
+    @Test
     public void withoutOwnedModifyEmptySlotEmitsBuy() {
         LocalSuggestionEngine.Input in = baseInput();
         in.offersBySlot = new long[8][];
@@ -313,6 +348,7 @@ public class LocalSuggestionEngineTest {
 
     private static final int VAMPYRE_DUST = 3325;
     private static final int BLACK_CHINCHOMPA = 11959;
+    private static final int AIR_RUNE = 556;
 
     private static LocalSuggestionEngine.Input deadBuyInput(int leftover) {
         LocalSuggestionEngine.Input in = baseInput();
@@ -326,6 +362,13 @@ public class LocalSuggestionEngineTest {
 
     private static long[] offer(int itemId, boolean buy, long price, int sold, int total, long lastProgressMs) {
         return new long[]{ itemId, buy ? 1 : 0, price, sold, total, 1, lastProgressMs };
+    }
+
+    private static Map<String, Object> sellFlip(int id, String name, long buyAt, long sellAt, long qty) {
+        Map<String, Object> m = flip(id, name, buyAt, sellAt, (sellAt - buyAt) * qty);
+        m.put("side", "sell");
+        m.put("suggested_qty", qty);
+        return m;
     }
 
     private static Map<String, Object> deadFlip(int id, String name, long buyAt, long sellAt) {

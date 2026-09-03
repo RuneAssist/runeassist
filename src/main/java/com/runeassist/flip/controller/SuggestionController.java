@@ -119,6 +119,12 @@ public class SuggestionController {
             return false;
         }
         Suggestion p = suggestionManager.getSuggestion();
+        // Dump alerts highlight Back while a sell setup is open. Leaving that
+        // screen used to look like "account state changed" and fetch a SELL of
+        // inventory, overwriting the dump. Hold until Confirm or Skip.
+        if (p != null && p.isRecentUnActionedDumpAlert()) {
+            return false;
+        }
         if (isModifyInProgress(p)) {
             return false;
         }
