@@ -113,7 +113,20 @@ public class UIUtilities {
         if (durationSeconds <= 0) {
             return "0m";
         }
-        return formatDurationMinutes(durationSeconds / 60);
+        int safeMinutes = durationSeconds / 60;
+        if (safeMinutes <= 0) {
+            return "0m";
+        }
+        int days = safeMinutes / (24 * 60);
+        int hours = (safeMinutes % (24 * 60)) / 60;
+        int remainingMinutes = safeMinutes % 60;
+        if (days > 0) {
+            return hours == 0 ? days + "d" : days + "d " + hours + "h";
+        }
+        if (hours > 0) {
+            return remainingMinutes == 0 ? hours + "h" : hours + "h " + remainingMinutes + "m";
+        }
+        return remainingMinutes + "m";
     }
 
     public static String truncateString(String string, int length) {

@@ -143,6 +143,7 @@ public class SuggestionPanel extends JPanel {
         headlineLabel.setForeground(Color.WHITE);
         headlineLabel.setFont(headlineLabel.getFont().deriveFont(Font.BOLD, 13f));
         headlineLabel.setBorder(RuneAssistColors.sectionHeaderBorder());
+        constrainWidth(headlineLabel);
         suggestionIcon.setVisible(false);
         suggestionIcon.setOpaque(true);
         suggestionIcon.setBackground(RuneAssistColors.CARD);
@@ -160,6 +161,7 @@ public class SuggestionPanel extends JPanel {
         qtyPriceLabel.setForeground(RuneAssistColors.ACCENT);
         qtyPriceLabel.setFont(qtyPriceLabel.getFont().deriveFont(11f));
         qtyPriceLabel.setAlignmentX(LEFT_ALIGNMENT);
+        constrainWidth(qtyPriceLabel);
         structured.add(qtyPriceLabel);
 
         additionalInfoText.setHorizontalAlignment(SwingConstants.LEFT);
@@ -167,14 +169,21 @@ public class SuggestionPanel extends JPanel {
         additionalInfoText.setText("");
         additionalInfoText.setAlignmentX(LEFT_ALIGNMENT);
         additionalInfoText.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
+        constrainWidth(additionalInfoText);
         structured.add(additionalInfoText);
 
         flagsRow.setOpaque(true);
         flagsRow.setBackground(RuneAssistColors.CARD);
         flagsRow.setAlignmentX(LEFT_ALIGNMENT);
         flagsRow.setBorder(BorderFactory.createEmptyBorder(0, 0, 2, 0));
+        constrainWidth(flagsRow);
         structured.add(flagsRow);
         return structured;
+    }
+
+    private static void constrainWidth(JComponent component) {
+        int inner = MainPanel.CONTENT_WIDTH - 20;
+        component.setMaximumSize(new Dimension(inner, Integer.MAX_VALUE));
     }
 
     private JPanel buildMessageCard() {
@@ -289,7 +298,7 @@ public class SuggestionPanel extends JPanel {
         if (text == null || text.isEmpty()) {
             additionalInfoText.setText("");
         } else {
-        additionalInfoText.setText("<html><div style='width:200px'>" + text + "</div></html>");
+            additionalInfoText.setText("<html><body width='196'>" + text + "</body></html>");
         }
         additionalInfoText.setToolTipText(tooltip);
         headlineLabel.setToolTipText(tooltip);
