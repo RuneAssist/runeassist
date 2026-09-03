@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 /**
@@ -52,6 +53,7 @@ public class RuneAssistSuggestionSource
     @Inject private PluginManager pluginManager;
     @Inject private com.runeassist.flip.model.SuggestionManager suggestionManager;
     @Inject private com.runeassist.flip.controller.GrandExchange grandExchange;
+    @Inject private ExecutorService executor;
 
     // Decant-detection state (singleton, so this persists across suggestion cycles): the
     // opportunity we last watched, and owned qty of each leg at that time. A dose-conserving
@@ -104,7 +106,7 @@ public class RuneAssistSuggestionSource
             return;
         }
 
-        new Thread(() ->
+        executor.execute(() ->
         {
             Suggestion suggestion = null;
             try
@@ -265,7 +267,7 @@ public class RuneAssistSuggestionSource
             }
             final Suggestion delivered = result;
             clientThread.invokeLater(() -> consumer.accept(delivered));
-        }, "runeassist-suggestion").start();
+        });
     }
 
     /**
