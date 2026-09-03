@@ -1,0 +1,37 @@
+# Build output
+build/
+out/
+bin/
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# IntelliJ / VS Code
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# macOS / Windows
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Secrets and local data — never commit
+.env
+.env.*
+credentials.json
+**/credentials.json
+tools/.cache/
+*.jsonl
+
+# Local player / RuneLite dumps
+**/*_local_flips.json
+**/player*.json
