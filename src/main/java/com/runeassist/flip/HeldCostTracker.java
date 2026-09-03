@@ -7,15 +7,19 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.GrandExchangeOfferState;
 import net.runelite.client.config.ConfigManager;
 
+import com.runeassist.flip.model.GeHistoryRow;
+
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntUnaryOperator;
 
 /**
  * Lightweight, self-contained FIFO cost-basis tracker for the RuneAssist flipping fork.
@@ -59,6 +63,7 @@ public class HeldCostTracker
         final Map<Integer, Deque<Lot>> positions = new LinkedHashMap<>();
         final Map<Integer, Slot> slots = new HashMap<>();
         final Map<Integer, List<long[]>> limitBuys = new LinkedHashMap<>(); // itemId -> [qty, time]
+        String historyFp = "";
         boolean loaded = false;
     }
 
@@ -184,6 +189,44 @@ public class HeldCostTracker
         ensureLoaded(displayName, acc);
         acc.positions.computeIfAbsent(itemId, k -> new ArrayDeque<>()).add(new Lot(qty, unitCost));
         save(displayName, acc);
+    }
+
+    /**
+     * When GE history opens, add FIFO lots for completed buys that are not already in
+     * this tracker. Does not record 4h limit usage (history usually has no timestamps)
+     * and does not autotype. Returns the number of lots added.
+     */
+    public synchronized int applyHistoryBackfill(String displayName, List<GeHistoryRow> newestFirst,
+                                                 Map<Integer, Long> liveFillingBuyQty,
+                                                 IntUnaryOperator unnote)
+    {
+        if (displayName == null || displayName.isEmpty() || newestFirst == null || newestFirst.isEmpty()) {
+            return 0;
+        }
+        Account acc = account(displayName);
+        ensureLoaded(displayName, acc);
+        Map<Integer, Long> heldQty = new HashMap<>();
+        for (Map.Entry<Integer, Deque<Lot>> e : acc.positions.entrySet())
+        {
+            long qty = 0;
+            for (Lot l : e.getValue()) qty += l.qty;
+            if (qty > 0) heldQty.put(e.getKey(), qty);
+        }
+        Map<Integer, Long> filling = liveFillingBuyQty == null ? Collections.emptyMap() : liveFillingBuyQty;
+        HeldCostHistoryBackfill.Result result = HeldCostHistoryBackfill.lotsToAdd(
+            newestFirst, heldQty, filling, acc.historyFp, unnote);
+        if (!result.changed) return 0;
+        int added = 0;
+        for (HeldCostHistoryBackfill.Lot lot : result.lots)
+        {
+            if (lot == null || lot.itemId <= 0 || lot.qty <= 0 || lot.unit < 0) continue;
+            acc.positions.computeIfAbsent(lot.itemId, k -> new ArrayDeque<>())
+                .add(new Lot(lot.qty, lot.unit));
+            added++;
+        }
+        acc.historyFp = result.fingerprint == null ? "" : result.fingerprint;
+        save(displayName, acc);
+        return added;
     }
 
     /** Like {@link #consumeSell}, but returns {qtyActuallyConsumed, totalCostOfThat}. */
@@ -354,6 +397,8 @@ public class HeldCostTracker
                 if (!list.isEmpty()) acc.limitBuys.put(Integer.parseInt(e.getKey()), list);
             }
             pruneLimitBuys(acc);
+            Object fp = saved.get("historyFp");
+            if (fp instanceof String) acc.historyFp = (String) fp;
         }
         catch (Exception e) { log.warn("held-cost load failed: {}", e.getMessage()); }
     }
@@ -386,6 +431,7 @@ public class HeldCostTracker
                 if (!e.getValue().isEmpty()) lim.put(String.valueOf(e.getKey()), e.getValue());
             }
             out.put("limitBuys", lim);
+            if (acc.historyFp != null && !acc.historyFp.isEmpty()) out.put("historyFp", acc.historyFp);
             configManager.setConfiguration(GROUP, configKey(displayName), gson.toJson(out));
         }
         catch (Exception e) { log.warn("held-cost save failed: {}", e.getMessage()); }
