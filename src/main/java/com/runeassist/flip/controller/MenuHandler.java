@@ -413,13 +413,23 @@ public class MenuHandler {
             return false;
         }
         String offerType = grandExchange.isOfferTypeSell() ? "sell" : "buy";
-        if (client.getVarpValue(VarPlayerID.TRADINGPOST_SEARCH) == suggestion.getItemId() && offerType.equals(suggestion.offerType())) {
+        int editorItem = editorItemId();
+        if (editorItem == suggestion.getItemId() && offerType.equals(suggestion.offerType())) {
             return grandExchange.getOfferPrice() == suggestion.getPrice()
                     && grandExchange.getOfferQuantity() == suggestion.getQuantity();
-        } else if (client.getVarpValue(VarPlayerID.TRADINGPOST_SEARCH) == offerManager.getViewedSlotItemId()
+        } else if (editorItem == offerManager.getViewedSlotItemId()
                 && offerManager.getViewedSlotItemPrice() > 0) {
             return grandExchange.getOfferPrice() == offerManager.getViewedSlotItemPrice();
         }
         return false;
+    }
+
+    /** Modify opens Set up offer without search, so TRADINGPOST_SEARCH is often -1. */
+    private int editorItemId() {
+        int current = grandExchange.getCurrentItemId();
+        if (current > 0) {
+            return current;
+        }
+        return client.getVarpValue(VarPlayerID.TRADINGPOST_SEARCH);
     }
 }

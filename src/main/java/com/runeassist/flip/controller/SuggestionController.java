@@ -151,45 +151,68 @@ public class SuggestionController {
         if (p != null && p.actionedTick != -1 && p.actionedTick <= client.getTickCount()) {
             return false;
         }
+        return isEditorOnModify(p);
+    }
+
+    /**
+     * Set up offer is open for this modify — including after cancel-then-relist,
+     * when the slot is EMPTY and {@code boxId} may be stale. Used so the panel
+     * and price highlight are not dropped as a ghost.
+     */
+    private boolean isEditorOnModify(Suggestion p) {
         if (!grandExchange.isSlotOpen()) {
             return false;
         }
+        int open = grandExchange.getOpenSlot();
+        int currentItem = grandExchange.getCurrentItemId();
         AccountStatusManager.OwnedModify owned = accountStatusManager.getOwnedModify();
         if (owned != null && owned.itemId > 0) {
-            return slotIsForOwnedModify(grandExchange.getOpenSlot(), owned);
+            if (slotIsForOwnedModify(open, currentItem, owned)) {
+                return true;
+            }
         }
         if (p != null && p.isModifySuggestion()) {
-            return slotIsForSuggestionModify(grandExchange.getOpenSlot(), p);
+            return slotIsForSuggestionModify(open, currentItem, p);
         }
         return false;
     }
 
-    private boolean slotIsForOwnedModify(int open, AccountStatusManager.OwnedModify owned) {
+    private boolean slotIsForOwnedModify(int open, int currentItem, AccountStatusManager.OwnedModify owned) {
         if (open < 0 || owned == null) {
             return false;
         }
-        if (open == owned.slot) {
+        if (ModifyStep.editorMatches(open, currentItem, owned.itemId, owned.slot)) {
             return true;
         }
         return liveOfferItemId(open) == owned.itemId;
     }
 
-    private boolean slotIsForSuggestionModify(int open, Suggestion p) {
+    private boolean slotIsForSuggestionModify(int open, int currentItem, Suggestion p) {
         if (open < 0 || p == null) {
             return false;
         }
-        if (open == p.getBoxId()) {
+        if (ModifyStep.editorMatches(open, currentItem, p.getItemId(), p.getBoxId())) {
             return true;
         }
         return liveOfferItemId(open) == p.getItemId();
     }
 
+    /**
+     * Filling BUYING/SELLING only. CANCELLED_* still reports an itemId after
+     * modify cancels, which used to block a replacement fetch and leave the
+     * panel stuck on "Getting the next flip…".
+     */
     private int liveOfferItemId(int slot) {
         GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
         if (offers == null || slot < 0 || slot >= offers.length || offers[slot] == null) {
             return -1;
         }
-        return offers[slot].getItemId();
+        GrandExchangeOfferState st = offers[slot].getState();
+        if (st != GrandExchangeOfferState.BUYING && st != GrandExchangeOfferState.SELLING) {
+            return -1;
+        }
+        int itemId = offers[slot].getItemId();
+        return itemId > 0 ? itemId : -1;
     }
 
     /** Stale MODIFY card: allow replacement and do not re-arm the lock on the next slot click. */
@@ -410,15 +433,17 @@ public class SuggestionController {
     /**
      * MODIFY with no filling offer and the editor closed — a leftover lock after
      * logout/collect/empty slot. Do not show it; fetch BUY into empty slots.
+     * Cancel-then-relist (Set up offer still showing this item) is not a ghost.
      */
     public boolean isGhostModify(Suggestion s) {
         if (s == null || !s.isModifySuggestion() || s.getItemId() <= 0) {
             return false;
         }
-        if (isModifyInProgress(s)) {
+        if (isEditorOnModify(s)) {
             return false;
         }
-        return !grandExchange.hasFillingOffer(s.getItemId());
+        return ModifyStep.isGhost(true, s.getItemId(), false,
+                grandExchange.hasFillingOffer(s.getItemId()));
     }
 
     private void playDumpAlertSound() {

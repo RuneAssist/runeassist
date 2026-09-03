@@ -57,7 +57,7 @@ public class GrandExchangeCollectHandler {
             log.debug("modify offer clicked (tick {}) on slot {}", client.getTickCount(), slot);
             Suggestion suggestion = suggestionManager.getSuggestion();
             if (suggestion != null && suggestion.isModifySuggestion()) {
-                accountStatusManager.beginOwnedModify(suggestion);
+                accountStatusManager.beginOwnedModify(suggestion, slot);
             }
             suggestionManager.suggestionsDelayedUntil = client.getTickCount() + 3;
             geUncollected.clearSlotUncollected(osrsLoginManager.getAccountHash(), slot);
