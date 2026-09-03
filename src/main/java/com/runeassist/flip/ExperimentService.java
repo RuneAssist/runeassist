@@ -36,19 +36,19 @@ import java.util.concurrent.ConcurrentHashMap;
 @Singleton
 public class ExperimentService
 {
-    private static final Set<String> ALLOWED_RSNS = Set.of();
+    private static final Set<String> ALLOWED_RSNS = Set.of("bof118", "coldtyres");
 
     private static final double[] BUY_OFFSETS = {0.0, -0.01, -0.03, -0.05};
     private static final double[] SELL_OFFSETS = {0.0, 0.01, 0.03, 0.05};
 
     public static final class Experiment
     {
-        final int itemId;
-        final String itemName;
-        final boolean buy;
-        final int qty;
-        final long startedAt = System.currentTimeMillis();
-        int rung = 0;
+        public final int itemId;
+        public final String itemName;
+        public final boolean buy;
+        public final int qty;
+        public final long startedAt = System.currentTimeMillis();
+        public int rung = 0;
 
         Experiment(int itemId, String itemName, boolean buy, int qty)
         {
@@ -58,7 +58,7 @@ public class ExperimentService
             this.qty = qty;
         }
 
-        double[] offsets() { return buy ? BUY_OFFSETS : SELL_OFFSETS; }
+        public double[] offsets() { return buy ? BUY_OFFSETS : SELL_OFFSETS; }
         boolean isLastRung() { return rung >= offsets().length - 1; }
     }
 
