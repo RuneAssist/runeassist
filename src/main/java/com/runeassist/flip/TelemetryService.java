@@ -45,21 +45,19 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * OPT-IN, anonymised telemetry logger.
+ * OPT-IN, pseudonymous telemetry logger.
  *
  * Writes versioned JSONL to a per-day file under ~/.runelite/runeassist/telemetry/
- * so account data (real XP/hr, GE performance, account trajectories) can be analysed
- * later. Live XP/GE/account capture is a no-op unless contribution is on
- * (opt-in, default OFF) in <b>RuneAssist Flipping → Privacy</b> and/or the MCP plugin. GE history
- * dumps still persist locally so a later opt-in can upload them.
+ * so GE offer/history/decision data can be analysed later. Capture is a no-op unless
+ * this plugin's own {@code shareTelemetry} toggle (opt-in, default OFF, <b>RuneAssist
+ * Flipping → Privacy</b>) is on. GE history dumps still persist locally so a later
+ * opt-in can upload them.
  *
- * <p>Flipping's toggle is sufficient on its own (the hosted ingest URL and plugin
- * contribute key are used when the box is ticked — no token to paste). MCP
- * {@code shareTelemetry} / endpoint / token remain as a fallback when Flipping is
- * not used. Local files are always the primary sink. Uploads are batched, retried,
-     * off-thread, and limited to {@link #UPLOAD_TYPES}; the {@code advice} record
-     * (raw chat question) is NEVER uploaded. {@code suggestion_decision} is uploaded:
-     * compact skip/abort/acted/ignored picks, no bank, no XP, no raw RSN.
+ * <p>The hosted ingest URL and plugin contribute key are used when the box is ticked
+ * — no token to paste. Local files are always the primary sink. Uploads are batched,
+ * retried, off-thread, and limited to exactly {@link #UPLOAD_TYPES}. {@code
+ * suggestion_decision} is uploaded as a compact skip/abort/acted/ignored pick, no
+ * bank, no chat, no raw RSN — just a pseudonymous account hash (SHA-256 of the RSN).
  *
  * Callers (client thread / EDT) gather live values and pass primitives in; this class
  * never touches the RuneLite Client and never throws. All disk IO runs on a single
@@ -85,7 +83,6 @@ public class TelemetryService
     @Inject private WikiPriceService wikiPriceService;
 
     private RuneAssistConfig flipConfig;
-    private OsrsMcpConfig mcpConfig;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "runeassist-telemetry");
@@ -94,11 +91,9 @@ public class TelemetryService
     });
 
     // ── optional upload (the hosted ingest flywheel; opt-in + endpoint required) ──
-    // Only these record types are ever uploaded. Notably "advice" is excluded — it
-    // contains the player's raw chat question, which never leaves the PC.
+    // Only these record types are ever uploaded.
     private static final Set<String> UPLOAD_TYPES =
-        new HashSet<>(Arrays.asList("ge_offer", "account_snapshot", "xp_gain", "ge_history",
-            "suggestion_decision"));
+        new HashSet<>(Arrays.asList("ge_offer", "ge_history", "suggestion_decision"));
     private static final int  BATCH_MAX     = 50;   // flush when this many queued
     private static final long FLUSH_EVERY_S = 60;   // or at least this often
     private static final int  QUEUE_CAP     = 2000; // drop oldest beyond this (bounded memory)
@@ -161,19 +156,8 @@ public class TelemetryService
 
     private boolean enabled()
     {
-        return flipShare() || mcpShare();
-    }
-
-    private boolean flipShare()
-    {
         RuneAssistConfig f = flip();
         return f != null && f.shareTelemetry();
-    }
-
-    private boolean mcpShare()
-    {
-        OsrsMcpConfig m = mcp();
-        return m != null && m.shareTelemetry();
     }
 
     private RuneAssistConfig flip()
@@ -186,16 +170,6 @@ public class TelemetryService
         return flipConfig;
     }
 
-    private OsrsMcpConfig mcp()
-    {
-        if (mcpConfig == null && configManager != null)
-        {
-            try { mcpConfig = configManager.getConfig(OsrsMcpConfig.class); }
-            catch (RuntimeException ignored) {}
-        }
-        return mcpConfig;
-    }
-
     private static String trimmed(String s)
     {
         if (s == null) return null;
@@ -203,36 +177,20 @@ public class TelemetryService
         return t.isEmpty() ? null : t;
     }
 
-    /** Prefer Flipping's endpoint (hosted default) when that toggle is on; else MCP. */
+    /** Only this plugin's own {@code shareTelemetry} toggle controls telemetry. */
     private String contributionEndpoint()
     {
-        if (flipShare())
-        {
-            String e = trimmed(flip().telemetryEndpoint());
-            return e != null ? e : DEFAULT_ENDPOINT;
-        }
-        if (mcpShare())
-        {
-            String e = trimmed(mcp().telemetryEndpoint());
-            if (e != null) return e;
-        }
-        return null;
+        if (!enabled()) return null;
+        String e = trimmed(flip().telemetryEndpoint());
+        return e != null ? e : DEFAULT_ENDPOINT;
     }
 
     private String contributionToken()
     {
-        if (flipShare())
-        {
-            String t = trimmed(flip().telemetryToken());
-            if (t != null) return t;
-            if (isHostedAres(contributionEndpoint())) return PLUGIN_CONTRIBUTE_TOKEN;
-        }
-        if (mcpShare())
-        {
-            String t = trimmed(mcp().telemetryToken());
-            if (t != null) return t;
-            if (isHostedAres(contributionEndpoint())) return PLUGIN_CONTRIBUTE_TOKEN;
-        }
+        if (!enabled()) return null;
+        String t = trimmed(flip().telemetryToken());
+        if (t != null) return t;
+        if (isHostedAres(contributionEndpoint())) return PLUGIN_CONTRIBUTE_TOKEN;
         return null;
     }
 
@@ -244,61 +202,6 @@ public class TelemetryService
     }
 
     // ── PUBLIC CAPTURE METHODS ────────────────────────────────────────────────
-
-    public void logXpGain(String rsn, String skill, long xp, long delta, int level,
-                          int x, int y, int plane)
-    {
-        if (!enabled()) return;
-        Map<String, Object> r = new LinkedHashMap<>();
-        r.put("v", SCHEMA_VERSION);
-        r.put("type", "xp_gain");
-        r.put("ts", System.currentTimeMillis());
-        r.put("acct", acctHash(rsn));
-        r.put("skill", skill);
-        r.put("xp", xp);
-        r.put("delta", delta);
-        r.put("level", level);
-        r.put("x", x);
-        r.put("y", y);
-        r.put("plane", plane);
-        write("xp_gain", r);
-    }
-
-    public void logAccountSnapshot(String rsn, int combatLevel, int totalLevel, int questPoints,
-                                   String accountType, int x, int y, int plane,
-                                   Map<String, long[]> skills)
-    {
-        if (!enabled()) return;
-        Map<String, Object> r = new LinkedHashMap<>();
-        r.put("v", SCHEMA_VERSION);
-        r.put("type", "account_snapshot");
-        r.put("ts", System.currentTimeMillis());
-        r.put("acct", acctHash(rsn));
-        r.put("combat_level", combatLevel);
-        r.put("total_level", totalLevel);
-        r.put("quest_points", questPoints);
-        r.put("account_type", accountType);
-        r.put("x", x);
-        r.put("y", y);
-        r.put("plane", plane);
-
-        // skills: skillName -> [level, xp]
-        Map<String, Object> skillMap = new LinkedHashMap<>();
-        if (skills != null)
-        {
-            for (Map.Entry<String, long[]> e : skills.entrySet())
-            {
-                long[] v = e.getValue();
-                if (v == null || v.length < 2) continue;
-                Map<String, Object> s = new LinkedHashMap<>();
-                s.put("level", v[0]);
-                s.put("xp", v[1]);
-                skillMap.put(e.getKey(), s);
-            }
-        }
-        r.put("skills", skillMap);
-        write("account_snapshot", r);
-    }
 
     public void logGeOffer(String rsn, int slot, String state, int itemId, int price,
                            int totalQuantity, int quantitySold, int spent)
@@ -440,32 +343,6 @@ public class TelemetryService
             historyLocalScanned = false;
             if (uploadEnabled()) scanLocalHistoryForUpload();
         });
-    }
-
-    /**
-     * The RuneAssist advice-&gt;outcome loop: what was asked, which tools fired, and the
-     * cost. Joined offline to the surrounding account_snapshot records (by time + acct) to
-     * see whether the advice was taken and whether it helped. Uses the last-known account
-     * hash (captured on the client thread by xp/snapshot events), so the caller -- the chat
-     * panel on the EDT -- needs no Client access. The question is the user's own input and
-     * stays local like everything else here.
-     */
-    public void logAdvice(String question, java.util.List<String> tools, String provider,
-                          int inTokens, int outTokens, int answerChars)
-    {
-        if (!enabled()) return;
-        Map<String, Object> r = new LinkedHashMap<>();
-        r.put("v", SCHEMA_VERSION);
-        r.put("type", "advice");
-        r.put("ts", System.currentTimeMillis());
-        r.put("acct", lastHash != null ? lastHash : "anon");
-        r.put("question", question);
-        r.put("tools", tools != null ? tools : java.util.Collections.emptyList());
-        r.put("provider", provider);
-        r.put("in_tokens", inTokens);
-        r.put("out_tokens", outTokens);
-        r.put("answer_chars", answerChars);
-        write("advice", r);
     }
 
     public void shutdown()
