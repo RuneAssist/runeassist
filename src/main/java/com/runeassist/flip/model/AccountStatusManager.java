@@ -217,14 +217,26 @@ public class AccountStatusManager {
      * Keep this listing owned until {@link #clearOwnedModify()}.
      */
     public synchronized void beginOwnedModify(Suggestion s) {
+        beginOwnedModify(s, -1);
+    }
+
+    /**
+     * @param slotHint clicked / currently open GE slot. Needed because modify
+     *                 cancels first — the live offer may already be gone, and
+     *                 {@link Suggestion#getBoxId()} can be stale.
+     */
+    public synchronized void beginOwnedModify(Suggestion s, int slotHint) {
         if (s == null || !s.isModifySuggestion() || s.getItemId() <= 0) {
             return;
         }
         if (ownedModify != null && ownedModify.itemId == s.getItemId()) {
+            if (slotHint >= 0) {
+                ownedModify.slot = slotHint;
+            }
             return;
         }
         OwnedModify owned = new OwnedModify();
-        owned.slot = s.getBoxId();
+        owned.slot = slotHint >= 0 ? slotHint : s.getBoxId();
         owned.itemId = s.getItemId();
         owned.buy = s.getType() == SuggestionType.MODIFY_BUY;
         owned.targetPrice = s.getPrice();

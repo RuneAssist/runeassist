@@ -142,8 +142,10 @@ public class GameUiChangesHandler {
     public void onWidgetClosed(WidgetClosed event) {
         if (event.getGroupId() == InterfaceID.GE_OFFERS) {
             clientThread.invokeLater(highlightController::removeAll);
-            accountStatusManager.clearOwnedModify();
-            suggestionManager.setSuggestionNeeded(true);
+            // GE_OFFERS reloads when opening the slot editor for modify. Clearing
+            // the lock here dropped the MODIFY card (panel → "Getting the next
+            // flip…", no price highlight). releaseStaleOwnedModify on tick
+            // drops the lock when the editor is actually gone.
         }
         if (event.getGroupId() == InterfaceID.BANKMAIN) {
             clientThread.invokeLater(highlightController::redraw);
@@ -157,7 +159,7 @@ public class GameUiChangesHandler {
             if (open >= 0 && suggestion != null && suggestion.isModifySuggestion()
                     && suggestion.actionedTick == -1
                     && slotIsForModify(open, suggestion)) {
-                accountStatusManager.beginOwnedModify(suggestion);
+                accountStatusManager.beginOwnedModify(suggestion, open);
             } else if (accountStatusManager.isOwnedModifyActive()
                     && (open < 0 || !slotIsForModify(open, suggestion))) {
                 accountStatusManager.clearOwnedModify();
@@ -205,23 +207,40 @@ public class GameUiChangesHandler {
     }
 
     /**
-     * True when the open GE slot is this MODIFY: the card's box, or the live offer
-     * in that slot is still the same item. A random empty slot must not re-arm the lock.
+     * True when the open GE slot is this MODIFY: owned/clicked slot, editor item,
+     * or a live offer of the same item. A random empty slot must not re-arm the lock.
+     * Matching only {@link Suggestion#getBoxId()} + filling offer fails after
+     * cancel-then-relist (stale boxId, slot already EMPTY).
      */
     private boolean slotIsForModify(int open, Suggestion suggestion) {
-        if (open < 0 || suggestion == null) {
+        if (open < 0) {
             return false;
         }
-        if (open == suggestion.getBoxId()) {
+        int currentItem = grandExchange.getCurrentItemId();
+        AccountStatusManager.OwnedModify owned = accountStatusManager.getOwnedModify();
+        if (owned != null && owned.itemId > 0) {
+            if (ModifyStep.editorMatches(open, currentItem, owned.itemId, owned.slot)) {
+                return true;
+            }
+            if (liveOfferItemId(open) == owned.itemId) {
+                return true;
+            }
+        }
+        if (suggestion == null || !suggestion.isModifySuggestion()) {
+            return false;
+        }
+        if (ModifyStep.editorMatches(open, currentItem, suggestion.getItemId(), suggestion.getBoxId())) {
             return true;
         }
+        return liveOfferItemId(open) == suggestion.getItemId();
+    }
+
+    private int liveOfferItemId(int slot) {
         GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
-        if (offers != null && open < offers.length && offers[open] != null
-                && offers[open].getItemId() > 0
-                && offers[open].getItemId() == suggestion.getItemId()) {
-            return true;
+        if (offers == null || slot < 0 || slot >= offers.length || offers[slot] == null) {
+            return -1;
         }
-        return false;
+        return offers[slot].getItemId();
     }
 
     private OfferStatus suggestionOfferStatus(Suggestion suggestion) {
