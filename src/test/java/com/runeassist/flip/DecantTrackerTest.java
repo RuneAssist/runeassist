@@ -124,6 +124,10 @@ public class DecantTrackerTest {
         return itemId;
     }
 
+    private static Suggestion suggestion(SuggestionType type, int itemId, double profit) {
+        return suggestion(type, itemId, Double.valueOf(profit));
+    }
+
     private static Suggestion suggestion(SuggestionType type, int itemId, Double profit) {
         Suggestion s = new Suggestion();
         s.setType(type);
