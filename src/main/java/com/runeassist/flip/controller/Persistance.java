@@ -15,7 +15,7 @@ import java.util.*;
 @Slf4j
 public class Persistance {
     public static Gson gson;
-    public static final File COPILOT_DIR = new File(RuneLite.RUNELITE_DIR, "runeassist-flip");
+    public static final File PLUGIN_DIR = new File(RuneLite.RUNELITE_DIR, "runeassist-flip");
     public static final String UN_ACKED_TRANSACTIONS_FILE_TEMPLATE = "%s_un_acked.jsonl";
     public static final String LOGIN_RESPONSE_JSON_FILE = "login-response.json";
     public static File directory;
@@ -28,17 +28,17 @@ public class Persistance {
 
     public static void setUp(Gson gson) throws IOException {
         Persistance.gson = gson;
-        directory = COPILOT_DIR;
-        createDirectory(COPILOT_DIR);
+        directory = PLUGIN_DIR;
+        createDirectory(PLUGIN_DIR);
         createRequiredFiles();
     }
 
     public static boolean hasExistingInstallation() {
-        if (!COPILOT_DIR.exists() || !COPILOT_DIR.isDirectory()) {
+        if (!PLUGIN_DIR.exists() || !PLUGIN_DIR.isDirectory()) {
             return false;
         }
 
-        String[] files = COPILOT_DIR.list();
+        String[] files = PLUGIN_DIR.list();
         return files != null && files.length > 0;
     }
 
@@ -66,7 +66,7 @@ public class Persistance {
 
     public static List<Transaction> loadUnAckedTransactions(String displayName) {
         List<Transaction> transactions = new ArrayList<>();
-        File file = new File(COPILOT_DIR, String.format(UN_ACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
+        File file = new File(PLUGIN_DIR, String.format(UN_ACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
         if (!file.exists()) {
             log.info("no existing un acked transactions file for {}", displayName);
             return new ArrayList<>();
@@ -105,7 +105,7 @@ public class Persistance {
     }
 
     public static void storeUnAckedTransactions(List<Transaction> transactions, String displayName) {
-        File unackedTransactionsFile = new File(COPILOT_DIR, String.format(UN_ACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
+        File unackedTransactionsFile = new File(PLUGIN_DIR, String.format(UN_ACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
         try (BufferedWriter w = new BufferedWriter(new FileWriter(unackedTransactionsFile, false))) {
             for (Transaction transaction : transactions) {
                 String json = gson.toJson(transaction);

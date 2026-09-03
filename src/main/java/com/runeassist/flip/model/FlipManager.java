@@ -40,7 +40,7 @@ public class FlipManager {
 
     // state
     @Setter
-    private volatile int copilotUserId;
+    private volatile int pluginUserId;
     private Integer intervalAccount;
     private int intervalStartTime;
     private Stats intervalStats = new Stats();
@@ -67,8 +67,8 @@ public class FlipManager {
         return null;
     }
 
-    public synchronized boolean mergeFlips(List<FlipV2> flips, int copilotUserId) {
-        if (copilotUserId != this.copilotUserId) {
+    public synchronized boolean mergeFlips(List<FlipV2> flips, int pluginUserId) {
+        if (pluginUserId != this.pluginUserId) {
             return false;
         }
         flips.sort(FLIP_STATUS_TIME_COMPARATOR);
@@ -265,7 +265,7 @@ public class FlipManager {
     public synchronized void reset() {
         intervalAccount = null;
         intervalStartTime = 0;
-        copilotUserId = 0;
+        pluginUserId = 0;
         intervalStats = new Stats();
         lastOpenFlipByItemId.clear();
         existingCloseTimes.clear();

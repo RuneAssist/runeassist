@@ -1,7 +1,7 @@
 package com.runeassist.flip.ui;
 
 import com.runeassist.flip.controller.OfferHandler;
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.OfferManager;
 import com.runeassist.flip.model.Suggestion;
 import lombok.extern.slf4j.Slf4j;
@@ -19,13 +19,13 @@ public class OfferEditor {
     private final OfferManager offerManager;
     private final OfferHandler offerHandler;
     private final Client client;
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
 
     private Widget text;
     private static final int MOUSE_OFF_TEXT_COLOR = 0x0040FF;
     private static final int MOUSE_OFF_ERROR_TEXT_COLOR = 0xAA2222;
 
-    public OfferEditor(OfferManager offerManager, Widget parent, OfferHandler offerHandler, Client client, FlippingCopilotConfig config) {
+    public OfferEditor(OfferManager offerManager, Widget parent, OfferHandler offerHandler, Client client, RuneAssistConfig config) {
         this.offerManager = offerManager;
         this.offerHandler = offerHandler;
         this.client = client;

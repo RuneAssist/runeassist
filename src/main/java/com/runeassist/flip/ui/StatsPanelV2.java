@@ -1,9 +1,9 @@
 package com.runeassist.flip.ui;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.*;
 import com.runeassist.flip.model.*;
-import com.runeassist.flip.rs.CopilotLoginRS;
+import com.runeassist.flip.rs.AccountLoginRS;
 import com.runeassist.flip.rs.PortfolioStateRS;
 import com.runeassist.flip.ui.components.AccountDropdown;
 import com.runeassist.flip.ui.components.IntervalDropdown;
@@ -43,9 +43,9 @@ public class StatsPanelV2 extends JPanel {
     private JPanel hourlyProfitRow;
 
     // dependencies
-    private final CopilotLoginRS copilotLoginRS;
+    private final AccountLoginRS accountLoginRS;
     private final OsrsLoginManager osrsLoginManager;
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final FlipManager flipManager;
     private final SessionManager sessionManager;
     private final WebHookController webHookController;
@@ -74,16 +74,16 @@ public class StatsPanelV2 extends JPanel {
 
     // Modified constructor
     @Inject
-    public StatsPanelV2(CopilotLoginRS copilotLoginRS,
+    public StatsPanelV2(AccountLoginRS accountLoginRS,
                         OsrsLoginManager osrsLoginManager,
-                        FlippingCopilotConfig config,
+                        RuneAssistConfig config,
                         FlipManager FlipManager,
                         SessionManager sessionManager,
                         WebHookController webHookController,
                         ClientThread clientThread,
                         FlipsDialogController flipsDialogController,
                         PortfolioStateRS portfolioStateRS) {
-        this.copilotLoginRS = copilotLoginRS;
+        this.accountLoginRS = accountLoginRS;
         this.osrsLoginManager = osrsLoginManager;
         this.sessionManager = sessionManager;
         this.webHookController = webHookController;
@@ -120,7 +120,7 @@ public class StatsPanelV2 extends JPanel {
         timeIntervalDropdownWrapper.setMaximumSize(new Dimension(Integer.MAX_VALUE, timeIntervalDropdownWrapper.getPreferredSize().height));
 
         accountDropdown = new AccountDropdown(
-                () -> copilotLoginRS.get().displayNameToAccountId,
+                () -> accountLoginRS.get().displayNameToAccountId,
                 flipManager::setIntervalAccount,
                 AccountDropdown.ALL_ACCOUNTS_DROPDOWN_OPTION
         );
@@ -184,7 +184,7 @@ public class StatsPanelV2 extends JPanel {
                         String displayName = osrsLoginManager.getPlayerDisplayName();
                         Integer accountId = displayName == null
                                 ? null
-                                : copilotLoginRS.get().getAccountId(displayName);
+                                : accountLoginRS.get().getAccountId(displayName);
                         if (accountId == null || accountId == -1) {
                             accountId = displayName == null ? null : LocalFlipLedger.accountIdFor(displayName);
                         }

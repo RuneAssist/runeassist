@@ -1,7 +1,7 @@
 package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.controller.ApiRequestHandler;
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.manager.PriceGraphConfigManager;
 import com.runeassist.flip.model.*;
@@ -28,8 +28,8 @@ public class FlipsDialogController {
     private final ItemController itemController;
     private final FlipManager flipsManager;
     private final ExecutorService executorService;
-    private final CopilotLoginRS copilotLoginRS;
-    private final FlippingCopilotConfig config;
+    private final AccountLoginRS accountLoginRS;
+    private final RuneAssistConfig config;
     private final ApiRequestHandler apiRequestHandler;
     private final PriceGraphConfigManager priceGraphConfigManager;
     private final OsrsLoginManager osrsLoginManager;
@@ -52,11 +52,11 @@ public class FlipsDialogController {
 
     @Inject
     public FlipsDialogController(
-            @Named("copilotExecutor") ScheduledExecutorService executorService,
+            @Named("runeAssistExecutor") ScheduledExecutorService executorService,
             ItemController itemController,
             FlipManager flipsManager,
-            CopilotLoginRS copilotLoginRS,
-            FlippingCopilotConfig config,
+            AccountLoginRS accountLoginRS,
+            RuneAssistConfig config,
             ApiRequestHandler apiRequestHandler,
             PriceGraphConfigManager priceGraphConfigManager,
             OsrsLoginManager osrsLoginManager,
@@ -72,7 +72,7 @@ public class FlipsDialogController {
         this.itemController = itemController;
         this.flipsManager = flipsManager;
         this.executorService = executorService;
-        this.copilotLoginRS = copilotLoginRS;
+        this.accountLoginRS = accountLoginRS;
         this.config = config;
         this.apiRequestHandler = apiRequestHandler;
         this.priceGraphConfigManager = priceGraphConfigManager;
@@ -104,30 +104,30 @@ public class FlipsDialogController {
                     apiRequestHandler,
                     localFlipLedger
             );
-            flipsPanel = new FlipsPanel(flipsManager, itemController, copilotLoginRS,
+            flipsPanel = new FlipsPanel(flipsManager, itemController, accountLoginRS,
                     executorService, config, apiRequestHandler, (f) -> {
                 showVisualizeFlip(f);
             });
-            missedFlipsPanel = new MissedFlipsPanel(osrsLoginRS, flipsManager, itemController, copilotLoginRS,
+            missedFlipsPanel = new MissedFlipsPanel(osrsLoginRS, flipsManager, itemController, accountLoginRS,
                     executorService, geHistoryStateRS, localFlipLedger, offerManager);
             ItemAggregatePanel itemsPanel = new ItemAggregatePanel(flipsManager, itemController,
-                    copilotLoginRS, executorService, config);
-            AccountsAggregatePanel accountsPanel = new AccountsAggregatePanel(copilotLoginRS,
+                    accountLoginRS, executorService, config);
+            AccountsAggregatePanel accountsPanel = new AccountsAggregatePanel(accountLoginRS,
                     executorService, config, apiRequestHandler, flipsManager);
-            ProfitPanel profitPanel = new ProfitPanel(flipsManager, executorService, copilotLoginRS, config);
+            ProfitPanel profitPanel = new ProfitPanel(flipsManager, executorService, accountLoginRS, config);
             PortfolioPanel portfolioPanel = new PortfolioPanel(
                     itemController,
                     config,
                     apiRequestHandler,
                     suggestionManager,
-                    copilotLoginRS,
+                    accountLoginRS,
                     osrsLoginRS,
                     portfolioStateRS,
                     bankStateRS,
                     clientThread,
                     itemId -> showPriceGraphTab(itemId, false, null)
             );
-            TransactionsPanel transactionsPanel = new TransactionsPanel(copilotLoginRS, itemController,
+            TransactionsPanel transactionsPanel = new TransactionsPanel(accountLoginRS, itemController,
                     executorService, apiRequestHandler, osrsLoginManager, config, flipsManager,
                     transactionManager, localFlipLedger);
             priceGraphPanel = new PriceGraphPanel(
@@ -214,7 +214,7 @@ public class FlipsDialogController {
 
     public void openSuggestionPriceGraph() {
         Suggestion suggestion = suggestionManager.getSuggestion();
-        if (config.priceGraphWebsite().equals(FlippingCopilotConfig.PriceGraphWebsite.FLIPPING_COPILOT)) {
+        if (config.priceGraphWebsite().equals(RuneAssistConfig.PriceGraphWebsite.RUNEASSIST)) {
             if (isSuggestionWithoutGraphData(suggestion)) {
                 showPriceGraphTab(suggestion.getItemId(), false, null);
             } else if (suggestion != null && !suggestion.isWaitSuggestion()) {

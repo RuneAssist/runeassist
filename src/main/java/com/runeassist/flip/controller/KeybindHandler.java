@@ -1,6 +1,6 @@
 package com.runeassist.flip.controller;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.SuggestionManager;
 import com.runeassist.flip.ui.flipsdialog.FlipsDialogController;
 import net.runelite.api.Client;
@@ -20,7 +20,7 @@ import java.awt.event.KeyEvent;
 public class KeybindHandler {
 
     private final KeyManager keyManager;
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final ClientThread clientThread;
     private final SuggestionManager suggestionManager;
     private final Client client;
@@ -32,7 +32,7 @@ public class KeybindHandler {
 
 
     @Inject
-    public KeybindHandler(KeyManager keyManager, FlippingCopilotConfig config, ClientThread clientThread, SuggestionManager suggestionManager, Client client, GrandExchange grandExchange, OfferHandler offerHandler, SuggestionController suggestionController, FlipsDialogController flipsDialogController) {
+    public KeybindHandler(KeyManager keyManager, RuneAssistConfig config, ClientThread clientThread, SuggestionManager suggestionManager, Client client, GrandExchange grandExchange, OfferHandler offerHandler, SuggestionController suggestionController, FlipsDialogController flipsDialogController) {
         this.keyManager = keyManager;
         this.config = config;
         this.clientThread = clientThread;

@@ -1,6 +1,6 @@
 package com.runeassist.flip.ui.graph;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.manager.PriceGraphConfigManager;
 
@@ -16,9 +16,9 @@ public class StatsPanel extends BaseStatsPanel {
     };
 
     // Set custom cell renderer for value column to color the change percentages (rows 5 and 6)
-    public StatsPanel(PriceGraphConfigManager configManager, FlippingCopilotConfig copilotConfig) {
+    public StatsPanel(PriceGraphConfigManager configManager, RuneAssistConfig pluginConfig) {
         super(configManager, ROWS, 400,
-                new ValueRenderer(copilotConfig, "0%", Arrays.asList(5, 6), Collections.emptyList()));
+                new ValueRenderer(pluginConfig, "0%", Arrays.asList(5, 6), Collections.emptyList()));
     }
 
     public void populate(DataManager dataManager, ItemController itemController) {

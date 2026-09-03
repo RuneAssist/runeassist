@@ -44,7 +44,7 @@ public class ItemAggregateFilterSort extends PagedFilterSort {
                                    Consumer<List<ItemAggregate>> aggregatesCallback,
                                    Consumer<Integer> totalPagesChangedCallback,
                                    Consumer<Boolean> slowLoadingCallback,
-                                   @Named("copilotExecutor") ExecutorService executorService) {
+                                   @Named("runeAssistExecutor") ExecutorService executorService) {
         super("Total profit", SortDirection.ASC);
         this.flipManager = flipManager;
         this.itemController = itemController;

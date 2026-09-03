@@ -6,16 +6,16 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginManager;
 
 /**
- * Plugin Hub "Flipping Copilot" ({@code com.flippingcopilot.*}). This fork is
- * {@code com.runeassist.flip.controller.FlippingCopilotPlugin} and must not emit
- * competing GE suggestions when the Hub plugin is also enabled.
+ * Detects Plugin Hub "Flipping Copilot" ({@code com.flippingcopilot.*}) so
+ * {@link com.runeassist.flip.controller.RuneAssistPlugin} does not emit competing
+ * GE suggestions when both plugins are enabled.
  */
 @Slf4j
-public final class HubFlippingCopilot
+public final class HubPluginConflict
 {
     public static final String WAIT_MESSAGE = "Turn off Plugin Hub Flipping Copilot";
 
-    private HubFlippingCopilot()
+    private HubPluginConflict()
     {
     }
 
@@ -61,7 +61,7 @@ public final class HubFlippingCopilot
         }
         catch (RuntimeException e)
         {
-            log.warn("HubFlippingCopilot.isEnabled scan failed", e);
+            log.warn("HubPluginConflict.isEnabled scan failed", e);
         }
         return false;
     }

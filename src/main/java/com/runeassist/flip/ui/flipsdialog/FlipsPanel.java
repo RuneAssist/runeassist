@@ -1,10 +1,10 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
-import com.runeassist.flip.rs.CopilotLoginRS;
+import com.runeassist.flip.rs.AccountLoginRS;
 import com.runeassist.flip.ui.Paginator;
 import com.runeassist.flip.ui.components.*;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +35,7 @@ public class FlipsPanel extends JPanel {
 
     // dependencies
     private final FlipManager flipsManager;
-    private final CopilotLoginRS copilotLoginRS;
+    private final AccountLoginRS accountLoginRS;
     private final ApiRequestHandler apiRequestHandler;
     private final Consumer<FlipV2> onVisualizeFlip;
 
@@ -51,13 +51,13 @@ public class FlipsPanel extends JPanel {
 
     public FlipsPanel(FlipManager flipsManager,
                       ItemController itemController,
-                      CopilotLoginRS copilotLoginRS,
-                      @Named("copilotExecutor") ExecutorService executorService,
-                      FlippingCopilotConfig config,
+                      AccountLoginRS accountLoginRS,
+                      @Named("runeAssistExecutor") ExecutorService executorService,
+                      RuneAssistConfig config,
                       ApiRequestHandler apiRequestHandler,
                       Consumer<FlipV2> onVisualizeFlip) {
         this.flipsManager = flipsManager;
-        this.copilotLoginRS = copilotLoginRS;
+        this.accountLoginRS = accountLoginRS;
         this.apiRequestHandler = apiRequestHandler;
         this.onVisualizeFlip = onVisualizeFlip;
 
@@ -68,12 +68,12 @@ public class FlipsPanel extends JPanel {
         Paginator paginatorPanel = new Paginator((i) -> sortAndFilter.setPage(i));
         tablePanel = new PaginatedTablePanel<>(COLUMN_NAMES, this::toRow);
         sortAndFilter = new FlipFilterAndSort(flipsManager, tablePanel::setRows, paginatorPanel::setTotalPages,
-                tablePanel::setSpinnerVisible, executorService, copilotLoginRS, itemController);
+                tablePanel::setSpinnerVisible, executorService, accountLoginRS, itemController);
 
         ItemSearchMultiSelect searchField = ItemSearchMultiSelect.itemsFilter(this, itemController,
                 sortAndFilter::getFilteredItems, sortAndFilter::setFilteredItems);
 
-        accountDropdown = DialogUi.accountDropdown(() -> copilotLoginRS.get().displayNameToAccountId, sortAndFilter::setAccountId);
+        accountDropdown = DialogUi.accountDropdown(() -> accountLoginRS.get().displayNameToAccountId, sortAndFilter::setAccountId);
 
         IntervalDropdown timeIntervalDropdown = DialogUi.intervalDropdown(sortAndFilter::setInterval);
 
@@ -124,7 +124,7 @@ public class FlipsPanel extends JPanel {
         return checkbox;
     }
 
-    private void applyRenderers(FlippingCopilotConfig config) {
+    private void applyRenderers(RuneAssistConfig config) {
         // Apply renderers
         tablePanel.moneyColumns(GP_FORMAT, true, 7, 8, 9, 11); // Avg. buy price, Avg. sell price, Tax, Profit ea.
         tablePanel.profitColumns(GP_FORMAT, config, 10); // Profit (with color)
@@ -141,7 +141,7 @@ public class FlipsPanel extends JPanel {
     }
 
     private Object[] toRow(FlipV2 flip) {
-        Map<Integer, String> accountIdToDisplayName = copilotLoginRS.get().accountIdToDisplayName;
+        Map<Integer, String> accountIdToDisplayName = accountLoginRS.get().accountIdToDisplayName;
         return new Object[]{
                 formatEpochOrNa(flip.getOpenedTime()),
                 formatEpochOrNa(flip.getClosedTime()),
@@ -176,7 +176,7 @@ public class FlipsPanel extends JPanel {
                 tablePanel.setSpinnerVisible(true);
                 log.info("deleting flip with ID: {}", flip.getId());
                 Consumer<List<FlipV2>> onSuccess = (flips) -> {
-                    flipsManager.mergeFlips(flips, copilotLoginRS.get().getUserId());
+                    flipsManager.mergeFlips(flips, accountLoginRS.get().getUserId());
                     tablePanel.setSpinnerVisible(false);
                     sortAndFilter.reloadFlips(true, true);
                 };

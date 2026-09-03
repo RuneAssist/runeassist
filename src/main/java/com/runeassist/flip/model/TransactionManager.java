@@ -3,7 +3,7 @@ package com.runeassist.flip.model;
 import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.controller.CloudSyncService;
 import com.runeassist.flip.controller.Persistance;
-import com.runeassist.flip.rs.CopilotLoginRS;
+import com.runeassist.flip.rs.AccountLoginRS;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -24,7 +24,7 @@ public class TransactionManager {
     private final FlipManager flipManager;
     private final ScheduledExecutorService executorService;
     private final ApiRequestHandler api;
-    private final CopilotLoginRS copilotLoginRS;
+    private final AccountLoginRS accountLoginRS;
     private final OsrsLoginManager osrsLoginManager;
     private final LocalFlipLedger localFlipLedger;
     private final OfferManager offerManager;
@@ -35,44 +35,14 @@ public class TransactionManager {
     private final ConcurrentMap<String, AtomicBoolean> transactionSyncScheduled = new ConcurrentHashMap<>();
 
     public void syncUnAckedTransactions(String displayName) {
-
-        long s = System.nanoTime();
-        List<Transaction> toSend;
         synchronized (this) {
-            toSend = new ArrayList<>(getUnAckedTransactions(displayName));
-            if(toSend.isEmpty()) {
-                transactionSyncScheduled.get(displayName).set(false);
-                return;
+            AtomicBoolean scheduled = transactionSyncScheduled.get(displayName);
+            if (scheduled != null) {
+                scheduled.set(false);
             }
         }
-
-        BiConsumer<Integer, List<FlipV2>> onSuccess = (userId, flips) -> {
-            if(!flips.isEmpty()) {
-                copilotLoginRS.addAccountIfMissing(flips.get(0).getAccountId(), displayName, userId);
-            }
-            flipManager.mergeFlips(flips, userId);
-            log.info("sending {} transactions took {}ms", toSend.size(), (System.nanoTime() - s) / 1000_000);
-            synchronized (this) {
-                List<Transaction> unAckedTransactions  = getUnAckedTransactions(displayName);
-                transactionSyncScheduled.get(displayName).set(false);
-                toSend.forEach(unAckedTransactions::remove);
-                if(!unAckedTransactions.isEmpty()) {
-                    scheduleSyncIn(0, displayName);
-                }
-            }
-        };
-
-        Consumer<HttpResponseException> onFailure = (e) -> {
-            synchronized (this) {
-                transactionSyncScheduled.get(displayName).set(false);
-            }
-            String currentDisplayName = osrsLoginManager.getPlayerDisplayName();
-            if (copilotLoginRS.get().isLoggedIn() && (currentDisplayName == null || currentDisplayName.equals(displayName))) {
-                log.warn("failed to send transactions to copilot server {}", e.getMessage(), e);
-                scheduleSyncIn(10, displayName);
-            }
-        };
-        api.sendTransactionsAsync(toSend, displayName, onSuccess, onFailure);
+        // Legacy copilot transaction upload is disabled. CloudSyncService
+        // handles opt-in history sync independently of this queue.
     }
 
     /**

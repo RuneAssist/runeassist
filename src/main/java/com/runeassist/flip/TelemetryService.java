@@ -1,10 +1,15 @@
-package com.osrsmcp;
+package com.runeassist.flip;
 
 import com.google.gson.Gson;
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
 import net.runelite.client.config.ConfigManager;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -16,9 +21,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -45,7 +47,7 @@ import java.util.concurrent.TimeUnit;
  * Writes versioned JSONL to a per-day file under ~/.runelite/runeassist/telemetry/
  * so account data (real XP/hr, GE performance, account trajectories) can be analysed
  * later. Live XP/GE/account capture is a no-op unless contribution is on
- * (default ON) in <b>RuneAssist Flipping → Privacy</b> and/or the MCP plugin. GE history
+ * (opt-in, default OFF) in <b>RuneAssist Flipping → Privacy</b> and/or the MCP plugin. GE history
  * dumps still persist locally so a later opt-in can upload them.
  *
  * <p>Flipping's toggle is sufficient on its own (the hosted ingest URL and plugin
@@ -70,14 +72,16 @@ public class TelemetryService
     /** Public plugin contribute key — not the Ares admin INGEST_TOKEN. */
     static final String PLUGIN_CONTRIBUTE_TOKEN = "ra-plugin-contribute-v1";
     private static final String UPLOAD_UA = "RuneAssist-flip/1.0 (github.com/RuneAssist/runeassist)";
+    private static final MediaType JSON = MediaType.parse("application/json");
 
     private final File baseDir;
+    private final OkHttpClient httpClient;
 
     @Inject private ConfigManager configManager;
-    @Inject private Gson gson;
+    private final Gson gson;
     @Inject private WikiPriceService wikiPriceService;
 
-    private FlippingCopilotConfig flipConfig;
+    private RuneAssistConfig flipConfig;
     private OsrsMcpConfig mcpConfig;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
@@ -141,8 +145,11 @@ public class TelemetryService
         }
     }
 
-    public TelemetryService()
+    @Inject
+    public TelemetryService(OkHttpClient httpClient, Gson gson)
     {
+        this.httpClient = httpClient;
+        this.gson = gson;
         baseDir = new File(RuneLite.RUNELITE_DIR, "runeassist/telemetry");
     }
 
@@ -153,7 +160,7 @@ public class TelemetryService
 
     private boolean flipShare()
     {
-        FlippingCopilotConfig f = flip();
+        RuneAssistConfig f = flip();
         return f != null && f.shareTelemetry();
     }
 
@@ -163,11 +170,11 @@ public class TelemetryService
         return m != null && m.shareTelemetry();
     }
 
-    private FlippingCopilotConfig flip()
+    private RuneAssistConfig flip()
     {
         if (flipConfig == null && configManager != null)
         {
-            try { flipConfig = configManager.getConfig(FlippingCopilotConfig.class); }
+            try { flipConfig = configManager.getConfig(RuneAssistConfig.class); }
             catch (RuntimeException ignored) {}
         }
         return flipConfig;
@@ -420,8 +427,8 @@ public class TelemetryService
     public void shutdown()
     {
         try { flushUploads(); } catch (Exception ignored) {}
-        uploader.shutdown();
-        executor.shutdown();
+        uploader.shutdownNow();
+        executor.shutdownNow();
     }
 
     // ── UPLOAD (optional, opt-in, endpoint-gated) ──────────────────────────────
@@ -463,35 +470,41 @@ public class TelemetryService
         String token    = contributionToken();
         try
         {
-            byte[] body = gson.toJson(batch).getBytes(StandardCharsets.UTF_8);
-            HttpURLConnection c = (HttpURLConnection) new URL(endpoint).openConnection();
-            c.setRequestMethod("POST");
-            c.setConnectTimeout(8000);
-            c.setReadTimeout(12000);
-            c.setDoOutput(true);
-            c.setRequestProperty("Content-Type", "application/json");
-            c.setRequestProperty("X-Schema-Version", String.valueOf(SCHEMA_VERSION));
-            c.setRequestProperty("User-Agent", UPLOAD_UA);
+            Request.Builder req = new Request.Builder()
+                .url(endpoint)
+                .header("Content-Type", "application/json")
+                .header("X-Schema-Version", String.valueOf(SCHEMA_VERSION))
+                .header("User-Agent", UPLOAD_UA)
+                .post(RequestBody.create(JSON, gson.toJson(batch)));
             if (token != null && !token.trim().isEmpty())
-                c.setRequestProperty("Authorization", "Bearer " + token.trim());
-            try (OutputStream os = c.getOutputStream()) { os.write(body); }
-            int code = c.getResponseCode();
-            c.disconnect();
-            if (code < 200 || code >= 300)
             {
-                if (code == 401)
+                req.header("Authorization", "Bearer " + token.trim());
+            }
+            try (Response r = httpClient.newBuilder()
+                .connectTimeout(8, TimeUnit.SECONDS)
+                .readTimeout(12, TimeUnit.SECONDS)
+                .callTimeout(20, TimeUnit.SECONDS)
+                .build()
+                .newCall(req.build())
+                .execute())
+            {
+                int code = r.code();
+                if (code < 200 || code >= 300)
                 {
-                    log.warn("Telemetry upload HTTP 401 — hosted ingest rejected the contribute key");
+                    if (code == 401)
+                    {
+                        log.warn("Telemetry upload HTTP 401 — hosted ingest rejected the contribute key");
+                    }
+                    else
+                    {
+                        log.warn("Telemetry upload failed HTTP {}; re-queueing {} records", code, batch.size());
+                    }
+                    requeue(batch);
                 }
                 else
                 {
-                    log.warn("Telemetry upload failed HTTP {}; re-queueing {} records", code, batch.size());
+                    markHistoryUploaded(batch);
                 }
-                requeue(batch);
-            }
-            else
-            {
-                markHistoryUploaded(batch);
             }
         }
         catch (Exception e)

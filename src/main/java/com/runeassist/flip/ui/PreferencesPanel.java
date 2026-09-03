@@ -115,7 +115,7 @@ public class PreferencesPanel extends JPanel {
             net.runelite.api.Client client,
             DrawManager drawManager,
             com.runeassist.flip.ExperimentService experimentService,
-            @Named("copilotExecutor") ScheduledExecutorService executorService) {
+            @Named("runeAssistExecutor") ScheduledExecutorService executorService) {
         super();
         this.preferencesManager = preferencesManager;
         this.accountPreferences = accountPreferences;

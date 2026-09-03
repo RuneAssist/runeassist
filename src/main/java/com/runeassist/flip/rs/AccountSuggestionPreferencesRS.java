@@ -22,7 +22,7 @@ public class AccountSuggestionPreferencesRS extends ReactiveStateImpl<AccountSug
 
     @Inject
     public AccountSuggestionPreferencesRS(Gson gson,
-                                          @Named("copilotExecutor") ScheduledExecutorService executorService,
+                                          @Named("runeAssistExecutor") ScheduledExecutorService executorService,
                                           OsrsLoginRS osrsLoginRS) {
         super(new AccountSuggestionPreferences());
         this.gson = gson;
@@ -84,6 +84,6 @@ public class AccountSuggestionPreferencesRS extends ReactiveStateImpl<AccountSug
     }
 
     private Path accountPreferencesPath(Long accountHash) {
-        return Paths.get(Persistance.COPILOT_DIR.getPath(), "acc_" + accountHash + "_prefs.json");
+        return Paths.get(Persistance.PLUGIN_DIR.getPath(), "acc_" + accountHash + "_prefs.json");
     }
 }

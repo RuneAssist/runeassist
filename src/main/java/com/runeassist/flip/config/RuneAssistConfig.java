@@ -11,13 +11,13 @@ import java.nio.charset.StandardCharsets;
 
 
 @ConfigGroup("runeassistflip")
-public interface FlippingCopilotConfig extends Config
+public interface RuneAssistConfig extends Config
 {
     // Keep this block first: RuneLite sorts sections by position, and users look at
-    // Configuration → RuneAssist Flipping. Production contribute is one pre-ticked box.
+    // Configuration → RuneAssist Flipping. Both toggles are opt-in (Hub requirement).
     @ConfigSection(
             name = "Privacy",
-            description = "Anonymous data contribution for the flip model",
+            description = "Optional anonymous data contribution and cloud history sync",
             position = 0
     )
     String privacySection = "privacySection";
@@ -25,30 +25,33 @@ public interface FlippingCopilotConfig extends Config
     @ConfigItem(
             keyName = "shareTelemetry",
             name = "Contribute anonymous data",
-            description = "On by default. Sends anonymised GE fills (hashed account id, never your " +
-                    "RSN or chat) to RuneAssist to train the flip model. Untick to keep everything local. " +
-                    "No endpoint or token needed for the hosted server.",
+            description = "Off by default. Sends anonymised GE fills (hashed account id, never your " +
+                    "RSN or chat) to RuneAssist ingest. Does not gate flip suggestions (those use " +
+                    "Ares /v1/flips independently). Untick stays local. No endpoint or token needed " +
+                    "for the hosted server.",
+            warning = "This feature submits your Grand Exchange offers and IP address to a 3rd-party server not controlled or verified by RuneLite developers",
             section = privacySection,
             position = 0
     )
     default boolean shareTelemetry()
     {
-        return true;
+        return false;
     }
 
     @ConfigItem(
             keyName = "cloudSync",
             name = "Cloud sync flip history",
-            description = "On by default. Silently links this client to RuneAssist cloud so GE fills " +
+            description = "Off by default. Silently links this client to RuneAssist cloud so GE fills " +
                     "sync across your devices (raw transactions only — not derived profit). Untick to keep " +
                     "history on this PC. Failures never block suggestions. Pair another device from the " +
                     "plugin Preferences panel.",
+            warning = "This feature submits your Grand Exchange transactions and IP address to a 3rd-party server not controlled or verified by RuneLite developers",
             section = privacySection,
             position = 1
     )
     default boolean cloudSync()
     {
-        return true;
+        return false;
     }
 
     @ConfigSection(
@@ -88,7 +91,7 @@ public interface FlippingCopilotConfig extends Config
 
     public enum PriceGraphWebsite
     {
-        FLIPPING_COPILOT("RuneAssist"),
+        RUNEASSIST("RuneAssist"),
         OSRS_WIKI("OSRS Wiki"),
         GE_TRACKER("GE Tracker"),
         PLATINUM_TOKENS("PlatinumTokens"),
@@ -261,7 +264,7 @@ public interface FlippingCopilotConfig extends Config
     )
     default PriceGraphWebsite priceGraphWebsite()
     {
-        return PriceGraphWebsite.FLIPPING_COPILOT;
+        return PriceGraphWebsite.RUNEASSIST;
     }
 
     @ConfigItem(

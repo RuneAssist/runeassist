@@ -31,7 +31,7 @@ public class AccountStatusManager {
     private final HeldItemSyncStateRS heldItemSyncStateRS;
     private final ItemController itemController;
     private final SuggestionManager suggestionManager;
-    private final com.osrsmcp.TelemetryService telemetry;
+    private final com.runeassist.flip.TelemetryService telemetry;
 
     /** Skip lasts 45 minutes so an abort/skip does not loop the same item, then it can surface again. */
     private static final long SKIP_TTL_MS = 45L * 60L * 1000L;

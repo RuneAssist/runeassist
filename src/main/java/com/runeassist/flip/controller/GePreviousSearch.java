@@ -29,7 +29,7 @@ public class GePreviousSearch {
         }
 
         if (isScanningForDumpsSuggested(suggestion)) {
-            if ((grandExchange.isPreviousSearchSet() || copilotPreviousSearchItemExists()) && grandExchange.showLastSearchEnabled()) {
+            if ((grandExchange.isPreviousSearchSet() || previousSearchItemExists()) && grandExchange.showLastSearchEnabled()) {
                 setScanningForDumpsMessage();
             } else {
                 createPreviousSearchWidget(-1, "");
@@ -43,7 +43,7 @@ public class GePreviousSearch {
         }
 
         if (suggestion.getType() == SuggestionType.BUY) {
-            if ((grandExchange.isPreviousSearchSet() || copilotPreviousSearchItemExists()) && grandExchange.showLastSearchEnabled()) {
+            if ((grandExchange.isPreviousSearchSet() || previousSearchItemExists()) && grandExchange.showLastSearchEnabled()) {
                 setPreviousSearch(suggestion.getItemId(), suggestion.getName());
             } else {
                 createPreviousSearchWidget(suggestion.getItemId(), suggestion.getName());
@@ -65,7 +65,7 @@ public class GePreviousSearch {
                 && suggestionPreferencesManager.isReceiveDumpSuggestions();
     }
 
-    private boolean copilotPreviousSearchItemExists() {
+    private boolean previousSearchItemExists() {
         Widget searchResults = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
         if(searchResults == null || searchResults.getChildren() == null || searchResults.getChildren().length < 2) {
             return false;

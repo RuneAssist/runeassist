@@ -1,8 +1,8 @@
 package com.runeassist.flip.ui;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.*;
-import com.runeassist.flip.HubFlippingCopilot;
+import com.runeassist.flip.HubPluginConflict;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.ui.flipsdialog.FlipsDialogController;
 import com.runeassist.flip.util.ProfitCalculator;
@@ -36,7 +36,7 @@ public class SuggestionPanel extends JPanel {
     private static final String CARD_SPINNER = "spinner";
 
     // dependencies
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final SuggestionManager suggestionManager;
     private final SuggestionPreferencesManager suggestionPreferencesManager;
     private final AccountStatusManager accountStatusManager;
@@ -80,7 +80,7 @@ public class SuggestionPanel extends JPanel {
 
 
     @Inject
-    public SuggestionPanel(FlippingCopilotConfig config,
+    public SuggestionPanel(RuneAssistConfig config,
                            SuggestionManager suggestionManager,
                            SuggestionPreferencesManager suggestionPreferencesManager,
                            AccountStatusManager accountStatusManager,
@@ -414,8 +414,8 @@ public class SuggestionPanel extends JPanel {
         setActionPill("wait");
         suggestionIcon.setVisible(false);
         String message = suggestion.getMessage();
-        if (HubFlippingCopilot.WAIT_MESSAGE.equals(message)) {
-            showCenteredMessage("<FONT COLOR=gray>" + HubFlippingCopilot.WAIT_MESSAGE + "</FONT>");
+        if (HubPluginConflict.WAIT_MESSAGE.equals(message)) {
+            showCenteredMessage("<FONT COLOR=gray>" + HubPluginConflict.WAIT_MESSAGE + "</FONT>");
             return;
         }
         if (Strings.isNullOrEmpty(message)) {
@@ -439,7 +439,7 @@ public class SuggestionPanel extends JPanel {
 
     public void suggestHubConflict() {
         setActionPill("wait");
-        setMessage("<FONT COLOR=gray>" + HubFlippingCopilot.WAIT_MESSAGE + "</FONT>");
+        setMessage("<FONT COLOR=gray>" + HubPluginConflict.WAIT_MESSAGE + "</FONT>");
         setButtonsVisible(false);
     }
 
@@ -586,7 +586,7 @@ public class SuggestionPanel extends JPanel {
         if(collectNeeded && !uncollectedManager.HasUncollected(osrsLoginManager.getAccountHash())) {
             log.warn("tick {} collect is suggested but there is nothing to collect! suggestion: {} {} {}", client.getTickCount(), suggestion.getType(), suggestion.getQuantity(), suggestion.getItemId());
         }
-        if (HubFlippingCopilot.WAIT_MESSAGE.equals(suggestion.getMessage())) {
+        if (HubPluginConflict.WAIT_MESSAGE.equals(suggestion.getMessage())) {
             suggestHubConflict();
         } else if (collectNeeded) {
             setServerMessage(suggestion.getMessage());

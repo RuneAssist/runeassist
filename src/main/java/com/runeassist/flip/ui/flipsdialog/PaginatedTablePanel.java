@@ -1,6 +1,6 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.SortDirection;
 import com.runeassist.flip.ui.*;
 import net.runelite.client.ui.ColorScheme;
@@ -137,7 +137,7 @@ public class PaginatedTablePanel<T> extends JPanel {
         setRenderer(moneyRenderer(format, centerStrings), columns);
     }
 
-    public void profitColumns(NumberFormat format, FlippingCopilotConfig config, int... columns) {
+    public void profitColumns(NumberFormat format, RuneAssistConfig config, int... columns) {
         setRenderer(profitRenderer(format, config), columns);
     }
 
@@ -327,7 +327,7 @@ public class PaginatedTablePanel<T> extends JPanel {
         };
     }
 
-    private static DefaultTableCellRenderer profitRenderer(NumberFormat format, FlippingCopilotConfig config) {
+    private static DefaultTableCellRenderer profitRenderer(NumberFormat format, RuneAssistConfig config) {
         return new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value,

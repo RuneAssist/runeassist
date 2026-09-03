@@ -1,6 +1,6 @@
 package com.runeassist.flip.ui;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.InventorySlotTooltipDataProvider;
 import com.runeassist.flip.controller.PlayerLocationController;
 import com.runeassist.flip.model.InventorySlotTooltipData;
@@ -42,7 +42,7 @@ public class InventorySlotTooltipOverlay extends Overlay {
     private final InventorySlotTooltipDataProvider tooltipDataProvider;
     private final TooltipManager tooltipManager;
     private final PlayerLocationController playerLocationController;
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
 
     {
         setPosition(OverlayPosition.DYNAMIC);

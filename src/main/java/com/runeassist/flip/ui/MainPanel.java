@@ -16,21 +16,21 @@ public class MainPanel extends PluginPanel {
     public static final int CONTENT_WIDTH = 242 - 12;
 
     public final LoginPanel loginPanel;
-    public final CopilotPanel copilotPanel;
+    public final RuneAssistPanel runeAssistPanel;
 
     private final CardLayout cardLayout = new CardLayout();
 
     @Inject
-    public MainPanel(CopilotPanel copilotPanel,
+    public MainPanel(RuneAssistPanel runeAssistPanel,
                      LoginPanel loginPanel) {
         super(false);
-        this.copilotPanel = copilotPanel;
+        this.runeAssistPanel = runeAssistPanel;
         this.loginPanel = loginPanel;
 
         setLayout(cardLayout);
         setBorder(BorderFactory.createEmptyBorder(5, 6, 5, 6));
         setBackground(RuneAssistColors.SHELL);
-        add(buildView(copilotPanel), "logged-in");
+        add(buildView(runeAssistPanel), "logged-in");
         cardLayout.show(this, "logged-in");
     }
 
@@ -47,7 +47,7 @@ public class MainPanel extends PluginPanel {
     public void refresh() {
         if (!UIUtilities.ensureEdt(this::refresh)) return;
         cardLayout.show(this, "logged-in");
-        copilotPanel.refresh();
+        runeAssistPanel.refresh();
     }
 
     private JPanel constructTopBar() {

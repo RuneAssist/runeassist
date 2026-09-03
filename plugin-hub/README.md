@@ -1,0 +1,74 @@
+# Plugin Hub submission draft
+
+This directory is **not** a live [runelite/plugin-hub](https://github.com/runelite/plugin-hub) checkout. It is a paste-ready manifest plus steps so a maintainer with a Hub fork can open the real PR.
+
+RuneAssist is a BSD-2 adaptation of Flipping Copilot. Hub reviewers can see git history and a similar GE overlay. The manifest does not hide that; it only publishes this plugin.
+
+## Manifest to paste
+
+File name in plugin-hub: `plugins/runeassist-flipping`
+
+Copy `plugin-hub/plugins/runeassist-flipping` from this repo. Before opening the Hub PR:
+
+1. Merge this plugin to `https://github.com/RuneAssist/runeassist` `main` (or another public commit you want Hub to build).
+2. Replace `commit=PASTE_40_CHAR_COMMIT_SHA` with the full 40-character SHA of that commit (`git rev-parse HEAD` on `main` after merge).
+3. Keep `repository=` as the public HTTPS URL ending in `.git`.
+4. Keep `warning=` exactly as written (same tone as Hub plugin `flipping-copilot`). Contribution is opt-in in the client, but the plugin can send GE offers/transactions and an IP to a third party (Ares `/v1/flips`, ingest, cloud sync).
+5. `build=standard` lives in this repo’s `runelite-plugin.properties`, not in the Hub file. Do not add a custom `build.gradle` dependency unless you switch to `build=gradle` and go through Hub dependency verification.
+
+Expected Hub file:
+
+```
+repository=https://github.com/RuneAssist/runeassist.git
+commit=<40-char sha>
+warning=This plugin submits your grand exchange offers, grand exchange transactions, and IP address to a 3rd party server not controlled or verified by the RuneLite Developers.
+authors=RuneAssist
+```
+
+## Exact Hub PR steps
+
+Follow https://github.com/runelite/plugin-hub#submitting-a-plugin :
+
+1. Fork https://github.com/runelite/plugin-hub (GitHub UI; this environment cannot open that PR — no `RuneAssist/plugin-hub` fork and Hub 403s agent tokens).
+2. Clone your fork. Add upstream if needed:
+   ```
+   git remote add upstream https://github.com/runelite/plugin-hub.git
+   git fetch upstream
+   git checkout -B runeassist-flipping upstream/master
+   ```
+3. Create `plugins/runeassist-flipping` with the four lines above (`repository`, `commit`, `warning`, `authors`).
+4. Commit and push:
+   ```
+   git add plugins/runeassist-flipping
+   git commit -m "Add runeassist-flipping"
+   git push -u origin runeassist-flipping
+   ```
+5. Open a pull request against `runelite/plugin-hub` `master` (**Compare across forks**). Description sketch:
+   - RuneAssist Flipping is a Grand Exchange assistant: local suggestion engine, held-cost tracking, Ares `/v1/flips` market data.
+   - Adapted from Flipping Copilot under BSD-2 (`LICENSE` / `THIRD_PARTY_LICENSES.md` in the plugin repo).
+   - Telemetry and cloud history sync default **off**; Hub `warning=` covers GE data + IP to a third party.
+   - `build=standard` in `runelite-plugin.properties`.
+6. Watch Hub CI (`.github/workflows/build.yml` and RuneLite Plugin Hub Checks). Fix plugin-repo issues, push a new plugin commit, then update `commit=` on the Hub PR. Keep a single Hub PR.
+
+## After Hub merge (updates)
+
+```
+git fetch upstream
+git checkout -B runeassist-flipping upstream/master
+# set commit= to the new plugin SHA
+git add plugins/runeassist-flipping
+git commit -m "update runeassist-flipping"
+git push -f -u origin runeassist-flipping
+```
+
+Then open (or update) the Hub PR from that branch.
+
+## What Hub already reads from this repo
+
+At the `commit=` SHA, Hub clones this repository and uses `runelite-plugin.properties`:
+
+- `displayName=RuneAssist Flipping`
+- `plugins=com.runeassist.flip.controller.RuneAssistPlugin`
+- `warning=` (same GE + IP third-party text)
+- `build=standard`
+- optional root `icon.png` (32×32, under the 48×72 Hub limit)
