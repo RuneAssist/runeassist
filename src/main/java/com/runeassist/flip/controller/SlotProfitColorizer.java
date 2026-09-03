@@ -143,6 +143,10 @@ public class SlotProfitColorizer {
 
         int itemId = client.getVarpValue(VarPlayerID.TRADINGPOST_SEARCH);
         if (itemId <= 0) {
+            // Modify (and inventory sell) never go through search.
+            itemId = grandExchange.getCurrentItemId();
+        }
+        if (itemId <= 0) {
             return defaultColor;
         }
 
