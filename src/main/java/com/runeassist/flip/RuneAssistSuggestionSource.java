@@ -13,6 +13,7 @@ import net.runelite.api.GrandExchangeOffer;
 import net.runelite.api.GrandExchangeOfferState;
 import net.runelite.api.InventoryID;
 import net.runelite.api.Item;
+import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.plugins.PluginManager;
@@ -726,6 +727,7 @@ public class RuneAssistSuggestionSource
         if (phase == DecantTracker.Phase.NEED_SELL)
         {
             if (hasActiveOffer(offersBySlot, sellItemId)) return null;
+            if (remainingSlots <= 0) return null; // can't list without a free GE slot
             long ownedSellQty = DecantTracker.ownedQty(ownedQty, sellItemId);
             if (ownedSellQty <= 0) return null;
             int qty = ownedSellQty > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) ownedSellQty;
@@ -840,15 +842,29 @@ public class RuneAssistSuggestionSource
      * Whether the decant candidate should take the single suggestion slot over what
      * {@link LocalSuggestionEngine} picked. Never preempts an ABORT/MODIFY on a live offer —
      * those are urgent/necessary. A ready-to-decant reminder always wins over WAIT/BUY/SELL
-     * (it's a quick, low-friction action); a buy/sell leg only wins if it's genuinely more
-     * profitable than the engine's own pick.
+     * (it's a quick, low-friction action). Listing already-held target-dose stock wins over
+     * WAIT/BUY so we do not keep buying more cheap doses while 4-doses sit in inventory
+     * (and a BUY-toward-decant never replaces an engine SELL of that held stock). Otherwise a
+     * buy/sell leg only wins if it is genuinely more profitable than the engine's own pick.
      */
-    private static boolean preferDecant(Suggestion normal, Suggestion decant)
+    static boolean preferDecant(Suggestion normal, Suggestion decant)
     {
+        if (decant == null) return false;
         if (normal == null) return true;
         if (normal.isAbortSuggestion() || normal.isModifySuggestion()) return false;
         if (decant.getType() == SuggestionType.DECANT) return true;
         if (normal.isWaitSuggestion()) return true;
+        // Already holding listable target-dose stock: sell it before buying more cheap doses.
+        if (decant.getType() == SuggestionType.SELL && normal.getType() == SuggestionType.BUY)
+        {
+            return true;
+        }
+        // Don't replace a SELL of held stock with "buy more 3s to decant", even when the
+        // full-batch buy-to-decant projects more profit than listing the bottles already held.
+        if (decant.getType() == SuggestionType.BUY && normal.getType() == SuggestionType.SELL)
+        {
+            return false;
+        }
         Double normalProfit = normal.getExpectedProfit();
         Double decantProfit = decant.getExpectedProfit();
         if (decantProfit == null) return false;
@@ -887,17 +903,25 @@ public class RuneAssistSuggestionSource
     }
 
     /**
-     * Inventory + bank item counts, itemId -> qty. Must be read on the client thread (like
-     * {@link #inventoryCoins()}/{@link #readOffers()} above) — {@code client.getItemContainer}
-     * asserts client-thread-only, so this cannot be called from the background scoring thread.
-     * Feeds {@link DecantTracker}, which has no direct {@link Client} access for that reason.
+     * Inventory + bank item counts, unnoted itemId -> qty. Must be read on the client thread
+     * (like {@link #inventoryCoins()}/{@link #readOffers()} above) —
+     * {@code client.getItemContainer} asserts client-thread-only, so this cannot be called from
+     * the background scoring thread. Feeds {@link DecantTracker}, which has no direct
+     * {@link Client} access for that reason. Noted stacks are collapsed onto their unnoted
+     * wiki/GE ids so holding Super defence(4) notes counts as holding Super defence(4).
      */
     private Map<Integer, Long> snapshotOwnedQty()
     {
-        Map<Integer, Long> out = new HashMap<>();
-        addContainerQty(out, client.getItemContainer(InventoryID.INVENTORY));
-        addContainerQty(out, client.getItemContainer(InventoryID.BANK));
-        return out;
+        Map<Integer, Long> raw = new HashMap<>();
+        addContainerQty(raw, client.getItemContainer(InventoryID.INVENTORY));
+        addContainerQty(raw, client.getItemContainer(InventoryID.BANK));
+        return DecantTracker.collapseToUnnoted(raw, this::toUnnotedItemId);
+    }
+
+    private int toUnnotedItemId(int itemId)
+    {
+        ItemComposition composition = client.getItemDefinition(itemId);
+        return DecantTracker.unnotedId(composition, itemId);
     }
 
     private static void addContainerQty(Map<Integer, Long> out, ItemContainer container)
