@@ -1,6 +1,7 @@
 package com.runeassist.flip;
 
 import com.runeassist.flip.model.AccountStatusManager;
+import com.runeassist.flip.model.ModifyStep;
 import com.runeassist.flip.model.OsrsLoginManager;
 import com.runeassist.flip.model.RiskLevel;
 import com.runeassist.flip.model.Suggestion;
@@ -603,7 +604,7 @@ public class RuneAssistSuggestionSource
         {
             return false;
         }
-        if (open == modifySlot)
+        if (ModifyStep.editorMatches(open, grandExchange.getCurrentItemId(), itemId, modifySlot))
         {
             return true;
         }

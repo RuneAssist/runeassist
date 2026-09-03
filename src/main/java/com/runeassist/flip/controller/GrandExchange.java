@@ -36,6 +36,11 @@ public class GrandExchange {
         return client.getVarbitValue(GE_OFFER_CREATION_TYPE) == 1 ? "sell" : "buy";
     }
 
+    /** Item currently in the Set up offer editor; -1 when none. */
+    public int getCurrentItemId() {
+        return client.getVarpValue(CURRENT_GE_ITEM);
+    }
+
     boolean isCollectButtonVisible() {
         Widget w = client.getWidget(InterfaceID.GE_OFFERS, 6);
         if (w == null) {
