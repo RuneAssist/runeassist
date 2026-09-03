@@ -1,6 +1,6 @@
 package com.runeassist.flip.controller;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.ui.UIUtilities;
 import joptsimple.internal.Strings;
@@ -21,7 +21,7 @@ import static net.runelite.http.api.RuneLiteAPI.GSON;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class WebHookController {
 
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final OkHttpClient okHttpClient;
 
     private void sendWebHook(DiscordWebhookBody discordWebhookBody) {

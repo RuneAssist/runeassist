@@ -1,7 +1,7 @@
 package com.runeassist.flip.rs;
 
 import com.runeassist.flip.controller.Persistance;
-import com.runeassist.flip.model.CopilotLoginState;
+import com.runeassist.flip.model.AccountLoginState;
 import com.runeassist.flip.model.LoginResponse;
 import com.google.gson.*;
 import com.google.inject.Inject;
@@ -15,19 +15,19 @@ import java.util.concurrent.ExecutorService;
 
 @Singleton
 @Slf4j
-public class CopilotLoginRS extends ReactiveStateImpl<CopilotLoginState> {
+public class AccountLoginRS extends ReactiveStateImpl<AccountLoginState> {
 
-    private final File file = new File(Persistance.COPILOT_DIR, Persistance.LOGIN_RESPONSE_JSON_FILE);
+    private final File file = new File(Persistance.PLUGIN_DIR, Persistance.LOGIN_RESPONSE_JSON_FILE);
 
     private final Gson gson;
     private final ExecutorService executorService;
 
     @Inject
-    public CopilotLoginRS(Gson gson, ExecutorService executorService) {
-        super(new CopilotLoginState());
+    public AccountLoginRS(Gson gson, ExecutorService executorService) {
+        super(new AccountLoginState());
         this.gson = gson;
         this.executorService = executorService;
-        registerListener((s) -> log.debug("CopilotLoginRS to {}", s));
+        registerListener((s) -> log.debug("AccountLoginRS to {}", s));
         update(s -> {
             s.loginResponse = loadLoginResponse();
             return s;
@@ -67,13 +67,13 @@ public class CopilotLoginRS extends ReactiveStateImpl<CopilotLoginState> {
         if (file.exists() && !file.delete()) {
             log.warn("failed to delete login response file {}", file);
         }
-        set(new CopilotLoginState());
+        set(new AccountLoginState());
     }
 
 
     public void removeAccount(Integer accountId) {
         update((s) -> {
-            CopilotLoginState updated = s.copy();
+            AccountLoginState updated = s.copy();
             String displayName = updated.accountIdToDisplayName.get(accountId);
             updated.accountIdToDisplayName.remove(accountId);
             if(displayName != null){
@@ -83,17 +83,17 @@ public class CopilotLoginRS extends ReactiveStateImpl<CopilotLoginState> {
         });
     }
 
-    public void addAccountIfMissing(Integer accountId, String displayName, int copilotUserId) {
+    public void addAccountIfMissing(Integer accountId, String displayName, int pluginUserId) {
         update((s) -> {
             if (accountId == null || displayName == null || s.accountIdToDisplayName.containsKey(accountId)) {
                 return s;
             }
             // RuneAssist fork: local GE fills register an account without an FC login.
-            if (s.isLoggedIn() && s.getUserId() != copilotUserId
-                    && copilotUserId != 0) {
+            if (s.isLoggedIn() && s.getUserId() != pluginUserId
+                    && pluginUserId != 0) {
                 return s;
             }
-            CopilotLoginState updated = s.copy();
+            AccountLoginState updated = s.copy();
             updated.displayNameToAccountId.put(displayName, accountId);
             updated.accountIdToDisplayName.put(accountId, displayName);
             return updated;

@@ -1,7 +1,7 @@
-package com.osrsmcp;
+package com.runeassist.flip;
 
 import com.google.gson.Gson;
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
 import net.runelite.client.config.ConfigManager;
@@ -81,7 +81,7 @@ public class TelemetryService
     private final Gson gson;
     @Inject private WikiPriceService wikiPriceService;
 
-    private FlippingCopilotConfig flipConfig;
+    private RuneAssistConfig flipConfig;
     private OsrsMcpConfig mcpConfig;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
@@ -160,7 +160,7 @@ public class TelemetryService
 
     private boolean flipShare()
     {
-        FlippingCopilotConfig f = flip();
+        RuneAssistConfig f = flip();
         return f != null && f.shareTelemetry();
     }
 
@@ -170,11 +170,11 @@ public class TelemetryService
         return m != null && m.shareTelemetry();
     }
 
-    private FlippingCopilotConfig flip()
+    private RuneAssistConfig flip()
     {
         if (flipConfig == null && configManager != null)
         {
-            try { flipConfig = configManager.getConfig(FlippingCopilotConfig.class); }
+            try { flipConfig = configManager.getConfig(RuneAssistConfig.class); }
             catch (RuntimeException ignored) {}
         }
         return flipConfig;

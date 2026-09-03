@@ -1,6 +1,6 @@
 package com.runeassist.flip.controller;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.util.ProfitCalculator;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +31,7 @@ public class SlotProfitColorizer {
     private static final String DETAIL_AND_SETUP_DEFAULT_COLOR = "ffb83f"; // Default color for detail view and offer setup
 
     private final Client client;
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final OfferManager offerManager;
     private final GrandExchange grandExchange;
     private final ProfitCalculator profitCalculator;

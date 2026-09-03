@@ -10,7 +10,7 @@ import java.util.*;
 @AllArgsConstructor
 @EqualsAndHashCode
 @ToString
-public class CopilotLoginState {
+public class AccountLoginState {
 
     public LoginResponse loginResponse = null;
     public Map<String,Integer> displayNameToAccountId = new HashMap<>();
@@ -46,7 +46,7 @@ public class CopilotLoginState {
         return accountIdToDisplayName.getOrDefault(accountId, "Unknown");
     }
 
-    public CopilotLoginState copy() {
-        return new CopilotLoginState(loginResponse, new HashMap<>(displayNameToAccountId), new HashMap<>(accountIdToDisplayName));
+    public AccountLoginState copy() {
+        return new AccountLoginState(loginResponse, new HashMap<>(displayNameToAccountId), new HashMap<>(accountIdToDisplayName));
     }
 }

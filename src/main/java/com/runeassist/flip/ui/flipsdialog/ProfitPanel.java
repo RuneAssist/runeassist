@@ -1,9 +1,9 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.FlipManager;
 import com.runeassist.flip.model.FlipV2;
-import com.runeassist.flip.rs.CopilotLoginRS;
+import com.runeassist.flip.rs.AccountLoginRS;
 import com.runeassist.flip.ui.UIUtilities;
 import com.runeassist.flip.ui.components.AccountDropdown;
 import com.runeassist.flip.ui.components.IntervalDropdown;
@@ -37,9 +37,9 @@ public class ProfitPanel extends JPanel {
     private List<Datapoint> cachedDatapoints = new ArrayList<>();
 
     public ProfitPanel(FlipManager flipManager,
-                       @Named("copilotExecutor") ExecutorService executorService,
-                       CopilotLoginRS copilotLoginRS,
-                       FlippingCopilotConfig config) {
+                       @Named("runeAssistExecutor") ExecutorService executorService,
+                       AccountLoginRS accountLoginRS,
+                       RuneAssistConfig config) {
         this.flipManager = flipManager;
         this.executorService = executorService;
 
@@ -57,7 +57,7 @@ public class ProfitPanel extends JPanel {
 
         intervalDropdown = DialogUi.intervalDropdown((units, value) -> refreshGraph(false));
 
-        accountDropdown = DialogUi.accountDropdown(() -> copilotLoginRS.get().displayNameToAccountId, accountId -> refreshGraph(false));
+        accountDropdown = DialogUi.accountDropdown(() -> accountLoginRS.get().displayNameToAccountId, accountId -> refreshGraph(false));
         accountDropdown.refresh();
 
         leftPanel.add(intervalDropdown);

@@ -1,8 +1,8 @@
 package com.runeassist.flip.controller;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.*;
-import com.runeassist.flip.rs.CopilotLoginRS;
+import com.runeassist.flip.rs.AccountLoginRS;
 import com.runeassist.flip.rs.PortfolioStateRS;
 import com.runeassist.flip.ui.*;
 import com.runeassist.flip.ui.flipsdialog.FlipsDialogController;
@@ -41,9 +41,9 @@ public class SuggestionController {
     private final ApiRequestHandler apiRequestHandler;
     private final Notifier notifier;
     private final OfferManager offerManager;
-    private final CopilotLoginRS copilotLoginRS;
+    private final AccountLoginRS accountLoginRS;
     private final ClientThread clientThread;
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final SuggestionManager suggestionManager;
     private final AccountStatusManager accountStatusManager;
     private final GrandExchangeUncollectedManager uncollectedManager;
@@ -52,12 +52,12 @@ public class SuggestionController {
     private final GePreviousSearch gePreviousSearch;
     // RuneAssist fork: our local suggestion source replaces FC's backend.
     private final com.runeassist.flip.RuneAssistSuggestionSource runeAssistSource;
-    private final com.osrsmcp.TelemetryService telemetry;
+    private final com.runeassist.flip.TelemetryService telemetry;
 
 
     private MainPanel mainPanel;
     private LoginPanel loginPanel;
-    private CopilotPanel copilotPanel;
+    private RuneAssistPanel runeAssistPanel;
     private SuggestionPanel suggestionPanel;
 
     public void skipSuggestion() {
@@ -305,7 +305,7 @@ public class SuggestionController {
             suggestionManager.setSuggestionRequestInProgress(false);
             suggestionManager.setGraphDataReadingInProgress(false);
             if (e.getResponseCode() == 401) {
-                copilotLoginRS.clear();
+                accountLoginRS.clear();
                 mainPanel.refresh();
                 loginPanel.showLoginErrorMessage("Login timed out. Please log in again");
             } else {
@@ -484,7 +484,7 @@ public class SuggestionController {
             if (config.enableTrayNotifications()) {
                 notifier.notify(msg);
             }
-            if (!copilotPanel.isShowing() && config.enableChatNotifications()) {
+            if (!runeAssistPanel.isShowing() && config.enableChatNotifications()) {
                 showChatNotifications(newSuggestion, accountStatus);
             }
         }

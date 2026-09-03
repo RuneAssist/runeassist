@@ -1,6 +1,6 @@
 package com.runeassist.flip.ui.graph;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.manager.PriceGraphConfigManager;
 import com.runeassist.flip.model.FlipV2;
@@ -15,9 +15,9 @@ public class FlipStatsPanel extends BaseStatsPanel {
     };
 
     // Set custom cell renderer for value column to color the Profit (row 8) and ROI (row 10) rows
-    public FlipStatsPanel(PriceGraphConfigManager configManager, FlippingCopilotConfig copilotConfig) {
+    public FlipStatsPanel(PriceGraphConfigManager configManager, RuneAssistConfig pluginConfig) {
         super(configManager, ROWS, 450,
-                new ValueRenderer(copilotConfig, "0.00%", Collections.singletonList(10), Collections.singletonList(8)));
+                new ValueRenderer(pluginConfig, "0.00%", Collections.singletonList(10), Collections.singletonList(8)));
     }
 
     public void populate(FlipV2 flip, ItemController itemController) {

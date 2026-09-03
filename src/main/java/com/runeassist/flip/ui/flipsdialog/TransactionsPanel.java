@@ -1,10 +1,10 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
-import com.runeassist.flip.rs.CopilotLoginRS;
+import com.runeassist.flip.rs.AccountLoginRS;
 import com.runeassist.flip.ui.Paginator;
 import com.runeassist.flip.ui.UIUtilities;
 import com.runeassist.flip.ui.components.AccountDropdown;
@@ -41,7 +41,7 @@ public class TransactionsPanel extends JPanel {
     };
 
     // dependencies
-    private final CopilotLoginRS copilotLoginRS;
+    private final AccountLoginRS accountLoginRS;
     private final ItemController itemController;
     private final ExecutorService executorService;
     private final ApiRequestHandler apiRequestHandler;
@@ -66,16 +66,16 @@ public class TransactionsPanel extends JPanel {
     private volatile int currentPage = 1;
     private volatile Integer selectedAccountId;
 
-    public TransactionsPanel(CopilotLoginRS copilotLoginRS,
+    public TransactionsPanel(AccountLoginRS accountLoginRS,
                              ItemController itemController,
-                             @Named("copilotExecutor") ExecutorService executorService,
+                             @Named("runeAssistExecutor") ExecutorService executorService,
                              ApiRequestHandler apiRequestHandler,
                              OsrsLoginManager osrsLoginManager,
-                             FlippingCopilotConfig config,
+                             RuneAssistConfig config,
                              FlipManager flipManager,
                              TransactionManager transactionManager,
                              LocalFlipLedger localFlipLedger) {
-        this.copilotLoginRS = copilotLoginRS;
+        this.accountLoginRS = accountLoginRS;
         this.itemController = itemController;
         this.executorService = executorService;
         this.apiRequestHandler = apiRequestHandler;
@@ -136,7 +136,7 @@ public class TransactionsPanel extends JPanel {
 
         // Account dropdown
         accountDropdown = DialogUi.accountDropdown(
-                () -> copilotLoginRS.get().displayNameToAccountId,
+                () -> accountLoginRS.get().displayNameToAccountId,
                 accountId -> {
                     if (!Objects.equals(accountId, selectedAccountId)) {
                         currentPage = 1;
@@ -172,7 +172,7 @@ public class TransactionsPanel extends JPanel {
         tablePanel.rightControls().add(downloadButton);
     }
 
-    private void setupTable(FlippingCopilotConfig config) {
+    private void setupTable(RuneAssistConfig config) {
         // Create table
         tablePanel.installPopupHandler(this::showTransactionMenu);
 
@@ -266,7 +266,7 @@ public class TransactionsPanel extends JPanel {
     }
 
     private Object[] toRow(AckedTransaction tx) {
-        Map<Integer, String> accountIdToDisplayName = copilotLoginRS.get().accountIdToDisplayName;
+        Map<Integer, String> accountIdToDisplayName = accountLoginRS.get().accountIdToDisplayName;
         int absQuantity = Math.abs(tx.getQuantity());
         long paidReceived = Math.abs(tx.getAmountSpent());
         long priceEa = tx.getPrice();
@@ -386,7 +386,7 @@ public class TransactionsPanel extends JPanel {
                     writer.write(Strings.join(COLUMN_NAMES, ","));
 
                     // Use the stream method to write all matching transactions
-                    Map<Integer, String> accountIdToDisplayName = copilotLoginRS.get().accountIdToDisplayName;
+                    Map<Integer, String> accountIdToDisplayName = accountLoginRS.get().accountIdToDisplayName;
                     transactionDataWrapper.stream(filteredItems, selectedAccountId)
                             .forEach(tx -> {
                                 try {

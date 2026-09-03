@@ -111,7 +111,7 @@ public class PreferencesPanel extends JPanel {
             CloudSyncService cloudSyncService,
             net.runelite.api.Client client,
             DrawManager drawManager,
-            @Named("copilotExecutor") ScheduledExecutorService executorService) {
+            @Named("runeAssistExecutor") ScheduledExecutorService executorService) {
         super();
         this.preferencesManager = preferencesManager;
         this.accountPreferences = accountPreferences;

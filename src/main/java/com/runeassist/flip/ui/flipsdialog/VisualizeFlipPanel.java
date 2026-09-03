@@ -1,7 +1,7 @@
 package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.controller.ApiRequestHandler;
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.manager.PriceGraphConfigManager;
 import com.runeassist.flip.model.AckedTransaction;
@@ -34,7 +34,7 @@ public class VisualizeFlipPanel extends JPanel {
 
     public VisualizeFlipPanel(ItemController itemController,
                               PriceGraphConfigManager configManager,
-                              FlippingCopilotConfig copilotConfig,
+                              RuneAssistConfig pluginConfig,
                               ApiRequestHandler apiRequestHandler,
                               LocalFlipLedger localFlipLedger) {
         this.itemController = itemController;
@@ -45,7 +45,7 @@ public class VisualizeFlipPanel extends JPanel {
         setBackground(ColorScheme.DARK_GRAY_COLOR);
 
         graphPanel = new GraphPanel(configManager);
-        statsPanel = new FlipStatsPanel(configManager, copilotConfig);
+        statsPanel = new FlipStatsPanel(configManager, pluginConfig);
         statsPanel.setBackground(configManager.getConfig().backgroundColor);
         statsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 

@@ -2,7 +2,7 @@ package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
-import com.runeassist.flip.rs.CopilotLoginRS;
+import com.runeassist.flip.rs.AccountLoginRS;
 import joptsimple.internal.Strings;
 import lombok.extern.slf4j.Slf4j;
 
@@ -25,7 +25,7 @@ public class FlipFilterAndSort extends PagedFilterSort {
     private final Consumer<Integer> totalPagesChangedCallback;
     private final Consumer<Boolean> slowLoadingCallback;
     private final ExecutorService executorService;
-    private final CopilotLoginRS copilotLoginRS;
+    private final AccountLoginRS accountLoginRS;
     private final ItemController itemController;
 
     // state
@@ -41,8 +41,8 @@ public class FlipFilterAndSort extends PagedFilterSort {
                              Consumer<List<FlipV2>> flipsCallback,
                              Consumer<Integer> totalPagesChangedCallback,
                              Consumer<Boolean> slowLoadingCallback,
-                             @Named("copilotExecutor") ExecutorService executorService,
-                             CopilotLoginRS copilotLoginRS, ItemController itemController) {
+                             @Named("runeAssistExecutor") ExecutorService executorService,
+                             AccountLoginRS accountLoginRS, ItemController itemController) {
         super("Last sell time", SortDirection.DESC);
         this.flipManager = flipManager;
 
@@ -50,7 +50,7 @@ public class FlipFilterAndSort extends PagedFilterSort {
         this.totalPagesChangedCallback = totalPagesChangedCallback;
         this.slowLoadingCallback = slowLoadingCallback;
         this.executorService = executorService;
-        this.copilotLoginRS = copilotLoginRS;
+        this.accountLoginRS = accountLoginRS;
         this.itemController = itemController;
     }
 
@@ -164,7 +164,7 @@ public class FlipFilterAndSort extends PagedFilterSort {
     }
 
     private String toCSVRow(FlipV2 f) {
-        Map<Integer, String> accountIdToDisplayName = copilotLoginRS.get().accountIdToDisplayName;
+        Map<Integer, String> accountIdToDisplayName = accountLoginRS.get().accountIdToDisplayName;
         return String.join(",",
                 formatTimestampISO(f.getOpenedTime()),
                 formatTimestampISO(f.getClosedTime()),

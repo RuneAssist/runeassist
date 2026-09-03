@@ -7,7 +7,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import com.runeassist.flip.model.*;
-import com.runeassist.flip.rs.CopilotLoginRS;
+import com.runeassist.flip.rs.AccountLoginRS;
 import com.runeassist.flip.ui.LoginPanel;
 import com.runeassist.flip.ui.MainPanel;
 import lombok.Setter;
@@ -18,7 +18,7 @@ import javax.inject.Singleton;
 
 @Slf4j
 @Singleton
-public class CopilotLoginController {
+public class AccountLoginController {
 
     // dependencies
     @Setter
@@ -31,11 +31,11 @@ public class CopilotLoginController {
     private final SessionManager sessionManager;
     private final TransactionManager transactionManager;
     private final ScheduledExecutorService executorService;
-    private final CopilotLoginRS copilotLoginRS;
+    private final AccountLoginRS accountLoginRS;
 
 
     @Inject
-    public CopilotLoginController(ApiRequestHandler apiRequestHandler,
+    public AccountLoginController(ApiRequestHandler apiRequestHandler,
                                   FlipManager flipManager,
                                   HighlightController highlightController,
                                   SuggestionManager suggestionManager,
@@ -43,17 +43,17 @@ public class CopilotLoginController {
                                   SessionManager sessionManager,
                                   TransactionManager transactionManager,
                                   ScheduledExecutorService executorService,
-                                  CopilotLoginRS copilotLoginRS) {
+                                  AccountLoginRS accountLoginRS) {
         this.apiRequestHandler = apiRequestHandler;
         this.flipManager = flipManager;
         this.osrsLoginManager = osrsLoginManager;
         this.sessionManager = sessionManager;
         this.transactionManager = transactionManager;
         this.executorService = executorService;
-        this.copilotLoginRS = copilotLoginRS;
+        this.accountLoginRS = accountLoginRS;
         // RuneAssist fork: keep FlipManager userId at 0 so local GE fills can merge.
-        loadCopilotAccounts(0);
-        copilotLoginRS.registerListener((s) -> {
+        loadLocalAccounts(0);
+        accountLoginRS.registerListener((s) -> {
             if(s.loginResponse == null) {
                 // Do not flipManager.reset() — local flips are the source of truth after the fork.
                 suggestionManager.reset();
@@ -65,18 +65,18 @@ public class CopilotLoginController {
         });
     }
 
-    private void loadCopilotAccounts(int previousFailures) {
+    private void loadLocalAccounts(int previousFailures) {
         // Legacy Flipping Copilot account/flip sync is disabled. LocalFlipLedger
         // plus CloudSyncService are the RuneAssist sources of truth.
     }
 
     private void syncFlips(int userId, Map<Integer, Integer> accountIdTime, int previousFailures) {
         // Continuously sync's the delta of new or updated flips from the server with back off on failure
-        if(copilotLoginRS.get().getUserId() != userId) {
+        if(accountLoginRS.get().getUserId() != userId) {
             log.info("user={}, no longer logged in, stopping syncFlips.", userId);
             return;
         }
-        Set<Integer> accountIds = copilotLoginRS.get().accountIds();
+        Set<Integer> accountIds = accountLoginRS.get().accountIds();
         if(accountIds.isEmpty()) {
             long backOffSeconds = Math.min(45, (long) 1+previousFailures);
             log.info("user={}, no accounts loaded - re-scheduling runSyncFlips in {}s", userId, backOffSeconds);
@@ -85,7 +85,7 @@ public class CopilotLoginController {
         }
         accountIds.forEach(a -> accountIdTime.computeIfAbsent(a, i -> 0));
         long s = System.nanoTime();
-        BiConsumer<Integer, FlipsDeltaResult> onSuccess = (Integer copilotUserId, FlipsDeltaResult r) -> {
+        BiConsumer<Integer, FlipsDeltaResult> onSuccess = (Integer pluginUserId, FlipsDeltaResult r) -> {
             if(!flipManager.mergeFlips(r.flips, userId)) {
                 log.info("user={}, no longer logged in, stopping syncFlips.", userId);
                 return;
@@ -107,7 +107,7 @@ public class CopilotLoginController {
     }
 
     public void onLoginResponse(LoginResponse loginResponse) {
-        copilotLoginRS.update((s) -> {
+        accountLoginRS.update((s) -> {
             s.loginResponse = loginResponse;
             return s;
         });
@@ -118,12 +118,12 @@ public class CopilotLoginController {
             flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
             transactionManager.scheduleSyncIn(0, displayName);
         }
-        flipManager.setCopilotUserId(loginResponse.getUserId());
-        loadCopilotAccounts(0);
+        flipManager.setPluginUserId(loginResponse.getUserId());
+        loadLocalAccounts(0);
     }
 
     public void onLoginFailure(String errorMessage) {
-        copilotLoginRS.set(new CopilotLoginState());
+        accountLoginRS.set(new AccountLoginState());
         loginPanel.showLoginErrorMessage(errorMessage);
     }
 
@@ -132,7 +132,7 @@ public class CopilotLoginController {
         if (displayName == null) {
             return null;
         }
-        Integer accountId = copilotLoginRS.get().getAccountId(displayName);
+        Integer accountId = accountLoginRS.get().getAccountId(displayName);
         if (accountId == null || accountId == -1) {
             return null;
         }

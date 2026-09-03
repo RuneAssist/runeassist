@@ -1,6 +1,6 @@
 package com.runeassist.flip.ui;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.FlipV2;
 import net.runelite.client.ui.FontManager;
 
@@ -17,7 +17,7 @@ import static com.runeassist.flip.util.DateUtil.formatEpoch;
 public class FlipPanel extends JPanel {
     private static final Color HOVER_BACKGROUND = RuneAssistColors.CARD.brighter();
 
-    public FlipPanel(FlipV2 flip, FlippingCopilotConfig config, Runnable onClick) {
+    public FlipPanel(FlipV2 flip, RuneAssistConfig config, Runnable onClick) {
         setLayout(new BorderLayout());
         setBackground(RuneAssistColors.CARD);
         setBorder(BorderFactory.createCompoundBorder(

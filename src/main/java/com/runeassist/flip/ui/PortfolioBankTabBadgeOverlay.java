@@ -1,6 +1,6 @@
 package com.runeassist.flip.ui;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.gameval.InterfaceID;
@@ -28,7 +28,7 @@ public class PortfolioBankTabBadgeOverlay extends Overlay {
             ImageUtil.loadImageResource(PortfolioBankTabBadgeOverlay.class, "/runeassist-flip.png"), BADGE_SIZE, BADGE_SIZE);
 
     private final Client client;
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final PluginManager pluginManager;
     private final BankTagsPlugin bankTagsPlugin;
 

@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.LocalFlipLedger;
 import com.runeassist.flip.model.OfferStatus;
 import com.runeassist.flip.model.OsrsLoginManager;
@@ -50,7 +50,7 @@ public class CloudSyncService {
     private final OkHttpClient http;
     private final Gson gson;
     private final ConfigManager configManager;
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final LocalFlipLedger localFlipLedger;
     private final OsrsLoginManager osrsLoginManager;
     private final ScheduledExecutorService executor;
@@ -66,10 +66,10 @@ public class CloudSyncService {
             OkHttpClient http,
             Gson gson,
             ConfigManager configManager,
-            FlippingCopilotConfig config,
+            RuneAssistConfig config,
             LocalFlipLedger localFlipLedger,
             OsrsLoginManager osrsLoginManager,
-            @Named("copilotExecutor") ScheduledExecutorService executor) {
+            @Named("runeAssistExecutor") ScheduledExecutorService executor) {
         this.http = http;
         this.gson = gson;
         this.configManager = configManager;

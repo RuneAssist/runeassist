@@ -3,7 +3,7 @@ package com.runeassist.flip.model;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.runeassist.flip.controller.Persistance;
-import com.runeassist.flip.rs.CopilotLoginRS;
+import com.runeassist.flip.rs.AccountLoginRS;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.GrandExchangeOfferState;
 
@@ -35,20 +35,20 @@ import java.util.UUID;
 @Singleton
 public class LocalFlipLedger {
 
-    /** Matches {@link FlipManager}'s default {@code copilotUserId} (0). */
+    /** Matches {@link FlipManager}'s default {@code pluginUserId} (0). */
     public static final int LOCAL_USER_ID = 0;
 
     private final FlipManager flipManager;
-    private final CopilotLoginRS copilotLoginRS;
+    private final AccountLoginRS accountLoginRS;
     private final Gson gson;
 
     private final Map<String, AccountBook> books = new LinkedHashMap<>();
     private final Set<String> hydratedNames = new HashSet<>();
 
     @Inject
-    public LocalFlipLedger(FlipManager flipManager, CopilotLoginRS copilotLoginRS, Gson gson) {
+    public LocalFlipLedger(FlipManager flipManager, AccountLoginRS accountLoginRS, Gson gson) {
         this.flipManager = flipManager;
-        this.copilotLoginRS = copilotLoginRS;
+        this.accountLoginRS = accountLoginRS;
         this.gson = gson;
     }
 
@@ -58,7 +58,7 @@ public class LocalFlipLedger {
         }
         AccountBook book = books.computeIfAbsent(displayName, this::loadBook);
         registerAccount(book);
-        flipManager.setCopilotUserId(LOCAL_USER_ID);
+        flipManager.setPluginUserId(LOCAL_USER_ID);
         if (!hydratedNames.add(displayName)) {
             return;
         }
@@ -181,7 +181,7 @@ public class LocalFlipLedger {
                 return;
             }
         }
-        Map<Integer, String> names = copilotLoginRS.get().accountIdToDisplayName;
+        Map<Integer, String> names = accountLoginRS.get().accountIdToDisplayName;
         if (names != null) {
             String name = names.get(accountId);
             if (name != null) {
@@ -373,14 +373,14 @@ public class LocalFlipLedger {
     }
 
     private void push(FlipV2 flip) {
-        flipManager.setCopilotUserId(LOCAL_USER_ID);
+        flipManager.setPluginUserId(LOCAL_USER_ID);
         List<FlipV2> batch = new ArrayList<>(1);
         batch.add(copyFlip(flip));
         flipManager.mergeFlips(batch, LOCAL_USER_ID);
     }
 
     private void registerAccount(AccountBook book) {
-        copilotLoginRS.addAccountIfMissing(book.accountId, book.displayName, LOCAL_USER_ID);
+        accountLoginRS.addAccountIfMissing(book.accountId, book.displayName, LOCAL_USER_ID);
     }
 
     private AccountBook loadBook(String displayName) {
@@ -450,7 +450,7 @@ public class LocalFlipLedger {
 
     private void persist(AccountBook book) {
         try {
-            File dir = Persistance.COPILOT_DIR;
+            File dir = Persistance.PLUGIN_DIR;
             if (!dir.exists() && !dir.mkdirs()) {
                 log.warn("unable to create {}", dir);
                 return;
@@ -477,7 +477,7 @@ public class LocalFlipLedger {
     }
 
     private static File bookFile(String displayName) {
-        return new File(Persistance.COPILOT_DIR, Persistance.hashDisplayName(displayName) + "_local_flips.json");
+        return new File(Persistance.PLUGIN_DIR, Persistance.hashDisplayName(displayName) + "_local_flips.json");
     }
 
     public static int accountIdFor(String displayName) {
