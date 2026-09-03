@@ -43,7 +43,7 @@ public class ShopFlipPanel extends JPanel {
     public ShopFlipPanel(ShopFlipService shopFlipService,
                           ShopLiveTracker shopLiveTracker,
                           ClientThread clientThread,
-                          @Named("copilotExecutor") ScheduledExecutorService executorService) {
+                          @Named("runeAssistExecutor") ScheduledExecutorService executorService) {
         this.shopFlipService = shopFlipService;
         this.shopLiveTracker = shopLiveTracker;
         this.clientThread = clientThread;

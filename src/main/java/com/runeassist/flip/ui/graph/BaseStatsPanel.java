@@ -1,6 +1,6 @@
 package com.runeassist.flip.ui.graph;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.manager.PriceGraphConfigManager;
 import com.runeassist.flip.ui.graph.model.Constants;
@@ -98,12 +98,12 @@ abstract class BaseStatsPanel extends JPanel {
      * zero literal, plain number rows green/red by sign, everything else left at the table default.
      */
     static class ValueRenderer extends DefaultTableCellRenderer {
-        private final FlippingCopilotConfig config;
+        private final RuneAssistConfig config;
         private final String percentZero;
         private final List<Integer> percentRows;
         private final List<Integer> numberRows;
 
-        ValueRenderer(FlippingCopilotConfig config, String percentZero, List<Integer> percentRows, List<Integer> numberRows) {
+        ValueRenderer(RuneAssistConfig config, String percentZero, List<Integer> percentRows, List<Integer> numberRows) {
             this.config = config;
             this.percentZero = percentZero;
             this.percentRows = percentRows;

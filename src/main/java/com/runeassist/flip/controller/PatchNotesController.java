@@ -67,6 +67,6 @@ public class PatchNotesController {
     }
 
     private Path patchNotesVersionPath() {
-        return Persistance.COPILOT_DIR.toPath().resolve(PATCH_NOTES_VERSION_FILE);
+        return Persistance.PLUGIN_DIR.toPath().resolve(PATCH_NOTES_VERSION_FILE);
     }
 }

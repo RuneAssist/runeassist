@@ -1,10 +1,10 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.model.AccountAggregate;
 import com.runeassist.flip.model.FlipManager;
-import com.runeassist.flip.rs.CopilotLoginRS;
+import com.runeassist.flip.rs.AccountLoginRS;
 import com.runeassist.flip.ui.components.IntervalDropdown;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
@@ -26,7 +26,7 @@ public class AccountsAggregatePanel extends JPanel {
     };
 
     // dependencies
-    private final CopilotLoginRS copilotLoginRS;
+    private final AccountLoginRS accountLoginRS;
     private final ApiRequestHandler apiRequestHandler;
     private final FlipManager flipManager;
     private final ExecutorService executorService;
@@ -37,12 +37,12 @@ public class AccountsAggregatePanel extends JPanel {
     // state
     private final AccountsAggregateFilterSort sortAndFilter;
 
-    public AccountsAggregatePanel(CopilotLoginRS copilotLoginRS,
-                                  @Named("copilotExecutor") ExecutorService executorService,
-                                  FlippingCopilotConfig config,
+    public AccountsAggregatePanel(AccountLoginRS accountLoginRS,
+                                  @Named("runeAssistExecutor") ExecutorService executorService,
+                                  RuneAssistConfig config,
                                   ApiRequestHandler apiRequestHandler,
                                   FlipManager flipManager) {
-        this.copilotLoginRS = copilotLoginRS;
+        this.accountLoginRS = accountLoginRS;
         this.apiRequestHandler = apiRequestHandler;
         this.flipManager = flipManager;
         this.executorService = executorService;
@@ -52,7 +52,7 @@ public class AccountsAggregatePanel extends JPanel {
 
         // Initialize sort and filter
         tablePanel = new PaginatedTablePanel<>(COLUMN_NAMES, this::toRow);
-        sortAndFilter = new AccountsAggregateFilterSort(flipManager, copilotLoginRS,
+        sortAndFilter = new AccountsAggregateFilterSort(flipManager, accountLoginRS,
                 tablePanel::setRows, tablePanel::setSpinnerVisible, executorService);
 
         // Create top panel with all controls
@@ -99,7 +99,7 @@ public class AccountsAggregatePanel extends JPanel {
                 tablePanel.setSpinnerVisible(true);
                 log.info("Deleting account: {}", account.getAccountId());
                 Runnable onSuccess = () -> {
-                    copilotLoginRS.removeAccount(account.getAccountId());
+                    accountLoginRS.removeAccount(account.getAccountId());
                     executorService.submit(() -> flipManager.deleteAccount(account.getAccountId()));
                     tablePanel.setSpinnerVisible(false);
                     sortAndFilter.reloadAggregates(true);

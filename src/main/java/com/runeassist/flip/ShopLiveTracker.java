@@ -33,12 +33,12 @@ import java.util.Map;
  *
  * <p>Not a {@code @Subscribe}r itself, matching this package's convention (see
  * {@code GrandExchangeOfferEventHandler}, {@code GameUiChangesHandler}): {@link
- * #onItemContainerChanged} is called manually from {@code FlippingCopilotPlugin}'s own
+ * #onItemContainerChanged} is called manually from {@code RuneAssistPlugin}'s own
  * {@code ItemContainerChanged} handler.
  *
  * <p><b>Not live-verified.</b> {@code InterfaceID.Shopmain.UNIVERSE} is read from the
  * RuneLite API sources (mirrors the existing {@code InterfaceID.Bankmain.UNIVERSE} bank-open
- * check in {@code FlippingCopilotPlugin}), not confirmed against a running shop screen --
+ * check in {@code RuneAssistPlugin}), not confirmed against a running shop screen --
  * check a shop actually flips {@link #isShopOpen()} true before trusting the rest.
  */
 @Slf4j

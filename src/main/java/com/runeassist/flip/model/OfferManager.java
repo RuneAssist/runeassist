@@ -103,6 +103,6 @@ public class OfferManager {
 
     private File getFile(Long accountHash, Integer slot) {
         Map<Integer, File> slotToFile = files.computeIfAbsent(accountHash, (k) -> new HashMap<>());
-        return slotToFile.computeIfAbsent(slot, (k) -> new File(Persistance.COPILOT_DIR, String.format(OFFER_FILE_TEMPLATE, accountHash, slot)));
+        return slotToFile.computeIfAbsent(slot, (k) -> new File(Persistance.PLUGIN_DIR, String.format(OFFER_FILE_TEMPLATE, accountHash, slot)));
     }
 }

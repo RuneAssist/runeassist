@@ -1,6 +1,6 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
@@ -48,10 +48,10 @@ public class PortfolioPanel extends JPanel {
     }
 
     private final ItemController itemController;
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final ApiRequestHandler apiRequestHandler;
     private final SuggestionManager suggestionManager;
-    private final CopilotLoginRS copilotLoginRS;
+    private final AccountLoginRS accountLoginRS;
     private final OsrsLoginRS osrsLoginRS;
     private final PortfolioStateRS portfolioStateRS;
     private final BankStateRS bankStateRS;
@@ -70,10 +70,10 @@ public class PortfolioPanel extends JPanel {
     private SortDirection sortDirection = SortDirection.DESC;
 
     public PortfolioPanel(ItemController itemController,
-                          FlippingCopilotConfig config,
+                          RuneAssistConfig config,
                           ApiRequestHandler apiRequestHandler,
                           SuggestionManager suggestionManager,
-                          CopilotLoginRS copilotLoginRS,
+                          AccountLoginRS accountLoginRS,
                           OsrsLoginRS osrsLoginRs,
                           PortfolioStateRS portfolioStateRS,
                           BankStateRS bankStateRS,
@@ -83,7 +83,7 @@ public class PortfolioPanel extends JPanel {
         this.config = config;
         this.apiRequestHandler = apiRequestHandler;
         this.suggestionManager = suggestionManager;
-        this.copilotLoginRS = copilotLoginRS;
+        this.accountLoginRS = accountLoginRS;
         this.osrsLoginRS = osrsLoginRs;
         this.portfolioStateRS = portfolioStateRS;
         this.bankStateRS = bankStateRS;
@@ -247,14 +247,14 @@ public class PortfolioPanel extends JPanel {
             return;
         }
         cardLayout.show(cardPanel, CONTENT_CARD);
-        Integer accountId = copilotLoginRS.get().getAccountId(osrsLoginRS.get().displayName);
+        Integer accountId = accountLoginRS.get().getAccountId(osrsLoginRS.get().displayName);
         clearPortfolioButton.setEnabled(accountId != null && accountId != -1);
         refreshAutoSyncLabel();
         renderFromState(portfolioStateRS.get());
     }
 
     private void onClearPortfolioClicked() {
-        Integer accountId = copilotLoginRS.get().getAccountId(osrsLoginRS.get().displayName);
+        Integer accountId = accountLoginRS.get().getAccountId(osrsLoginRS.get().displayName);
         if (accountId == null || accountId == -1) {
             return;
         }
@@ -400,7 +400,7 @@ public class PortfolioPanel extends JPanel {
     }
 
     private void togglePortfolio(int itemId, int portfolioId, int quantity) {
-        Integer accountId = copilotLoginRS.get().getAccountId(osrsLoginRS.get().displayName);
+        Integer accountId = accountLoginRS.get().getAccountId(osrsLoginRS.get().displayName);
         if (accountId == null || accountId == -1) {
             return;
         }

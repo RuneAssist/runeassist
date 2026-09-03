@@ -128,7 +128,7 @@ public class SessionManager {
 
     private File getFile(String displayName) {
         return displayNameToFile.computeIfAbsent(displayName,
-                (k) -> new File(Persistance.COPILOT_DIR, String.format(SESSION_DATA_FILE_TEMPLATE, Persistance.hashDisplayName(displayName))));
+                (k) -> new File(Persistance.PLUGIN_DIR, String.format(SESSION_DATA_FILE_TEMPLATE, Persistance.hashDisplayName(displayName))));
     }
 
     private SessionData getSessionData(String displayName) {

@@ -37,7 +37,7 @@ public class MissedFlipsPanel extends JPanel {
 
     private final FlipManager flipsManager;
     private final ItemController itemController;
-    private final CopilotLoginRS copilotLoginRS;
+    private final AccountLoginRS accountLoginRS;
     private final OsrsLoginRS osrsLoginRS;
     private final ExecutorService executorService;
     private final GeHistoryStateRS geHistoryStateRS;
@@ -59,7 +59,7 @@ public class MissedFlipsPanel extends JPanel {
     public MissedFlipsPanel(OsrsLoginRS osrsLoginRS,
                             FlipManager flipsManager,
                             ItemController itemController,
-                            CopilotLoginRS copilotLoginRS,
+                            AccountLoginRS accountLoginRS,
                             ExecutorService executorService,
                             GeHistoryStateRS geHistoryStateRS,
                             LocalFlipLedger localFlipLedger,
@@ -67,7 +67,7 @@ public class MissedFlipsPanel extends JPanel {
         this.osrsLoginRS = osrsLoginRS;
         this.flipsManager = flipsManager;
         this.itemController = itemController;
-        this.copilotLoginRS = copilotLoginRS;
+        this.accountLoginRS = accountLoginRS;
         this.executorService = executorService;
         this.geHistoryStateRS = geHistoryStateRS;
         this.localFlipLedger = localFlipLedger;
@@ -165,7 +165,7 @@ public class MissedFlipsPanel extends JPanel {
     }
 
     private Integer resolveAccountId(String displayName) {
-        Map<String, Integer> map = copilotLoginRS.get().displayNameToAccountId;
+        Map<String, Integer> map = accountLoginRS.get().displayNameToAccountId;
         if (map != null && map.get(displayName) != null) {
             return map.get(displayName);
         }

@@ -1,6 +1,6 @@
 package com.runeassist.flip.ui;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.controller.PlayerLocationController;
 import com.runeassist.flip.model.PortfolioItemCardData;
@@ -28,7 +28,7 @@ public class InventoryPortfolioBadgeOverlay extends WidgetItemOverlay {
     private static final BufferedImage BADGE_ICON = ImageUtil.resizeImage(
             ImageUtil.loadImageResource(InventoryPortfolioBadgeOverlay.class, "/runeassist-flip.png"), BADGE_SIZE, BADGE_SIZE);
 
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final ItemController itemController;
     private final PortfolioStateRS portfolioStateRS;
     private final PlayerLocationController playerLocationController;

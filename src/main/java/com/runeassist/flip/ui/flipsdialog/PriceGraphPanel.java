@@ -1,7 +1,7 @@
 package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.controller.ApiRequestHandler;
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.manager.PriceGraphConfigManager;
 import com.runeassist.flip.model.*;
@@ -52,7 +52,7 @@ public class PriceGraphPanel extends JPanel {
 
     public PriceGraphPanel(ItemController itemController,
                            PriceGraphConfigManager configManager,
-                           FlippingCopilotConfig copilotConfig,
+                           RuneAssistConfig pluginConfig,
                            ApiRequestHandler apiRequestHandler,
                            OsrsLoginManager osrsLoginManager, SuggestionManager suggestionManager) {
         this.itemController = itemController;
@@ -119,7 +119,7 @@ public class PriceGraphPanel extends JPanel {
         add(topPanel, BorderLayout.NORTH);
 
         graphPanel = new GraphPanel(configManager);
-        statsPanel = new StatsPanel(configManager, copilotConfig);
+        statsPanel = new StatsPanel(configManager, pluginConfig);
         statsPanel.setBackground(configManager.getConfig().backgroundColor);
         statsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 

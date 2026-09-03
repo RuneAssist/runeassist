@@ -1,6 +1,6 @@
 package com.runeassist.flip.ui;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.QuantityFormatter;
@@ -54,7 +54,7 @@ public class UIUtilities {
                 + new String[] {"", "K", "M", "B", "T"}[(int) (power / 3)];
     }
 
-    public static Color getProfitColor(long profit, FlippingCopilotConfig config) {
+    public static Color getProfitColor(long profit, RuneAssistConfig config) {
         if (profit > 0) {
             return config.profitAmountColor();
         } else if (profit < 0) {
@@ -64,7 +64,7 @@ public class UIUtilities {
         }
     }
 
-    public static Color getProfitColor(double profit, FlippingCopilotConfig config) {
+    public static Color getProfitColor(double profit, RuneAssistConfig config) {
         if (profit > 0) {
             return config.profitAmountColor();
         } else if (profit < 0) {

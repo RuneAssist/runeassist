@@ -1,6 +1,6 @@
 package com.runeassist.flip.controller;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.BankStateRS;
 import com.runeassist.flip.rs.PortfolioStateRS;
@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Singleton
 @Slf4j
 public class PortfolioBankTagController {
-    private static final String COPILOT_CONFIG_GROUP = "runeassistflip";
+    private static final String CONFIG_GROUP = "runeassistflip";
     private static final String CREATED_TAB_CONFIG_KEY = "portfolioBankTagTabCreated";
     private static final String BANK_TAGS_CONFIG_GROUP = "banktags";
     private static final String BANK_TAGS_TAB_CONFIG = "tagtabs";
@@ -30,7 +30,7 @@ public class PortfolioBankTagController {
     private static final int TAB_ICON_ITEM_ID = ItemID.FRISD_TAXBAG_BULGING;
     private static final String LEGACY_TAB_ICON_ITEM_ID = String.valueOf(ItemController.PLATINUM_TOKENS_ITEM_ID);
 
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final ClientThread clientThread;
     private final ConfigManager configManager;
     private final PluginManager pluginManager;
@@ -49,7 +49,7 @@ public class PortfolioBankTagController {
     private Runnable removeBankListener;
 
     @Inject
-    public PortfolioBankTagController(FlippingCopilotConfig config,
+    public PortfolioBankTagController(RuneAssistConfig config,
                                       ClientThread clientThread,
                                       ConfigManager configManager,
                                       PluginManager pluginManager,
@@ -145,7 +145,7 @@ public class PortfolioBankTagController {
         if (!tabs.contains(TAG_NAME)) {
             tabs.add(TAG_NAME);
             configManager.setConfiguration(BANK_TAGS_CONFIG_GROUP, BANK_TAGS_TAB_CONFIG, Text.toCSV(tabs));
-            configManager.setConfiguration(COPILOT_CONFIG_GROUP, CREATED_TAB_CONFIG_KEY, true);
+            configManager.setConfiguration(CONFIG_GROUP, CREATED_TAB_CONFIG_KEY, true);
         }
 
         String iconKey = BANK_TAGS_ICON_PREFIX + TAG_NAME;
@@ -156,7 +156,7 @@ public class PortfolioBankTagController {
     }
 
     private void removeAutoCreatedTab() {
-        if (!Boolean.TRUE.equals(configManager.getConfiguration(COPILOT_CONFIG_GROUP, CREATED_TAB_CONFIG_KEY, Boolean.class))) {
+        if (!Boolean.TRUE.equals(configManager.getConfiguration(CONFIG_GROUP, CREATED_TAB_CONFIG_KEY, Boolean.class))) {
             return;
         }
 
@@ -165,7 +165,7 @@ public class PortfolioBankTagController {
             configManager.setConfiguration(BANK_TAGS_CONFIG_GROUP, BANK_TAGS_TAB_CONFIG, Text.toCSV(tabs));
         }
         configManager.unsetConfiguration(BANK_TAGS_CONFIG_GROUP, BANK_TAGS_ICON_PREFIX + TAG_NAME);
-        configManager.unsetConfiguration(COPILOT_CONFIG_GROUP, CREATED_TAB_CONFIG_KEY);
+        configManager.unsetConfiguration(CONFIG_GROUP, CREATED_TAB_CONFIG_KEY);
     }
 
     private String configValue(String key) {

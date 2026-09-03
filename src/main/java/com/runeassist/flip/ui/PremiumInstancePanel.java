@@ -1,7 +1,7 @@
 package com.runeassist.flip.ui;
 
 import com.runeassist.flip.controller.ApiRequestHandler;
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.PremiumInstanceStatus;
 import com.runeassist.flip.model.SuggestionManager;
 import lombok.extern.slf4j.Slf4j;
@@ -21,11 +21,11 @@ public class PremiumInstancePanel extends JPanel {
     private final CardLayout cardLayout;
     private final JPanel cardPanel;
     private final List<JComboBox<String>> instanceDropdowns;
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final ApiRequestHandler apiRequestHandler;
     private final SuggestionManager suggestionManager;
 
-    public PremiumInstancePanel(FlippingCopilotConfig config, ApiRequestHandler apiRequestHandler, SuggestionManager suggestionManager) {
+    public PremiumInstancePanel(RuneAssistConfig config, ApiRequestHandler apiRequestHandler, SuggestionManager suggestionManager) {
         this.config = config;
         this.apiRequestHandler = apiRequestHandler;
         this.suggestionManager = suggestionManager;

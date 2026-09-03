@@ -1,4 +1,4 @@
-package com.osrsmcp;
+package com.runeassist.flip;
 
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;

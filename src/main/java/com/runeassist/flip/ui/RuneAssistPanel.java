@@ -6,7 +6,7 @@ import javax.swing.*;
 import java.awt.*;
 
 @Singleton
-public class CopilotPanel extends JPanel {
+public class RuneAssistPanel extends JPanel {
 
     public final SuggestionPanel suggestionPanel;
     public final StatsPanelV2 statsPanel;
@@ -22,7 +22,7 @@ public class CopilotPanel extends JPanel {
     private boolean shopFlipOpen;
 
     @Inject
-    public CopilotPanel(SuggestionPanel suggestionPanel,
+    public RuneAssistPanel(SuggestionPanel suggestionPanel,
                         StatsPanelV2 statsPanel,
                         ControlPanel controlPanel,
                         PreferencesPanel preferencesPanel,
