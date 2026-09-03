@@ -22,7 +22,6 @@ import net.runelite.api.gameval.InterfaceID;
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class GameUiChangesHandler {
-    private static final int GE_HISTORY_TAB_WIDGET_ID = 149;
     private static final int SCRIPT_GE_COLLECT = 782;
     private static final int SCRIPT_GE_SLOT_REDRAW = 804;
     private static final String BANK_TAG_TAB_VIEW_OPTION = "View tag tab";
@@ -122,10 +121,17 @@ public class GameUiChangesHandler {
             }
             clientThread.invokeLater(slotProfitColorizer::updateAllSlots);
         }
-        if (event.getGroupId() == 383
+        // 467 (GE_OFFERS_SIDE) loads after 465. Redrawing only on the main GE
+        // window left SELL highlights looking at a null inventory widget (runes
+        // never outlined even when the suggestion was already SELL). Collect /
+        // inventory / bank-pin are the other GE-adjacent interfaces that change
+        // which widgets are targetable.
+        if (event.getGroupId() == InterfaceID.GE_HISTORY
                 || event.getGroupId() == InterfaceID.GE_OFFERS
-                || event.getGroupId() == 213
-                || event.getGroupId() == GE_HISTORY_TAB_WIDGET_ID) {
+                || event.getGroupId() == InterfaceID.GE_OFFERS_SIDE
+                || event.getGroupId() == InterfaceID.GE_COLLECT
+                || event.getGroupId() == InterfaceID.INVENTORY
+                || event.getGroupId() == InterfaceID.BANKPIN_KEYPAD) {
             clientThread.invokeLater(highlightController::redraw);
         }
         if (event.getGroupId() == InterfaceID.BANKMAIN) {

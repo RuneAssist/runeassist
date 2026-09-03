@@ -294,7 +294,7 @@ public class HighlightController {
             return true;
         }
         else if (suggestion.isSellSuggestion() && accountStatus.hasSufficientInventoryForSellSuggestion(suggestion)) {
-            Widget geInvGroup = client.getWidget(467, 0);
+            Widget geInvGroup = client.getWidget(InterfaceID.GE_OFFERS_SIDE, 0);
             Widget itemWidget = getInventoryItemWidget(suggestion.getItemId());
             log.info("highlight sell branch: geInvGroupNull={} itemWidgetNull={} itemWidgetHidden={}",
                     geInvGroup == null, itemWidget == null,
@@ -489,7 +489,7 @@ public class HighlightController {
     }
 
     private Widget getItemSearchButtonWidget() {
-        Widget setupContainer = client.getWidget(465, 26);
+        Widget setupContainer = client.getWidget(InterfaceID.GE_OFFERS, 26);
         if (setupContainer == null) {
             return null;
         }
@@ -552,9 +552,9 @@ public class HighlightController {
     }
 
     private Widget getInventoryItemWidget(int unnotedItemId) {
-        // Only the GE-specific inventory widget is relevant here — the regular inventory
-        // (149,0) is shown when the GE is closed, and we don't highlight items in that case.
-        Widget inventory = client.getWidget(467, 0);
+        // GE inventory side (InterfaceID.GE_OFFERS_SIDE / 467). Regular inventory
+        // (149,0) is shown when the GE is closed; we do not highlight that.
+        Widget inventory = client.getWidget(InterfaceID.GE_OFFERS_SIDE, 0);
         if (inventory == null) {
             return null;
         }
@@ -568,19 +568,21 @@ public class HighlightController {
         Widget unnotedWidget = null;
 
         for (Widget widget : children) {
-            if (widget == null) {
+            if (widget == null || widget.isHidden() || widget.getItemQuantity() <= 0) {
                 continue;
             }
 
             int itemId = widget.getItemId();
-            ItemComposition itemComposition = client.getItemDefinition(itemId);
-
-            if (itemComposition.getNote() != -1) {
-                if (itemComposition.getLinkedNoteId() == unnotedItemId) {
+            if (itemId <= 0) {
+                continue;
+            }
+            if (matchesItemId(itemId, unnotedItemId)) {
+                ItemComposition itemComposition = client.getItemDefinition(itemId);
+                if (itemComposition.getNote() != -1) {
                     notedWidget = widget;
+                } else {
+                    unnotedWidget = widget;
                 }
-            } else if (itemId == unnotedItemId) {
-                unnotedWidget = widget;
             }
         }
         return notedWidget != null ? notedWidget : unnotedWidget;
