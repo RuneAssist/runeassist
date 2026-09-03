@@ -127,8 +127,6 @@ public class RuneAssistPlugin extends Plugin {
 	private com.runeassist.flip.ShopLiveTracker shopLiveTracker;
 
 	@Inject
-	private com.runeassist.flip.ExperimentService experimentService;
-	@Inject
 	private GeHistoryStateRS geHistoryStateRS;
 	@Inject
 	private PatchNotesController patchNotesController;
@@ -260,9 +258,6 @@ public class RuneAssistPlugin extends Plugin {
 				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
 			telemetry.logGeOffer(rsn, event.getSlot(), o.getState().name(), o.getItemId(),
 				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
-			String state = o.getState().name();
-			boolean buySide = state.contains("BUY") || "BOUGHT".equals(state);
-			experimentService.onOfferResolved(rsn, o.getItemId(), buySide, state);
 		}
 		clientThread.invokeLater(() -> highlightController.redraw());
 	}
