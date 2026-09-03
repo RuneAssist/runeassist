@@ -1,6 +1,6 @@
 # RuneAssist Flipping
 
-RuneLite plugin for Grand Exchange flipping. Suggestions come from Ares `/v1/flips` plus an on-device engine with held-cost tracking. Optional anonymous contribution and cloud history sync are off by default (Configuration → Privacy).
+RuneLite plugin for Grand Exchange flipping. Suggestions come from a server-ranked candidate list plus an on-device engine with held-cost tracking. Opt-in, pseudonymous telemetry contribution and cloud history sync are off by default (Configuration → Privacy).
 
 Based on [Flipping Copilot](https://github.com/cbrewitt/flipping-copilot), used under the BSD 2-Clause License (see `LICENSE` and `THIRD_PARTY_LICENSES.md`).
 
