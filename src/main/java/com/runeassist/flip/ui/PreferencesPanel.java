@@ -6,6 +6,7 @@ import com.runeassist.flip.rs.AccountSuggestionPreferencesRS;
 import com.runeassist.flip.model.SuggestionManager;
 import com.runeassist.flip.ui.components.ItemSearchMultiSelect;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.LinkBrowser;
@@ -72,6 +73,7 @@ public class PreferencesPanel extends JPanel {
     private final AccountSuggestionPreferencesRS accountPreferences;
     private final CloudSyncService cloudSyncService;
     private final net.runelite.api.Client client;
+    private final ClientThread clientThread;
     private final DrawManager drawManager;
     private final ItemController itemController;
     private final ScheduledExecutorService executorService;
@@ -111,6 +113,7 @@ public class PreferencesPanel extends JPanel {
             DumpsStreamController dumpsStreamController,
             CloudSyncService cloudSyncService,
             net.runelite.api.Client client,
+            ClientThread clientThread,
             DrawManager drawManager,
             @Named("runeAssistExecutor") ScheduledExecutorService executorService) {
         super();
@@ -118,6 +121,7 @@ public class PreferencesPanel extends JPanel {
         this.accountPreferences = accountPreferences;
         this.cloudSyncService = cloudSyncService;
         this.client = client;
+        this.clientThread = clientThread;
         this.drawManager = drawManager;
         this.itemController = itemController;
         this.executorService = executorService;
@@ -601,6 +605,14 @@ public class PreferencesPanel extends JPanel {
         }
     }
 
+    private static final String BUG_REPORT_HOST = "runeassist.ares-server.co.uk";
+
+    /**
+     * Consent for the bug-report network call lives entirely in this dialog's OK button — see
+     * {@link CloudSyncService#reportBug}, which only registers a device token (if this
+     * install doesn't have one yet) and sends the request after the user confirms here, not
+     * before. The screenshot defaults OFF and is only ever attached if the user ticks the box.
+     */
     private void promptAndSubmitBugReport(byte[] screenshotPng) {
         JTextArea textArea = new JTextArea(6, 30);
         textArea.setLineWrap(true);
@@ -610,7 +622,14 @@ public class PreferencesPanel extends JPanel {
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.add(new JScrollPane(textArea));
 
-        JCheckBox includeScreenshot = new JCheckBox("Include screenshot", screenshotPng != null);
+        JLabel disclosure = new JLabel("<html><body style='width:260px'>Sends this text, your RSN and the "
+                + "screenshot to " + BUG_REPORT_HOST + " (RuneAssist's server).</body></html>");
+        disclosure.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        disclosure.setAlignmentX(Component.LEFT_ALIGNMENT);
+        content.add(Box.createVerticalStrut(6));
+        content.add(disclosure);
+
+        JCheckBox includeScreenshot = new JCheckBox("Include screenshot", false);
         if (screenshotPng != null) {
             try {
                 BufferedImage preview = ImageIO.read(new ByteArrayInputStream(screenshotPng));
@@ -638,12 +657,18 @@ public class PreferencesPanel extends JPanel {
             return;
         }
         byte[] attach = (screenshotPng != null && includeScreenshot.isSelected()) ? screenshotPng : null;
-        net.runelite.api.Player localPlayer = client.getLocalPlayer();
-        String displayName = localPlayer != null ? localPlayer.getName() : null;
+        clientThread.invoke(() -> {
+            net.runelite.api.Player localPlayer = client.getLocalPlayer();
+            String displayName = localPlayer != null ? localPlayer.getName() : null;
+            submitBugReport(displayName, message, attach);
+        });
+    }
+
+    private void submitBugReport(String displayName, String message, byte[] attach) {
         cloudSyncService.reportBug(displayName, message, attach, ok -> {
             JOptionPane.showMessageDialog(
                     SwingUtilities.getWindowAncestor(this),
-                    ok ? "Thanks — logged." : "Couldn't submit right now (check cloud sync is on and reachable).",
+                    ok ? "Thanks — logged." : "Couldn't submit right now (check your connection and try again).",
                     "Report a bug",
                     ok ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
         });
