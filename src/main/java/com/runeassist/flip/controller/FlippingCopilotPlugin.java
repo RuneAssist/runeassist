@@ -145,6 +145,8 @@ public class FlippingCopilotPlugin extends Plugin {
 	private com.runeassist.flip.controller.CloudSyncService cloudSyncService;
 	@Inject
 	private com.osrsmcp.GeHistoryDump geHistoryDump;
+	@Inject
+	private com.runeassist.flip.GeHistoryHeldBackfill geHistoryHeldBackfill;
 
 	// We use our own ThreadPool since the default ScheduledExecutorService only has a single thread and we don't want to block it
 	@Provides
@@ -324,6 +326,7 @@ public class FlippingCopilotPlugin extends Plugin {
 		bankStateRS.onGameTick();
 		geHistoryStateRS.onGameTick(client);
 		geHistoryDump.onGameTick();
+		geHistoryHeldBackfill.maybeApply(geHistoryStateRS.get());
 		grandExchangeOpenRS.set(grandExchange.isOpen());
 
 		suggestionController.onGameTick();
@@ -365,6 +368,8 @@ public class FlippingCopilotPlugin extends Plugin {
 		gameUiChangesHandler.onWidgetLoaded(event);
 		if (event.getGroupId() == GeHistoryStateRS.GE_HISTORY_GROUP) {
 			geHistoryDump.onHistoryWidgetLoaded();
+			geHistoryStateRS.onGameTick(client);
+			geHistoryHeldBackfill.maybeApply(geHistoryStateRS.get());
 		}
 	}
 

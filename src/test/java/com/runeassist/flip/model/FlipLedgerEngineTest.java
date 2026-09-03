@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.junit.jupiter.api.Test;
 
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,18 +21,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Drift guard: Java FIFO replay must match {@code server/flip-ledger-vectors.json},
- * which the JS port also runs.
+ * Drift guard: Java FIFO replay must match {@code flip-ledger-vectors.json}
+ * (also the contract for ingest {@code server/flip-ledger.mjs}).
  */
 public class FlipLedgerEngineTest {
 
     @Test
     public void matchesSharedVectors() throws Exception {
-        Path path = Paths.get("server/flip-ledger-vectors.json");
-        if (!Files.exists(path)) {
-            path = Paths.get("../server/flip-ledger-vectors.json");
-        }
-        String json = Files.readString(path, StandardCharsets.UTF_8);
+        String json = readVectors();
         JsonObject root = new Gson().fromJson(json, JsonObject.class);
         JsonArray cases = root.getAsJsonArray("cases");
         assertNotNull(cases);
@@ -49,6 +46,39 @@ public class FlipLedgerEngineTest {
             assertFlips(name + " open", expect.getAsJsonArray("openPositions"),
                     FlipLedgerEngine.openPositions(book));
         }
+    }
+
+    private static String readVectors() throws Exception {
+        InputStream in = FlipLedgerEngineTest.class.getResourceAsStream("/flip-ledger-vectors.json");
+        if (in != null) {
+            byte[] bytes;
+            try (InputStream stream = in) {
+                bytes = readAll(stream);
+            }
+            return new String(bytes, StandardCharsets.UTF_8);
+        }
+        Path[] candidates = {
+                Paths.get("src/test/resources/flip-ledger-vectors.json"),
+                Paths.get("server/flip-ledger-vectors.json"),
+                Paths.get("../server/flip-ledger-vectors.json")
+        };
+        for (Path path : candidates) {
+            if (Files.exists(path)) {
+                return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+            }
+        }
+        fail("flip-ledger-vectors.json not found on classpath or disk");
+        return "";
+    }
+
+    private static byte[] readAll(InputStream in) throws Exception {
+        byte[] buf = new byte[4096];
+        int n;
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        while ((n = in.read(buf)) >= 0) {
+            out.write(buf, 0, n);
+        }
+        return out.toByteArray();
     }
 
     private static List<Transaction> parseTxs(JsonArray arr) {

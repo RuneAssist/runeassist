@@ -390,7 +390,7 @@ public final class LocalSuggestionEngine {
 
         return wait(waitReason(slotsFull, anyUnblocked, anyWithLimitLeft, anyAffordable,
                 sawLimitExhausted, sawBlocked, sawPriced, sawBelowMinProfit, sawBuyRow,
-                in.minPredictedProfit, coins), offersBySlot, maxSlots, scoredFlips, held);
+                in.minPredictedProfit, coins), offersBySlot, maxSlots, scoredFlips, held, nowMs);
     }
 
     /**
@@ -527,31 +527,37 @@ public final class LocalSuggestionEngine {
     /** Fallback Wait with a specific reason + slot numbers. Never uses {@link #WAIT_GENERIC}. */
     static Suggestion waitFallback(String message, long[][] offersBySlot, int maxSlots) {
         return wait(message == null || message.isEmpty() ? WAIT_NO_MARGIN : message,
-                offersBySlot, maxSlots, null, null);
+                offersBySlot, maxSlots, null, null, 0L);
     }
 
     private static Suggestion wait(String message, long[][] offersBySlot, int maxSlots,
-                                   List<Map<String, Object>> scoredFlips, Map<Integer, long[]> held) {
+                                   List<Map<String, Object>> scoredFlips, Map<Integer, long[]> held,
+                                   long nowMs) {
         Suggestion wait = new Suggestion();
         wait.setType(SuggestionType.WAIT);
         wait.setBoxId(-1);
         wait.setName("");
         wait.setMessage(message);
-        String why = waitWhy(offersBySlot, maxSlots, scoredFlips, held);
+        String why = waitWhy(offersBySlot, maxSlots, scoredFlips, held, nowMs);
         if (why != null && !why.isEmpty()) {
             wait.setWhy(why);
         }
         return wait;
     }
 
-    /** Slot count plus the furthest-along filling offer, so the south card is not blank. */
+    /**
+     * Slot count plus the furthest-along filling offer. When the board is full, also
+     * the age of the stalest filling offer ({@code lastProgressMs}) so WAIT is actionable.
+     */
     private static String waitWhy(long[][] offersBySlot, int maxSlots,
-                                  List<Map<String, Object>> scoredFlips, Map<Integer, long[]> held) {
+                                  List<Map<String, Object>> scoredFlips, Map<Integer, long[]> held,
+                                  long nowMs) {
         int cap = maxSlots > 0 ? maxSlots : 8;
         int used = countUsedSlots(offersBySlot);
         StringBuilder sb = new StringBuilder();
         sb.append(used).append("/").append(cap).append(" slots");
         long[] best = null;
+        long oldestProgress = Long.MAX_VALUE;
         boolean finishedCollectable = false;
         if (offersBySlot != null) {
             for (long[] offer : offersBySlot) {
@@ -565,11 +571,16 @@ public final class LocalSuggestionEngine {
                     }
                     continue;
                 }
-                if (offer[O_SOLD] <= 0L || offer[O_TOTAL] <= 0L) {
-                    continue;
+                if (offer[O_SOLD] > 0L && offer[O_TOTAL] > 0L) {
+                    if (best == null || offer[O_SOLD] > best[O_SOLD]) {
+                        best = offer;
+                    }
                 }
-                if (best == null || offer[O_SOLD] > best[O_SOLD]) {
-                    best = offer;
+                if (offer.length > O_LAST_PROGRESS_MS) {
+                    long lastProgress = offer[O_LAST_PROGRESS_MS];
+                    if (lastProgress > 0L && lastProgress < oldestProgress) {
+                        oldestProgress = lastProgress;
+                    }
                 }
             }
         }
@@ -598,7 +609,30 @@ public final class LocalSuggestionEngine {
                     .append(heldKinds == 1 ? " held item" : " held items")
                     .append(" waiting for a slot");
         }
+        if (used >= cap && oldestProgress != Long.MAX_VALUE) {
+            long now = nowMs > 0L ? nowMs : System.currentTimeMillis();
+            long ageMs = now - oldestProgress;
+            if (ageMs >= 60_000L) {
+                sb.append(" · stale ").append(compactAge(ageMs));
+            }
+        }
         return sb.toString();
+    }
+
+    /** Compact age for the WAIT why-line: {@code 18m}, {@code 2h}, {@code 2h 5m}, {@code 1d}. */
+    static String compactAge(long ms) {
+        long minutes = Math.max(1L, ms / 60_000L);
+        if (minutes < 60L) {
+            return minutes + "m";
+        }
+        long hours = minutes / 60L;
+        long remMin = minutes % 60L;
+        if (hours < 24L) {
+            return remMin == 0L ? hours + "h" : hours + "h " + remMin + "m";
+        }
+        long days = hours / 24L;
+        long remHours = hours % 24L;
+        return remHours == 0L ? days + "d" : days + "d " + remHours + "h";
     }
 
     private static int countHeldKinds(Map<Integer, long[]> held) {
