@@ -123,6 +123,12 @@ public class FlippingCopilotPlugin extends Plugin {
 	// private PortfolioBankTabBadgeOverlay portfolioBankTabBadgeOverlay;
 	@Inject
 	private BankStateRS bankStateRS;
+
+	@Inject
+	private com.runeassist.flip.ShopLiveTracker shopLiveTracker;
+
+	@Inject
+	private com.runeassist.flip.ExperimentService experimentService;
 	@Inject
 	private GeHistoryStateRS geHistoryStateRS;
 	@Inject
@@ -135,6 +141,8 @@ public class FlippingCopilotPlugin extends Plugin {
 	private com.runeassist.flip.HeldCostTracker heldCostTracker;
 	@Inject
 	private com.osrsmcp.TelemetryService telemetry;
+	@Inject
+	private com.runeassist.flip.controller.CloudSyncService cloudSyncService;
 	@Inject
 	private com.osrsmcp.GeHistoryDump geHistoryDump;
 
@@ -193,6 +201,7 @@ public class FlippingCopilotPlugin extends Plugin {
 		}
 		flipsDialogController.initDialog(SwingUtilities.getWindowAncestor(mainPanel));
 		telemetry.onUploadSettingsChanged();
+		cloudSyncService.start();
 		executorService.scheduleAtFixedRate(() ->
 			clientThread.invoke(() -> {
 				boolean loginValid = osrsLoginManager.isValidLoginState();
@@ -243,18 +252,23 @@ public class FlippingCopilotPlugin extends Plugin {
 		// RuneAssist: track cost basis of held stock so we can suggest profitable sells.
 		net.runelite.api.GrandExchangeOffer o = event.getOffer();
 		if (o != null) {
-			heldCostTracker.onOffer(event.getSlot(), o.getState(), o.getItemId(),
-				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
 			net.runelite.api.Player p = client.getLocalPlayer();
 			String rsn = p != null ? p.getName() : "anon";
+			heldCostTracker.onOffer(rsn, event.getSlot(), o.getState(), o.getItemId(),
+				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
 			telemetry.logGeOffer(rsn, event.getSlot(), o.getState().name(), o.getItemId(),
 				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
+			String state = o.getState().name();
+			boolean buySide = state.contains("BUY") || "BOUGHT".equals(state);
+			experimentService.onOfferResolved(rsn, o.getItemId(), buySide, state);
 		}
 		clientThread.invokeLater(() -> highlightController.redraw());
 	}
 
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event) {
+		shopLiveTracker.onItemContainerChanged(event);
+
 		boolean inventoryChanged = event.getContainerId() == InventoryID.INV;
 		boolean bankChanged = event.getContainerId() == InventoryID.BANK;
 
@@ -266,10 +280,12 @@ public class FlippingCopilotPlugin extends Plugin {
 			suggestionManager.setSuggestionNeeded(true);
 		}
 
-		if (event.getContainerId() == InventoryID.INV && grandExchange.isOpen()) {
-			suggestionManager.setSuggestionNeeded(true);
-			clientThread.invokeLater(() -> highlightController.redraw());
-		}
+        if (event.getContainerId() == InventoryID.INV && grandExchange.isOpen()) {
+            if (!accountStatusManager.isOwnedModifyActive() || !grandExchange.isSlotOpen()) {
+                suggestionManager.setSuggestionNeeded(true);
+            }
+            clientThread.invokeLater(() -> highlightController.redraw());
+        }
 	}
 
 	private boolean isBankOpen() {
@@ -300,6 +316,7 @@ public class FlippingCopilotPlugin extends Plugin {
 		if (mainPanel != null) {
 			mainPanel.refresh();
 		}
+		cloudSyncService.onLogin(name);
 	}
 
 	@Subscribe
@@ -334,6 +351,9 @@ public class FlippingCopilotPlugin extends Plugin {
 
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event) {
+		// RuneAssist fork: "Add to portfolio" now tracks locally (HeldCostTracker) instead of
+		// calling FC's real /profit-tracking/toggle-item-portfolio endpoint, which needed an
+		// FC account JWT we never have and silently did nothing.
 		menuHandler.injectInventoryPortfolioMenuEntry(event);
 		menuHandler.injectCopilotPriceGraphMenuEntry(event);
 		menuHandler.injectConfirmMenuEntry(event);
@@ -368,6 +388,7 @@ public class FlippingCopilotPlugin extends Plugin {
 		switch (event.getGameState())
 		{
 			case LOGIN_SCREEN:
+				cloudSyncService.flushNow();
 				sessionManager.reset();
 				suggestionManager.reset();
 				osrsLoginManager.reset();
@@ -380,6 +401,7 @@ public class FlippingCopilotPlugin extends Plugin {
 			case LOGGING_IN:
 			case HOPPING:
 			case CONNECTION_LOST:
+				accountStatusManager.clearOwnedModify();
 				osrsLoginManager.setLastLoginTick(client.getTickCount());
 				osrsLoginRS.set(osrsLoginRS.get().nextState(client));
 				break;
@@ -413,6 +435,7 @@ public class FlippingCopilotPlugin extends Plugin {
 	@Subscribe
 	public void onClientShutdown(ClientShutdown clientShutdownEvent) {
 		log.debug("client shutdown event received");
+		cloudSyncService.flushNow();
 		offerManager.saveAll();
 		if(copilotLoginRS.get().isLoggedIn()) {
 			String displayName = osrsLoginManager.getLastDisplayName();
@@ -457,6 +480,9 @@ public class FlippingCopilotPlugin extends Plugin {
 					|| "telemetryEndpoint".equals(event.getKey())
 					|| "telemetryToken".equals(event.getKey())) {
 				telemetry.onUploadSettingsChanged();
+			}
+			if ("cloudSync".equals(event.getKey())) {
+				cloudSyncService.onEnabledChanged();
 			}
 			// RuneAssist fork: BankTags portfolio-tag feature disabled.
 			// if (event.getKey().equals("portfolioBankTag")) {

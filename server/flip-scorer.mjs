@@ -328,3 +328,9 @@ export function cacheStatus() {
     pricesAgeMs: pricesAt ? Date.now() - pricesAt : null,
   };
 }
+
+export function itemName(id) {
+  const m = meta.get(Number(id));
+  return m && m.name ? m.name : `Item ${id}`;
+}
+

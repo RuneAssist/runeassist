@@ -1,0 +1,96 @@
+{
+  "comment": "Shared FIFO test vectors. Java FlipLedgerEngine and JS flip-ledger.mjs must match these expected flips/stats exactly. Flip UUIDs are not compared.",
+  "cases": [
+    {
+      "name": "simple_round_trip",
+      "transactions": [
+        {"id": "11111111-1111-1111-1111-111111111111", "type": "BUY", "itemId": 4151, "price": 1000, "quantity": 100, "boxId": 0, "amountSpent": 100000, "timestamp": "2026-01-01T00:00:00Z"},
+        {"id": "22222222-2222-2222-2222-222222222222", "type": "SELL", "itemId": 4151, "price": 1200, "quantity": 100, "boxId": 0, "amountSpent": 120000, "timestamp": "2026-01-01T00:05:00Z"}
+      ],
+      "expect": {
+        "stats": {"profit": 17600, "gross": 100000, "taxPaid": 2400, "flipsMade": 1},
+        "portfolioValue": 0,
+        "closedFlips": [
+          {"itemId": 4151, "openedQuantity": 100, "closedQuantity": 100, "spent": 100000, "profit": 17600, "taxPaid": 2400, "status": "FINISHED"}
+        ],
+        "openPositions": []
+      }
+    },
+    {
+      "name": "partial_fills_then_full_sell",
+      "transactions": [
+        {"id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1", "type": "BUY", "itemId": 4151, "price": 1000, "quantity": 50, "boxId": 1, "amountSpent": 50000, "timestamp": "2026-01-01T00:00:00Z"},
+        {"id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2", "type": "BUY", "itemId": 4151, "price": 1100, "quantity": 50, "boxId": 1, "amountSpent": 55000, "timestamp": "2026-01-01T00:01:00Z"},
+        {"id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3", "type": "SELL", "itemId": 4151, "price": 1200, "quantity": 100, "boxId": 2, "amountSpent": 120000, "timestamp": "2026-01-01T00:10:00Z"}
+      ],
+      "expect": {
+        "stats": {"profit": 12600, "gross": 105000, "taxPaid": 2400, "flipsMade": 1},
+        "portfolioValue": 0,
+        "closedFlips": [
+          {"itemId": 4151, "openedQuantity": 100, "closedQuantity": 100, "spent": 105000, "profit": 12600, "taxPaid": 2400, "status": "FINISHED"}
+        ],
+        "openPositions": []
+      }
+    },
+    {
+      "name": "partial_sell_leaves_open_lot",
+      "transactions": [
+        {"id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1", "type": "BUY", "itemId": 4151, "price": 1000, "quantity": 100, "boxId": 0, "amountSpent": 100000, "timestamp": "2026-01-01T00:00:00Z"},
+        {"id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2", "type": "SELL", "itemId": 4151, "price": 1200, "quantity": 40, "boxId": 0, "amountSpent": 48000, "timestamp": "2026-01-01T00:05:00Z"}
+      ],
+      "expect": {
+        "stats": {"profit": 7040, "gross": 100000, "taxPaid": 960, "flipsMade": 1},
+        "portfolioValue": 60000,
+        "closedFlips": [],
+        "openPositions": [
+          {"itemId": 4151, "openedQuantity": 100, "closedQuantity": 40, "spent": 100000, "profit": 7040, "taxPaid": 960, "status": "SELLING"}
+        ]
+      }
+    },
+    {
+      "name": "unmatched_sell_is_ignored",
+      "transactions": [
+        {"id": "cccccccc-cccc-cccc-cccc-ccccccccccc1", "type": "SELL", "itemId": 4151, "price": 1200, "quantity": 10, "boxId": 0, "amountSpent": 12000, "timestamp": "2026-01-01T00:00:00Z"}
+      ],
+      "expect": {
+        "stats": {"profit": 0, "gross": 0, "taxPaid": 0, "flipsMade": 0},
+        "portfolioValue": 0,
+        "closedFlips": [],
+        "openPositions": []
+      }
+    },
+    {
+      "name": "two_items_independent_books",
+      "transactions": [
+        {"id": "dddddddd-dddd-dddd-dddd-ddddddddddd1", "type": "BUY", "itemId": 4151, "price": 1000, "quantity": 10, "boxId": 0, "amountSpent": 10000, "timestamp": "2026-01-01T00:00:00Z"},
+        {"id": "dddddddd-dddd-dddd-dddd-ddddddddddd2", "type": "BUY", "itemId": 561, "price": 200, "quantity": 100, "boxId": 1, "amountSpent": 20000, "timestamp": "2026-01-01T00:01:00Z"},
+        {"id": "dddddddd-dddd-dddd-dddd-ddddddddddd3", "type": "SELL", "itemId": 4151, "price": 1100, "quantity": 10, "boxId": 0, "amountSpent": 11000, "timestamp": "2026-01-01T00:02:00Z"}
+      ],
+      "expect": {
+        "stats": {"profit": 780, "gross": 30000, "taxPaid": 220, "flipsMade": 2},
+        "portfolioValue": 20000,
+        "closedFlips": [
+          {"itemId": 4151, "openedQuantity": 10, "closedQuantity": 10, "spent": 10000, "profit": 780, "taxPaid": 220, "status": "FINISHED"}
+        ],
+        "openPositions": [
+          {"itemId": 561, "openedQuantity": 100, "closedQuantity": 0, "spent": 20000, "profit": 0, "taxPaid": 0, "status": "BUYING"}
+        ]
+      }
+    },
+    {
+      "name": "tax_exempt_item",
+      "transactions": [
+        {"id": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1", "type": "BUY", "itemId": 8011, "price": 100, "quantity": 10, "boxId": 0, "amountSpent": 1000, "timestamp": "2026-01-01T00:00:00Z"},
+        {"id": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee2", "type": "SELL", "itemId": 8011, "price": 150, "quantity": 10, "boxId": 0, "amountSpent": 1500, "timestamp": "2026-01-01T00:01:00Z"}
+      ],
+      "expect": {
+        "stats": {"profit": 500, "gross": 1000, "taxPaid": 0, "flipsMade": 1},
+        "portfolioValue": 0,
+        "closedFlips": [
+          {"itemId": 8011, "openedQuantity": 10, "closedQuantity": 10, "spent": 1000, "profit": 500, "taxPaid": 0, "status": "FINISHED"}
+        ],
+        "openPositions": []
+      }
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 package com.runeassist.flip;
 
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginManager;
@@ -9,6 +10,7 @@ import net.runelite.client.plugins.PluginManager;
  * {@code com.runeassist.flip.controller.FlippingCopilotPlugin} and must not emit
  * competing GE suggestions when the Hub plugin is also enabled.
  */
+@Slf4j
 public final class HubFlippingCopilot
 {
     public static final String WAIT_MESSAGE = "Turn off Plugin Hub Flipping Copilot";
@@ -46,14 +48,20 @@ public final class HubFlippingCopilot
         {
             for (Plugin p : pluginManager.getPlugins())
             {
-                if (isHubPlugin(p) && pluginManager.isPluginEnabled(p))
+                if (isHubPlugin(p))
                 {
-                    return true;
+                    boolean enabled = pluginManager.isPluginEnabled(p);
+                    log.debug("hub FC candidate class={} enabled={}", p.getClass().getName(), enabled);
+                    if (enabled)
+                    {
+                        return true;
+                    }
                 }
             }
         }
-        catch (RuntimeException ignored)
+        catch (RuntimeException e)
         {
+            log.warn("HubFlippingCopilot.isEnabled scan failed", e);
         }
         return false;
     }

@@ -64,10 +64,6 @@ public class SuggestionPanel extends JPanel {
     private JButton skipButton;
     private final JPanel buttonContainer = new JPanel();
     private final JPanel suggestedActionPanel;
-    private final PreferencesPanel preferencesPanel;
-    private final JLayeredPane layeredPane = new JLayeredPane();
-    private boolean isPreferencesPanelVisible = false;
-    private final JLabel gearButton;
     private String innerSuggestionMessage;
     private final CardLayout bodyLayout = new CardLayout();
     private final JPanel bodyCards = new JPanel(bodyLayout);
@@ -89,7 +85,6 @@ public class SuggestionPanel extends JPanel {
                            SuggestionPreferencesManager suggestionPreferencesManager,
                            AccountStatusManager accountStatusManager,
                            PauseButton pauseButton,
-                           PreferencesPanel preferencesPanel,
                            OsrsLoginManager osrsLoginManager,
                            Client client, PausedManager pausedManager,
                            GrandExchangeUncollectedManager uncollectedManager,
@@ -97,7 +92,6 @@ public class SuggestionPanel extends JPanel {
                            HighlightController highlightController,
                            ItemManager itemManager,
                            GrandExchange grandExchange,  PremiumInstanceController premiumInstanceController, FlipsDialogController flipsDialogController, ProfitCalculator profitCalculator, SuggestionController suggestionController) {
-        this.preferencesPanel = preferencesPanel;
         this.config = config;
         this.suggestionManager = suggestionManager;
         this.suggestionPreferencesManager = suggestionPreferencesManager;
@@ -116,12 +110,15 @@ public class SuggestionPanel extends JPanel {
         this.profitCalculator = profitCalculator;
         this.suggestionController = suggestionController;
 
-        layeredPane.setLayout(null);
-        setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH, DEFAULT_PANEL_HEIGHT));
+        Dimension size = new Dimension(MainPanel.CONTENT_WIDTH, DEFAULT_PANEL_HEIGHT);
+        setPreferredSize(size);
+        setMinimumSize(size);
+        setMaximumSize(new Dimension(Integer.MAX_VALUE, DEFAULT_PANEL_HEIGHT));
+        setLayout(new BorderLayout());
+        setBackground(RuneAssistColors.SHELL);
+
         suggestedActionPanel = darkPanel(new BorderLayout(), RuneAssistColors.CARD);
         suggestedActionPanel.setBorder(RuneAssistColors.cardBorder());
-        suggestedActionPanel.setBounds(0, 0, MainPanel.CONTENT_WIDTH, DEFAULT_PANEL_HEIGHT);
-
         suggestedActionPanel.add(buildHeader(), BorderLayout.NORTH);
 
         bodyCards.setOpaque(true);
@@ -134,25 +131,7 @@ public class SuggestionPanel extends JPanel {
         setupButtonContainer();
         suggestedActionPanel.add(buttonContainer, BorderLayout.SOUTH);
 
-        layeredPane.add(suggestedActionPanel, JLayeredPane.DEFAULT_LAYER);
-        this.preferencesPanel.setVisible(false);
-
-        layeredPane.add(this.preferencesPanel, JLayeredPane.PALETTE_LAYER);
-
-        gearButton = UIUtilities.gearButton("Settings", this::handleGearClick);
-        gearButton.setEnabled(true);
-        gearButton.setFocusable(true);
-        gearButton.setBackground(RuneAssistColors.CARD);
-        gearButton.setOpaque(true);
-        gearButton.setBounds(MainPanel.CONTENT_WIDTH - 24, 6, 20, 20);
-
-        layeredPane.add(gearButton, JLayeredPane.MODAL_LAYER);
-
-        setLayout(new BorderLayout());
-        setBackground(RuneAssistColors.SHELL);
-        setPanelHeight(DEFAULT_PANEL_HEIGHT);
-
-        add(layeredPane);
+        add(suggestedActionPanel, BorderLayout.CENTER);
         showMessageCard();
     }
 
@@ -202,13 +181,12 @@ public class SuggestionPanel extends JPanel {
     }
 
     private JPanel buildMessageCard() {
-        suggestionTextContainer.setLayout(new BoxLayout(suggestionTextContainer, BoxLayout.X_AXIS));
-        suggestionTextContainer.add(Box.createHorizontalGlue());
-        suggestionTextContainer.add(suggestionText);
-        suggestionTextContainer.add(Box.createHorizontalGlue());
+        suggestionTextContainer.setLayout(new BorderLayout());
+        suggestionTextContainer.add(suggestionText, BorderLayout.CENTER);
         suggestionTextContainer.setOpaque(true);
         suggestionTextContainer.setBackground(RuneAssistColors.CARD);
         suggestionText.setHorizontalAlignment(SwingConstants.CENTER);
+        suggestionText.setVerticalAlignment(SwingConstants.CENTER);
         suggestionText.setForeground(RuneAssistColors.TEXT);
         suggestionText.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
         return suggestionTextContainer;
@@ -222,6 +200,7 @@ public class SuggestionPanel extends JPanel {
         }
         actionPill.setText(text.toUpperCase(Locale.ROOT));
         actionPill.setVisible(true);
+        actionPill.revalidate();
     }
 
     private void showStructuredCard() {
@@ -230,30 +209,6 @@ public class SuggestionPanel extends JPanel {
 
     private void showMessageCard() {
         bodyLayout.show(bodyCards, CARD_MESSAGE);
-    }
-
-    private void handleGearClick() {
-        isPreferencesPanelVisible = !isPreferencesPanelVisible;
-        if (isPreferencesPanelVisible) {
-            setPanelHeight(280);
-        } else {
-            setPanelHeight(DEFAULT_PANEL_HEIGHT);
-        }
-
-        preferencesPanel.setVisible(isPreferencesPanelVisible);
-        suggestedActionPanel.setVisible(!isPreferencesPanelVisible);
-
-        refresh();
-        layeredPane.revalidate();
-        layeredPane.repaint();
-    }
-
-    private void setPanelHeight(int height) {
-        layeredPane.setSize(MainPanel.CONTENT_WIDTH, height);
-        layeredPane.setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH, height));
-        setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH, height));
-        preferencesPanel.setBounds(0, 0, MainPanel.CONTENT_WIDTH, height);
-        suggestedActionPanel.setBounds(0, 0, MainPanel.CONTENT_WIDTH, height);
     }
 
     private void setupButtonContainer() {
@@ -351,25 +306,13 @@ public class SuggestionPanel extends JPanel {
         clearSuggestionTooltips();
         SuggestionType suggestionType = suggestion.getType();
         if (suggestionType == null) {
-            setActionPill("error");
-            showCenteredMessage("Error processing suggestion");
+            suggestionManager.setSuggestionNeeded(true);
+            showFetchingWait();
             return;
         }
         switch (suggestionType) {
             case WAIT:
-                if (HubFlippingCopilot.WAIT_MESSAGE.equals(suggestion.getMessage())) {
-                    setActionPill("wait");
-                    showCenteredMessage("<FONT COLOR=gray>" + HubFlippingCopilot.WAIT_MESSAGE + "</FONT>");
-                } else {
-                    setActionPill("wait");
-                    String wait = "Wait";
-                    if (!Strings.isNullOrEmpty(suggestion.getMessage())) {
-                        wait += "<br><FONT COLOR=white>" + suggestion.getMessage() + "</FONT>";
-                    }
-                    showCenteredMessage(wait);
-                }
-                suggestionIcon.setVisible(false);
-                applyWaitCaption(suggestion);
+                paintWait(suggestion);
                 return;
             case ABORT:
                 setActionPill("abort");
@@ -398,9 +341,16 @@ public class SuggestionPanel extends JPanel {
                 }
                 setItemIcon(suggestion.getItemId());
                 break;
+            case DECANT:
+                setActionPill("decant");
+                itemNameLabel.setText(suggestion.getName());
+                qtyPriceLabel.setText(!Strings.isNullOrEmpty(suggestion.getMessage())
+                        ? suggestion.getMessage() : "Decant now");
+                setItemIcon(suggestion.getItemId());
+                break;
             default:
-                setActionPill("error");
-                showCenteredMessage("Error processing suggestion");
+                suggestionManager.setSuggestionNeeded(true);
+                showFetchingWait();
                 return;
         }
         String why = suggestion.getWhy();
@@ -459,13 +409,27 @@ public class SuggestionPanel extends JPanel {
         showStructuredCard();
     }
 
-    private void applyWaitCaption(Suggestion suggestion) {
-        String why = suggestion.getWhy();
-        String waitText = !Strings.isNullOrEmpty(why) ? htmlEscape(why) : formatWaitSlotStatus();
-        additionalInfoText.setVisible(false);
-        if (!Strings.isNullOrEmpty(waitText)) {
-            // keep wait copy on the message card; slot counts already in south of structured
+    /** WAIT must always show a pill + why. Never a blank RUNEASSIST header. */
+    private void paintWait(Suggestion suggestion) {
+        setActionPill("wait");
+        suggestionIcon.setVisible(false);
+        String message = suggestion.getMessage();
+        if (HubFlippingCopilot.WAIT_MESSAGE.equals(message)) {
+            showCenteredMessage("<FONT COLOR=gray>" + HubFlippingCopilot.WAIT_MESSAGE + "</FONT>");
+            return;
         }
+        if (Strings.isNullOrEmpty(message)) {
+            message = "Wait";
+        }
+        itemNameLabel.setText("<html>" + htmlEscape(message) + "</html>");
+        qtyPriceLabel.setText("");
+        String why = suggestion.getWhy();
+        if (Strings.isNullOrEmpty(why)) {
+            why = formatWaitSlotStatus();
+        }
+        setAdditionalInfoText(Strings.isNullOrEmpty(why) ? "" : htmlEscape(why), null);
+        setButtonsVisible(false);
+        showStructuredCard();
     }
 
     private boolean shouldSellFromBank(Suggestion suggestion) {
@@ -515,7 +479,6 @@ public class SuggestionPanel extends JPanel {
         innerSuggestionMessage = message;
         setButtonsVisible(false);
         suggestionText.setText("<html><center>" + message + "<br>" + serverMessage + "</center></html>");
-        suggestionText.setMaximumSize(new Dimension(suggestionText.getPreferredSize().width, Integer.MAX_VALUE));
         showMessageCard();
         suggestionTextContainer.revalidate();
         suggestionTextContainer.repaint();
@@ -548,7 +511,6 @@ public class SuggestionPanel extends JPanel {
             suggestionText.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
         }
         suggestionText.setText("<html><center>" + displayMessage + "<br>" + serverMessage + "</center></html>");
-        suggestionText.setMaximumSize(new Dimension(suggestionText.getPreferredSize().width, Integer.MAX_VALUE));
         showMessageCard();
         suggestionTextContainer.revalidate();
         suggestionTextContainer.repaint();
@@ -598,10 +560,26 @@ public class SuggestionPanel extends JPanel {
         Suggestion suggestion = suggestionManager.getSuggestion();
         setServerMessage("");
         if (suggestion == null) {
+            showFetchingWait();
+            suggestionManager.setSuggestionNeeded(true);
+            return;
+        }
+        if (suggestion.getType() == null
+                || (suggestion.isModifySuggestion() && suggestionController.isGhostModify(suggestion))) {
+            log.info("dropping unactionable suggestion type={} item={}",
+                    suggestion.getType(), suggestion.getItemId());
+            if (suggestion.isModifySuggestion() && suggestion.actionedTick == -1) {
+                suggestion.actionedTick = 0;
+            }
+            accountStatusManager.clearOwnedModify();
+            suggestionManager.setSuggestionNeeded(true);
+            showFetchingWait();
             return;
         }
         AccountStatus accountStatus = accountStatusManager.getAccountStatus();
         if(accountStatus == null) {
+            showFetchingWait();
+            suggestionManager.setSuggestionNeeded(true);
             return;
         }
         boolean collectNeeded = accountStatus.isCollectNeeded(suggestion, grandExchange.isSetupOfferOpen());
@@ -615,8 +593,7 @@ public class SuggestionPanel extends JPanel {
             suggestCollect();
         } else if (suggestion.isWaitSuggestion() && !grandExchange.isOpen() && accountStatus.emptySlotExists()) {
             suggestOpenGe();
-        } else if (suggestion.isWaitSuggestion() && accountStatus.moreGpNeeded()
-                && Strings.isNullOrEmpty(suggestion.getMessage())) {
+        } else if (suggestion.isWaitSuggestion() && accountStatus.moreGpNeeded()) {
             suggestAddGp();
         } else if (suggestion.isWaitSuggestion()
                 && grandExchange.isOpen()
@@ -630,13 +607,14 @@ public class SuggestionPanel extends JPanel {
         highlightController.redraw();
     }
 
+    private void showFetchingWait() {
+        setActionPill("wait");
+        setMessage("Getting the next flip…");
+    }
+
     public void refresh() {
         log.debug("refreshing suggestion panel {}", client.getGameState());
         if (!ensureEdt(this::refresh)) return;
-        if(isPreferencesPanelVisible) {
-            preferencesPanel.refresh();
-            return;
-        }
         if (pausedManager.isPaused()) {
             hideLoading();
             setIsPausedMessage();

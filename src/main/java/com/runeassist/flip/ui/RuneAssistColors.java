@@ -12,17 +12,18 @@ import java.awt.Font;
 import java.awt.Insets;
 
 /**
- * Sidecar / flips-dialog identity. Teal on RuneLite dark — not Flipping Copilot orange.
+ * Sidecar / flips-dialog identity. "Ledger" direction: brass on RuneLite dark, paired with
+ * the gate-chevron coin mark — not Flipping Copilot orange, not the earlier teal.
  */
 public final class RuneAssistColors {
-    /** Primary accent. #2EC4B6 */
-    public static final Color ACCENT = new Color(0x2EC4B6);
-    /** Hover / selected fill. #1F9E94 */
-    public static final Color ACCENT_HOVER = new Color(0x1F9E94);
-    /** Selected-tab and table-selection background. #164E4A */
-    public static final Color ACCENT_MUTED = new Color(0x164E4A);
+    /** Primary accent. #D1A537 */
+    public static final Color ACCENT = new Color(0xD1A537);
+    /** Hover / selected fill. #B08A2E */
+    public static final Color ACCENT_HOVER = new Color(0xB08A2E);
+    /** Selected-tab and table-selection background. #4A3A1C */
+    public static final Color ACCENT_MUTED = new Color(0x4A3A1C);
     /** Text/icons sitting on a filled accent chip. */
-    public static final Color ON_ACCENT = new Color(0x0B1A19);
+    public static final Color ON_ACCENT = new Color(0x1A1408);
     public static final Color CARD = ColorScheme.DARKER_GRAY_COLOR;
     public static final Color SHELL = ColorScheme.DARK_GRAY_COLOR;
     public static final Color TEXT = ColorScheme.LIGHT_GRAY_COLOR;

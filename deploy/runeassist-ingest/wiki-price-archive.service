@@ -1,0 +1,14 @@
+[Unit]
+Description=RuneAssist OSRS Wiki price/volume archive (forecast fuel, not ge_offer)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ubuntu/selfhost/apps/runeassist-ingest
+ExecStart=/usr/bin/node /home/ubuntu/selfhost/apps/runeassist-ingest/wiki-price-archive.mjs --dir=/home/ubuntu/selfhost/apps/runeassist-ingest/wiki-archive
+Nice=10
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

@@ -61,7 +61,9 @@ async function main() {
     const m = meta.get(id);
     const h = H[idStr];
     if (!m || !h) continue;
-    const buy = l.low, sell = l.high;            // buy at low (insta-sell price), sell at high
+    // Prefer 1h averages over last-trade high/low (last trades are full of outliers).
+    const buy = h.avgLowPrice || l.low;
+    const sell = h.avgHighPrice || l.high;
     if (!(buy > 0) || !(sell > 0) || sell <= buy) continue;
 
     const vol = (h.highPriceVolume ?? 0) + (h.lowPriceVolume ?? 0); // 1h units
@@ -72,17 +74,27 @@ async function main() {
 
     const marginPct = margin / buy * 100;
     const limit = m.limit ?? 0;
+    if (!(limit > 0)) continue; // unknown GE buy limit — never invent a quantity
 
-    // Estimate fill time for a full buy-limit order from hourly throughput.
+    const name = String(m.name || '').toLowerCase();
+    if (name.includes('placeholder') || name.startsWith('broken ') || name.includes('(nz)')) continue;
+
+    // Estimate fill time from hourly throughput; size qty to ~5 minutes of volume (or --timeframe).
     const buyVol = h.lowPriceVolume ?? 0;   // people selling to us (we buy)
     const sellVol = h.highPriceVolume ?? 0; // people buying from us (we sell)
     const perHour = Math.max(1, Math.min(buyVol, sellVol)); // bottleneck side
-    const qtyCap = Math.min(limit || Infinity, Math.floor(CAPITAL / buy)) || 0;
+    if (Math.min(buyVol, sellVol) < 150) continue;
+    if (marginPct > 12) continue; // wide spread = stale/odd last-trade, not a real flip
+    const imbalance = Math.abs(buyVol - sellVol) / vol;        // 0 balanced .. 1 one-sided
+    if (imbalance > 0.55) continue;
+
+    const timeframeMin = num(args.timeframe, 5);
+    const liqQty = Math.max(1, Math.floor(perHour / 60 * timeframeMin));
+    const qtyCap = Math.min(limit, liqQty, Math.floor(CAPITAL / buy)) || 0;
     const fillHrs = qtyCap > 0 ? qtyCap / perHour : Infinity;
 
-    // Risk penalty: thin liquidity, extreme spread, or one-sided volume.
-    const imbalance = Math.abs(buyVol - sellVol) / vol;        // 0 balanced .. 1 one-sided
-    const spreadRisk = marginPct > 25 ? 0.5 : 0;               // suspiciously wide = flip trap
+    // Risk penalty: thin liquidity or residual spread.
+    const spreadRisk = marginPct > 15 ? 0.35 : 0;
     const liqRisk = vol < MIN_VOLUME * 4 ? 0.4 : 0;
     const risk = Math.min(0.9, imbalance * 0.6 + spreadRisk + liqRisk);
 

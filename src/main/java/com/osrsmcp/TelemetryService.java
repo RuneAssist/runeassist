@@ -75,6 +75,7 @@ public class TelemetryService
 
     @Inject private ConfigManager configManager;
     @Inject private Gson gson;
+    @Inject private WikiPriceService wikiPriceService;
 
     private FlippingCopilotConfig flipConfig;
     private OsrsMcpConfig mcpConfig;
@@ -302,6 +303,12 @@ public class TelemetryService
         r.put("total_quantity", totalQuantity);
         r.put("quantity_sold", quantitySold);
         r.put("spent", spent);
+        // Cache-only read (see getPriceIfCached doc) -- never blocks, so safe on any thread this
+        // is called from. Captures the live market context an offer was placed/repriced against,
+        // which can't be reconstructed retroactively (the wiki only exposes current prices).
+        WikiPriceService.PriceData market = wikiPriceService.getPriceIfCached(itemId);
+        r.put("market_high", market != null ? market.high : null);
+        r.put("market_low", market != null ? market.low : null);
         write("ge_offer", r);
     }
 

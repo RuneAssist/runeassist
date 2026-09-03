@@ -35,6 +35,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rankFlips, ensureMarketCache } from './flip-scorer.mjs';
+import { initDb, tryHandle as tryAccountHandle } from './account-sync.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -303,6 +304,16 @@ function send(res, code, obj) {
 }
 
 const server = http.createServer((req, res) => {
+  tryAccountHandle(req, res).then((handled) => {
+    if (handled) return;
+    handleLegacy(req, res);
+  }).catch((e) => {
+    console.error('request failed:', e);
+    if (!res.headersSent) send(res, 500, { error: 'internal' });
+  });
+});
+
+function handleLegacy(req, res) {
   if (req.method === 'GET' && req.url === '/health') return send(res, 200, { ok: true });
 
   if (req.method === 'GET' && req.url === '/v1/stats') {
@@ -418,9 +429,10 @@ const server = http.createServer((req, res) => {
   }
 
   send(res, 404, { error: 'not found' });
-});
+}
 
 server.listen(PORT, () => {
   console.log(`RuneAssist ingest server on :${PORT}  data=${DATA_DIR}  (schema v${SCHEMA_VERSION})`);
+  initDb().catch((e) => console.error('account-sync db init failed:', e.message));
   ensureMarketCache().catch((e) => console.error('market cache warmup failed:', e.message));
 });

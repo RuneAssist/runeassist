@@ -31,6 +31,7 @@ public class GrandExchangeOfferEventHandler {
     private final GrandExchangeUncollectedManager grandExchangeUncollectedManager;
     private final OfferManager offerManager;
     private final SuggestionManager suggestionManager;
+    private final AccountStatusManager accountStatusManager;
     private final LocalFlipLedger localFlipLedger;
 
     // state
@@ -91,8 +92,28 @@ public class GrandExchangeOfferEventHandler {
             }
         }
 
-        // Always fetch suggestion to ensure fast response for better UX
-        suggestionManager.setSuggestionNeeded(true);
+        // Own a freshly listed or modified offer for ~10 min (leftover qty after
+        // cancel-relist looks like sold==0 and must not abort the same tick).
+        boolean loginBurst = client.getTickCount() <= osrsLoginManager.getLastLoginTick() + GE_LOGIN_BURST_WINDOW;
+        if (!loginBurst && isNewOffer(prev, o)) {
+            GrandExchangeOfferState st = o.getState();
+            if ((st == GrandExchangeOfferState.BUYING || st == GrandExchangeOfferState.SELLING)
+                    && o.getItemId() > 0) {
+                accountStatusManager.protectListing(o.getItemId());
+            }
+        }
+
+        boolean editorOpen = grandExchange.isSlotOpen();
+        if (o.getState() == GrandExchangeOfferState.EMPTY) {
+            accountStatusManager.releaseOwnedModifyIfSlotEmpty(slot, editorOpen);
+        }
+        accountStatusManager.releaseStaleOwnedModify(client.getGrandExchangeOffers(), editorOpen);
+
+        // Always fetch suggestion to ensure fast response for better UX — except while
+        // a MODIFY is in progress: cancel-then-relist empties the slot and would emit BUY.
+        if (!accountStatusManager.isOwnedModifyActive() || !editorOpen) {
+            suggestionManager.setSuggestionNeeded(true);
+        }
     }
 
     private boolean wasCopilotPriceUsed(SavedOffer o, SavedOffer prev) {
@@ -136,7 +157,9 @@ public class GrandExchangeOfferEventHandler {
                 // if the slot is empty we want to ensure that the un collected manager doesn't think there is something to collect
                 // this can happen due to race conditions between the collection and offer fills timing
                 grandExchangeUncollectedManager.ensureSlotClear(accountHash, slot);
-                suggestionManager.setSuggestionNeeded(true);
+                if (!accountStatusManager.isOwnedModifyActive() || !grandExchange.isSlotOpen()) {
+                    suggestionManager.setSuggestionNeeded(true);
+                }
                 return;
         }
         grandExchangeUncollectedManager.addUncollected(accountHash, slot, o.getItemId(), uncollectedItems, uncollectedGp);

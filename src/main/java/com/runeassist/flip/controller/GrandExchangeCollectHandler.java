@@ -24,6 +24,7 @@ public class GrandExchangeCollectHandler {
     private final SuggestionManager suggestionManager;
     private final Client client;
     private final HeldItemSyncStateRS heldItemSyncStateRS;
+    private final AccountStatusManager accountStatusManager;
     private final com.osrsmcp.TelemetryService telemetry;
 
     @Setter
@@ -33,6 +34,7 @@ public class GrandExchangeCollectHandler {
         String menuOption = event.getMenuOption();
         Widget widget = event.getWidget();
         if (menuOption != null && menuOption.contains("Collect")) {
+            accountStatusManager.clearOwnedModify();
             Suggestion suggestion = suggestionManager.getSuggestion();
             if (suggestion != null && suggestion.isAbortSuggestion() && suggestion.actionedTick == -1) {
                 suggestion.actionedTick = client.getTickCount();
@@ -53,6 +55,10 @@ public class GrandExchangeCollectHandler {
         if (menuOption.equals("Modify offer")) {
             int slot = widget.getId() - 30474247;
             log.debug("modify offer clicked (tick {}) on slot {}", client.getTickCount(), slot);
+            Suggestion suggestion = suggestionManager.getSuggestion();
+            if (suggestion != null && suggestion.isModifySuggestion()) {
+                accountStatusManager.beginOwnedModify(suggestion);
+            }
             suggestionManager.suggestionsDelayedUntil = client.getTickCount() + 3;
             geUncollected.clearSlotUncollected(osrsLoginManager.getAccountHash(), slot);
         }

@@ -86,6 +86,14 @@ public class SuggestionController {
     }
 
     void onGameTick() {
+        if (accountStatusManager.releaseStaleOwnedModify(
+                client.getGrandExchangeOffers(), grandExchange.isSlotOpen())) {
+            markGhostModifyActioned();
+            suggestionManager.setSuggestionNeeded(true);
+            if (suggestionPanel != null) {
+                suggestionPanel.refresh();
+            }
+        }
         if(suggestionManager.isSuggestionRequestInProgress() || suggestionManager.isGraphDataReadingInProgress()) {
             return;
         }
@@ -111,11 +119,85 @@ public class SuggestionController {
             return false;
         }
         Suggestion p = suggestionManager.getSuggestion();
-        if(grandExchange.isSlotOpen() && !suggestionActionedOrVeryOutOfDate(p)) {
+        if (isModifyInProgress(p)) {
             return false;
+        }
+        if (grandExchange.isSlotOpen()) {
+            if (!suggestionActionedOrVeryOutOfDate(p)) {
+                return false;
+            }
+            if (liveOfferItemId(grandExchange.getOpenSlot()) != -1) {
+                // The "very out of date" path exists to un-freeze a ghost editor (left open
+                // with nothing behind it) so the card doesn't lock up forever -- see
+                // isModifyInProgress's comment. But a live offer behind the open slot (e.g.
+                // the player manually re-listing leftover stock after a partial fill/cancel,
+                // unrelated to any suggestion) means they're actively using this screen; do
+                // not yank the card to an unrelated item's suggestion out from under them.
+                return false;
+            }
         }
 
         return suggestionManager.isSuggestionNeeded() || suggestionManager.suggestionOutOfDate();
+    }
+
+    /**
+     * Click-to-modify / offer editor open for the current MODIFY card. Do not fetch
+     * a replacement (the 60s "very out of date" path used to bypass isSlotOpen and
+     * LocalSuggestionEngine then saw the cancelled slot as empty and emitted BUY).
+     * A leftover lock with the editor closed (logout, hop, GE home) must not freeze
+     * the card — empty slots should get BUY.
+     */
+    private boolean isModifyInProgress(Suggestion p) {
+        if (p != null && p.actionedTick != -1 && p.actionedTick <= client.getTickCount()) {
+            return false;
+        }
+        if (!grandExchange.isSlotOpen()) {
+            return false;
+        }
+        AccountStatusManager.OwnedModify owned = accountStatusManager.getOwnedModify();
+        if (owned != null && owned.itemId > 0) {
+            return slotIsForOwnedModify(grandExchange.getOpenSlot(), owned);
+        }
+        if (p != null && p.isModifySuggestion()) {
+            return slotIsForSuggestionModify(grandExchange.getOpenSlot(), p);
+        }
+        return false;
+    }
+
+    private boolean slotIsForOwnedModify(int open, AccountStatusManager.OwnedModify owned) {
+        if (open < 0 || owned == null) {
+            return false;
+        }
+        if (open == owned.slot) {
+            return true;
+        }
+        return liveOfferItemId(open) == owned.itemId;
+    }
+
+    private boolean slotIsForSuggestionModify(int open, Suggestion p) {
+        if (open < 0 || p == null) {
+            return false;
+        }
+        if (open == p.getBoxId()) {
+            return true;
+        }
+        return liveOfferItemId(open) == p.getItemId();
+    }
+
+    private int liveOfferItemId(int slot) {
+        GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
+        if (offers == null || slot < 0 || slot >= offers.length || offers[slot] == null) {
+            return -1;
+        }
+        return offers[slot].getItemId();
+    }
+
+    /** Stale MODIFY card: allow replacement and do not re-arm the lock on the next slot click. */
+    private void markGhostModifyActioned() {
+        Suggestion p = suggestionManager.getSuggestion();
+        if (p != null && p.isModifySuggestion() && p.actionedTick == -1) {
+            p.actionedTick = 0;
+        }
     }
 
     private boolean suggestionActionedOrVeryOutOfDate(Suggestion p) {
@@ -153,6 +235,9 @@ public class SuggestionController {
         // RuneAssist fork: no FC account required — only the OSRS login must be valid.
         if (!osrsLoginManager.isValidLoginState()) {
             suggestionManager.setSuggestionRefreshPending(false);
+            if (suggestionPanel != null) {
+                suggestionPanel.refresh();
+            }
             return;
         }
         if (suggestionManager.isSuggestionRequestInProgress()) {
@@ -161,6 +246,10 @@ public class SuggestionController {
         AccountStatus accountStatus = accountStatusManager.getAccountStatus();
         if (accountStatus == null) {
             suggestionManager.setSuggestionRefreshPending(false);
+            suggestionManager.setSuggestionNeeded(true);
+            if (suggestionPanel != null) {
+                suggestionPanel.refresh();
+            }
             return;
         }
         Suggestion oldSuggestion = suggestionManager.getSuggestion();
@@ -225,6 +314,34 @@ public class SuggestionController {
             log.info("discarding suggestion as not dump alert and no request in progress {}", newSuggestion);
             return;
         }
+        if (isGhostModify(newSuggestion)) {
+            log.info("discarding ghost MODIFY item {} — no live offer, editor closed",
+                    newSuggestion.getItemId());
+            accountStatusManager.clearOwnedModify();
+            markGhostModifyActioned();
+            Suggestion current = suggestionManager.getSuggestion();
+            if (current != null && current.isModifySuggestion()) {
+                suggestionManager.setSuggestion(null);
+            }
+            suggestionManager.setSuggestionRequestInProgress(false);
+            suggestionManager.setGraphDataReadingInProgress(false);
+            suggestionManager.setSuggestionNeeded(true);
+            if (suggestionPanel != null) {
+                suggestionPanel.refresh();
+            }
+            getSuggestionAsync();
+            return;
+        }
+        if (shouldKeepOwnedModify(oldSuggestion, newSuggestion)) {
+            log.info("keeping in-progress MODIFY item {} slot {}; discarding {}",
+                    oldSuggestion.getItemId(), oldSuggestion.getBoxId(), newSuggestion);
+            suggestionManager.setSuggestionRequestInProgress(false);
+            suggestionManager.setGraphDataReadingInProgress(false);
+            if (suggestionPanel != null) {
+                suggestionPanel.refresh();
+            }
+            return;
+        }
         if (newSuggestion.isBuyDumpSuggestion() && config.dumpAlertSound()) {
             playDumpAlertSound();
         }
@@ -263,6 +380,45 @@ public class SuggestionController {
         if (client.getVarcIntValue(VarClientInt.INPUT_TYPE) == 14) {
             clientThread.invokeLater(gePreviousSearch::showSuggestedItemInSearch);
         }
+    }
+
+    /**
+     * While the user is acting on a MODIFY, a refresh that would switch the card to
+     * BUY/SELL/MODIFY of a different item is dropped. Same-item MODIFY is allowed
+     * (repriced quote). Editor closed / leftover lock must not keep a ghost card.
+     */
+    private boolean shouldKeepOwnedModify(Suggestion oldSuggestion, Suggestion newSuggestion) {
+        if (oldSuggestion == null || !oldSuggestion.isModifySuggestion()) {
+            return false;
+        }
+        if (oldSuggestion.actionedTick != -1) {
+            return false;
+        }
+        if (!isModifyInProgress(oldSuggestion)) {
+            return false;
+        }
+        if (newSuggestion == null) {
+            return true;
+        }
+        if (newSuggestion.isModifySuggestion()
+                && newSuggestion.getItemId() == oldSuggestion.getItemId()) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * MODIFY with no filling offer and the editor closed — a leftover lock after
+     * logout/collect/empty slot. Do not show it; fetch BUY into empty slots.
+     */
+    public boolean isGhostModify(Suggestion s) {
+        if (s == null || !s.isModifySuggestion() || s.getItemId() <= 0) {
+            return false;
+        }
+        if (isModifyInProgress(s)) {
+            return false;
+        }
+        return !grandExchange.hasFillingOffer(s.getItemId());
     }
 
     private void playDumpAlertSound() {

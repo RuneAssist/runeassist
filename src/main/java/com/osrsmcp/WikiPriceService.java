@@ -93,6 +93,17 @@ public class WikiPriceService
         return priceCache.get(itemId);
     }
 
+    /**
+     * Like {@link #getPrice} but never triggers a fetch -- returns whatever is already
+     * cached (possibly stale, possibly null if nothing has loaded yet). Safe to call from
+     * the client thread or any latency-sensitive path where a blocking HTTP call would be
+     * a problem; use this for logging/telemetry, {@link #getPrice} for suggestion logic.
+     */
+    public PriceData getPriceIfCached(int itemId)
+    {
+        return priceCache.get(itemId);
+    }
+
     /** Returns prices for a list of item IDs. */
     public Map<Integer, PriceData> getPrices(List<Integer> itemIds)
     {

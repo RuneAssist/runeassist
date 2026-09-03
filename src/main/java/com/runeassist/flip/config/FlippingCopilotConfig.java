@@ -36,6 +36,21 @@ public interface FlippingCopilotConfig extends Config
         return true;
     }
 
+    @ConfigItem(
+            keyName = "cloudSync",
+            name = "Cloud sync flip history",
+            description = "On by default. Silently links this client to RuneAssist cloud so GE fills " +
+                    "sync across your devices (raw transactions only — not derived profit). Untick to keep " +
+                    "history on this PC. Failures never block suggestions. Pair another device from the " +
+                    "plugin Preferences panel.",
+            section = privacySection,
+            position = 1
+    )
+    default boolean cloudSync()
+    {
+        return true;
+    }
+
     @ConfigSection(
             name = "Advanced contribution",
             description = "Only needed for a custom ingest server. Production uses the hosted default.",
