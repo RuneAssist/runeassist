@@ -52,7 +52,6 @@ public class CopilotLoginController {
         this.executorService = executorService;
         this.copilotLoginRS = copilotLoginRS;
         // RuneAssist fork: keep FlipManager userId at 0 so local GE fills can merge.
-        // An FC login still overwrites this in onLoginResponse.
         loadCopilotAccounts(0);
         copilotLoginRS.registerListener((s) -> {
             if(s.loginResponse == null) {
@@ -67,24 +66,8 @@ public class CopilotLoginController {
     }
 
     private void loadCopilotAccounts(int previousFailures) {
-        int userId = copilotLoginRS.get().getUserId();
-        if(userId == -1) {
-            return;
-        }
-        long s = System.nanoTime();
-        Consumer<Map<String, Integer>> onSuccess = (displayNameToAccountId) -> {
-            displayNameToAccountId.forEach((key, value) -> copilotLoginRS.addAccountIfMissing(value, key, userId));
-            log.info("loading {} copilot accounts succeeded - took {}ms", displayNameToAccountId.size(), (System.nanoTime() - s) / 1000_000);
-            syncFlips(copilotLoginRS.get().getUserId(), new HashMap<>(), 0);
-        };
-        Consumer<String> onFailure = (errorMessage) -> {
-            if (copilotLoginRS.get().isLoggedIn()) {
-                long backOffSeconds = Math.min(15, (long) Math.exp(previousFailures));
-                log.info("failed to load copilot accounts ({}) retrying in {}s", errorMessage, backOffSeconds);
-                executorService.schedule(() -> loadCopilotAccounts(previousFailures + 1), backOffSeconds, TimeUnit.SECONDS);
-            }
-        };
-        apiRequestHandler.asyncLoadAccounts(onSuccess, onFailure);
+        // Legacy Flipping Copilot account/flip sync is disabled. LocalFlipLedger
+        // plus CloudSyncService are the RuneAssist sources of truth.
     }
 
     private void syncFlips(int userId, Map<Integer, Integer> accountIdTime, int previousFailures) {
@@ -120,19 +103,7 @@ public class CopilotLoginController {
     }
 
     public void onLoginPressed(String email, String password) {
-        Consumer<LoginResponse> onSuccess = (LoginResponse loginResponse) -> {
-            onLoginResponse(loginResponse);
-            loginPanel.endLoading();
-        };
-        Consumer<String> onFailure = (String errorMessage) -> {
-            onLoginFailure(errorMessage);
-            loginPanel.endLoading();
-        };
-        if (email == null || password == null) {
-            return;
-        }
-        loginPanel.startLoading();
-        apiRequestHandler.authenticate(email, password, onSuccess, onFailure);
+        log.debug("legacy copilot login is disabled");
     }
 
     public void onLoginResponse(LoginResponse loginResponse) {

@@ -78,11 +78,7 @@ public class HighlightController {
             clearTask.run();
             return;
         }
-        try {
-            SwingUtilities.invokeAndWait(clearTask);
-        } catch (Exception e) {
-            SwingUtilities.invokeLater(clearTask);
-        }
+        SwingUtilities.invokeLater(clearTask);
     }
 
     public void redraw() {
@@ -94,20 +90,20 @@ public class HighlightController {
             return;
         }
         if(!config.suggestionHighlights()) {
-            log.info("highlight redraw: suggestionHighlights config is OFF");
+            log.debug("highlight redraw: suggestionHighlights config is OFF");
             return;
         }
         if (offerManager.isOfferJustPlaced()) {
-            log.info("highlight redraw: skipped, offer just placed");
+            log.debug("highlight redraw: skipped, offer just placed");
             return;
         }
         if(suggestionManager.getSuggestionError() != null) {
-            log.info("highlight redraw: skipped, suggestion error={}", suggestionManager.getSuggestionError());
+            log.debug("highlight redraw: skipped, suggestion error={}", suggestionManager.getSuggestionError());
             return;
         }
         Suggestion suggestion = suggestionManager.getSuggestion();
         if (suggestion == null) {
-            log.info("highlight redraw: skipped, suggestion is null");
+            log.debug("highlight redraw: skipped, suggestion is null");
             return;
         }
         if (suggestion.isDecantSuggestion()) {
@@ -120,7 +116,7 @@ public class HighlightController {
         // sending them to the bank is wrong — they have to go to the GE clerk first.
         boolean isCollectNeeded = accountStatus != null && accountStatus.isCollectNeeded(suggestion, grandExchange.isSetupOfferOpen());
         boolean goToBank = sellFromBank && !isCollectNeeded;
-        log.info("highlight redraw: type={} item={} geOpen={} homeScreen={} slotOpen={} bankOpen={} goToBank={} accountStatusNull={}",
+        log.debug("highlight redraw: type={} item={} geOpen={} homeScreen={} slotOpen={} bankOpen={} goToBank={} accountStatusNull={}",
                 suggestion.getType(), suggestion.getItemId(), grandExchange.isOpen(),
                 grandExchange.isHomeScreenOpen(), grandExchange.isSlotOpen(), isBankOpen(), goToBank,
                 accountStatus == null);
@@ -141,11 +137,11 @@ public class HighlightController {
         }
         if (grandExchange.isHomeScreenOpen()) {
             boolean drew = drawHomeScreenHighLights(suggestion);
-            log.info("highlight redraw: drawHomeScreenHighLights returned {}", drew);
+            log.debug("highlight redraw: drawHomeScreenHighLights returned {}", drew);
         } else if (grandExchange.isSlotOpen()) {
             drawOfferScreenHighlights(suggestion);
         } else {
-            log.info("highlight redraw: GE open but neither home screen nor slot screen detected");
+            log.debug("highlight redraw: GE open but neither home screen nor slot screen detected");
         }
     }
 
@@ -296,7 +292,7 @@ public class HighlightController {
         else if (suggestion.isSellSuggestion() && accountStatus.hasSufficientInventoryForSellSuggestion(suggestion)) {
             Widget geInvGroup = client.getWidget(InterfaceID.GE_OFFERS_SIDE, 0);
             Widget itemWidget = getInventoryItemWidget(suggestion.getItemId());
-            log.info("highlight sell branch: geInvGroupNull={} itemWidgetNull={} itemWidgetHidden={}",
+            log.debug("highlight sell branch: geInvGroupNull={} itemWidgetNull={} itemWidgetHidden={}",
                     geInvGroup == null, itemWidget == null,
                     itemWidget != null && itemWidget.isHidden());
             if (itemWidget != null && !itemWidget.isHidden()) {
@@ -305,7 +301,7 @@ public class HighlightController {
             return true;
         }
         else if (suggestion.isSellSuggestion()) {
-            log.info("highlight sell branch: hasSufficientInventoryForSellSuggestion=false for item={}",
+            log.debug("highlight sell branch: hasSufficientInventoryForSellSuggestion=false for item={}",
                     suggestion.getItemId());
         }
         return false;

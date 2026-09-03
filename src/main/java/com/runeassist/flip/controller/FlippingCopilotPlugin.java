@@ -39,7 +39,7 @@ import java.util.concurrent.*;
 // or FC servers. Kept as its own RuneLite plugin so FC's Guice @Provides + wiring stay intact.
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
-		description = "Grand Exchange flip assistant. Based on Flipping Copilot (BSD-2). Contribute is under Configuration → Privacy (on by default).",
+		description = "Grand Exchange flip assistant. Based on Flipping Copilot (BSD-2). Optional contribution is under Configuration → Privacy.",
 		tags = {"runeassist", "flipping", "ge", "grand exchange", "money", "privacy", "contribute"}
 )
 // RuneAssist fork: dropped @PluginDependency(BankTagsPlugin.class) -- a sideloaded plugin
@@ -238,6 +238,7 @@ public class FlippingCopilotPlugin extends Plugin {
 		}
 		keybindHandler.unregister();
 		telemetry.shutdown();
+		executorService.shutdownNow();
 	}
 
 	@Provides
