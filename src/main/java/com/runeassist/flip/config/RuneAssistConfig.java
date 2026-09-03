@@ -17,7 +17,7 @@ public interface RuneAssistConfig extends Config
     // Configuration → RuneAssist Flipping. Both toggles are opt-in (Hub requirement).
     @ConfigSection(
             name = "Privacy",
-            description = "Optional anonymous data contribution and cloud history sync",
+            description = "Optional pseudonymous data contribution and opt-in cloud history sync",
             position = 0
     )
     String privacySection = "privacySection";
@@ -25,10 +25,11 @@ public interface RuneAssistConfig extends Config
     @ConfigItem(
             keyName = "shareTelemetry",
             name = "Contribute anonymous data",
-            description = "Off by default. Sends anonymised GE fills (hashed account id, never your " +
-                    "RSN or chat) to RuneAssist ingest. Does not gate flip suggestions (those use " +
-                    "Ares /v1/flips independently). Untick stays local. No endpoint or token needed " +
-                    "for the hosted server.",
+            description = "Off by default. Uploads GE offers, completed GE history and flip-panel " +
+                    "decisions to RuneAssist's server under a pseudonymous account hash (SHA-256 of " +
+                    "your RSN). Never sends chat, bank contents or your RSN in plain text. Does not " +
+                    "gate flip suggestions (those use the server's /v1/flips independently). Untick " +
+                    "stays local. No endpoint or token needed for the hosted server.",
             warning = "This feature submits your Grand Exchange offers and IP address to a 3rd-party server not controlled or verified by RuneLite developers",
             section = privacySection,
             position = 0
@@ -41,10 +42,10 @@ public interface RuneAssistConfig extends Config
     @ConfigItem(
             keyName = "cloudSync",
             name = "Cloud sync flip history",
-            description = "Off by default. Silently links this client to RuneAssist cloud so GE fills " +
-                    "sync across your devices (raw transactions only — not derived profit). Untick to keep " +
-                    "history on this PC. Failures never block suggestions. Pair another device from the " +
-                    "plugin Preferences panel.",
+            description = "Off by default. Links this client to a RuneAssist cloud account and uploads " +
+                    "your GE transactions and RSN so history syncs across devices (raw transactions " +
+                    "only — not derived profit). Untick to keep history on this PC. Failures never block " +
+                    "suggestions. Pair another device from the plugin Preferences panel.",
             warning = "This feature submits your Grand Exchange transactions and IP address to a 3rd-party server not controlled or verified by RuneLite developers",
             section = privacySection,
             position = 1
@@ -425,10 +426,15 @@ public interface RuneAssistConfig extends Config
     @ConfigItem(
             keyName = "webhook",
             name = "Webhook URL",
-            description = "The Discord Webhook URL for sending display name and profit.",
+            description = "Optional. A Discord webhook URL you create and supply — a third-party " +
+                    "endpoint (Discord's), not RuneAssist's. Used to send your display name and profit " +
+                    "to that webhook. Leave blank to disable.",
             section = notificationsSection,
             position = 5
     )
-    String webhook();
+    default String webhook()
+    {
+        return "";
+    }
 
 }
