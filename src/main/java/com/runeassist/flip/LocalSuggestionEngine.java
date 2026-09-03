@@ -3,6 +3,7 @@ package com.runeassist.flip;
 import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.model.SuggestionType;
 import com.runeassist.flip.util.Constants;
+import com.runeassist.flip.util.ProfitCalculator;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -185,7 +186,7 @@ public final class LocalSuggestionEngine {
                     ? offer[O_LAST_PROGRESS_MS] : 0L;
                 boolean stale = isStaleHold(lastProgressMs, in.timeframeMinutes, nowMs);
                 Map<String, Object> market = findMarketFlip(scoredFlips, offerItemId);
-                Map<String, Object> sellRow = findFlip(scoredFlips, offerItemId);
+                Map<String, Object> sellRow = findSellFlip(scoredFlips, offerItemId);
                 if (shouldAbortOffer(market, buy, fillingProgress, recentlySuggested, stale)) {
                     String name = getString(market, "name");
                     if (name == null) {
@@ -199,7 +200,9 @@ public final class LocalSuggestionEngine {
                 }
 
                 // BUY reprice needs a market quote, not a cost-basis sell row.
-                Map<String, Object> quote = buy ? market : (market != null ? market : sellRow);
+                // SELL rows carry the actual held cost basis. A market row can still
+                // have a positive spread while repricing below this player's break-even.
+                Map<String, Object> quote = buy ? market : (sellRow != null ? sellRow : market);
                 if (quote == null) {
                     continue;
                 }
@@ -211,6 +214,9 @@ public final class LocalSuggestionEngine {
                 String name = getString(quote, "name");
                 Double hours = getNullableDouble(quote, "est_fill_hours");
                 Double profit = modifyProfit(quote, remaining);
+                if (buy && belowMinProfit(profit, in.minPredictedProfit)) {
+                    continue;
+                }
                 long listedMs = offer.length > O_LISTED_MS ? offer[O_LISTED_MS] : 0L;
                 boolean inModifyGrace = listedMs > 0L && nowMs - listedMs < MODIFY_GRACE_MS;
 
@@ -225,7 +231,8 @@ public final class LocalSuggestionEngine {
                     }
                 } else {
                     long sellAt = getLong(quote, "sell_at");
-                    if (clearlyMispriced(offerPrice, sellAt, inModifyGrace)) {
+                    if (clearlyMispriced(offerPrice, sellAt, inModifyGrace)
+                            && sellRepriceAboveCostBasis(offerItemId, sellAt, held)) {
                         Suggestion s = build(SuggestionType.MODIFY_SELL, slot, offerItemId,
                                 sellAt, remaining, name, profit, hours);
                         applyLimit(s, quote, remainingLimit);
@@ -456,8 +463,8 @@ public final class LocalSuggestionEngine {
             }
         }
         Map<String, Object> market = findMarketFlip(scoredFlips, itemId);
-        Map<String, Object> sellRow = findFlip(scoredFlips, itemId);
-        Map<String, Object> quote = buy ? market : (market != null ? market : sellRow);
+        Map<String, Object> sellRow = findSellFlip(scoredFlips, itemId);
+        Map<String, Object> quote = buy ? market : (sellRow != null ? sellRow : market);
         if (isDeadMargin(quote) || isDeadMargin(market)) {
             return null;
         }
@@ -474,6 +481,9 @@ public final class LocalSuggestionEngine {
         if (target <= 0 && !foundOnGe) {
             return null;
         }
+        if (!buy && !sellRepriceAboveCostBasis(itemId, target, in.held)) {
+            return null;
+        }
         if (qty <= 0) {
             qty = 1;
         }
@@ -483,6 +493,9 @@ public final class LocalSuggestionEngine {
         }
         Double hours = getNullableDouble(quote, "est_fill_hours");
         Double profit = modifyProfit(quote, qty);
+        if (buy && belowMinProfit(profit, in.minPredictedProfit)) {
+            return null;
+        }
         Suggestion s = build(buy ? SuggestionType.MODIFY_BUY : SuggestionType.MODIFY_SELL,
                 Math.max(slot, 0), itemId, target, qty, name, profit, hours);
         applyLimit(s, quote != null ? quote : sellRow, remainingLimit);
@@ -657,6 +670,21 @@ public final class LocalSuggestionEngine {
             return margin * remaining;
         }
         return scaledProfit(quote, remaining);
+    }
+
+    private static boolean belowMinProfit(Double profit, long minPredictedProfit) {
+        return minPredictedProfit > 0 && (profit == null || profit < minPredictedProfit);
+    }
+
+    static boolean sellRepriceAboveCostBasis(int itemId, long sellAt, Map<Integer, long[]> held) {
+        if (sellAt <= 0 || held == null) {
+            return true;
+        }
+        long[] entry = held.get(itemId);
+        if (entry == null || entry.length < 2 || entry[1] <= 0) {
+            return true;
+        }
+        return ProfitCalculator.getPostTaxPrice(itemId, sellAt) > entry[1];
     }
 
     private static Suggestion build(SuggestionType type, int boxId, int itemId,
@@ -897,6 +925,20 @@ public final class LocalSuggestionEngine {
         }
         for (Map<String, Object> flip : scoredFlips) {
             if (flip != null && getInt(flip, "id") == itemId) {
+                return flip;
+            }
+        }
+        return null;
+    }
+
+    /** Cost-basis sell row for an item, or null. */
+    private static Map<String, Object> findSellFlip(List<Map<String, Object>> scoredFlips, int itemId) {
+        if (scoredFlips == null) {
+            return null;
+        }
+        for (Map<String, Object> flip : scoredFlips) {
+            if (flip != null && getInt(flip, "id") == itemId
+                    && "sell".equals(getString(flip, "side"))) {
                 return flip;
             }
         }

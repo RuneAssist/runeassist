@@ -291,6 +291,54 @@ public class LocalSuggestionEngineTest {
     }
 
     @Test
+    public void doesNotRepriceSellBelowHeldCostBasis() {
+        LocalSuggestionEngine.Input in = baseInput();
+        in.offersBySlot = new long[8][];
+        in.offersBySlot[0] = offer(RUBY_NECKLACE, false, 2_100, 0, 1_000, 0L);
+        in.held.put(RUBY_NECKLACE, new long[]{1_000, 2_025});
+
+        Map<String, Object> market = flip(RUBY_NECKLACE, "Ruby necklace", 1_850, 2_000, 150_000);
+        in.scoredFlips = new ArrayList<>();
+        in.scoredFlips.add(market);
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertTrue(s.getType() != SuggestionType.MODIFY_SELL);
+        assertTrue(s.getItemId() != RUBY_NECKLACE);
+    }
+
+    @Test
+    public void repricesSellWhenTargetRemainsAboveHeldCostBasis() {
+        LocalSuggestionEngine.Input in = baseInput();
+        in.offersBySlot = new long[8][];
+        in.offersBySlot[0] = offer(RUBY_NECKLACE, false, 2_100, 0, 1_000, 0L);
+        in.held.put(RUBY_NECKLACE, new long[]{1_000, 1_900});
+        in.scoredFlips = new ArrayList<>();
+        in.scoredFlips.add(flip(RUBY_NECKLACE, "Ruby necklace", 1_850, 2_000, 150_000));
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertEquals(SuggestionType.MODIFY_SELL, s.getType());
+        assertEquals(RUBY_NECKLACE, s.getItemId());
+        assertEquals(2_000, s.getPrice());
+    }
+
+    @Test
+    public void doesNotRepriceBuyBelowConfiguredProfitFloor() {
+        LocalSuggestionEngine.Input in = baseInput();
+        in.offersBySlot = new long[8][];
+        in.offersBySlot[0] = offer(RUBY_NECKLACE, true, 1_800, 0, 1_000, 0L);
+        in.minPredictedProfit = 20_000L;
+        in.scoredFlips = new ArrayList<>();
+        Map<String, Object> marginal = flip(RUBY_NECKLACE, "Ruby necklace", 1_900, 1_905, 5_000);
+        marginal.put("suggested_qty", 1_000L);
+        in.scoredFlips.add(marginal);
+        in.scoredFlips.add(flip(DRAGON_ARROWS, "Dragon arrow(p++)", 1770, 1900, 421_000));
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertTrue(s.getType() != SuggestionType.MODIFY_BUY);
+        assertTrue(s.getItemId() != RUBY_NECKLACE);
+    }
+
+    @Test
     public void fillingDeadMarginIsNotAbortedUnlessStale() {
         LocalSuggestionEngine.Input in = baseInput();
         in.offersBySlot = new long[8][];

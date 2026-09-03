@@ -2,6 +2,7 @@ package com.runeassist.flip;
 
 import com.google.gson.Gson;
 import com.runeassist.flip.config.RuneAssistConfig;
+import com.runeassist.flip.model.Suggestion;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
 import net.runelite.client.config.ConfigManager;
@@ -36,6 +37,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.WeakHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -104,6 +107,9 @@ public class TelemetryService
     private static final String CURSOR_FILE  = "ge_history-cursor.json";
 
     private final List<Map<String, Object>> uploadQueue = new ArrayList<>();
+    private final Map<String, String> lastGeOfferByAccountSlot = new HashMap<>();
+    private final Map<Suggestion, String> suggestionTelemetryIds = new WeakHashMap<>();
+    private final Map<Suggestion, Set<String>> suggestionOutcomes = new WeakHashMap<>();
     private final ScheduledExecutorService uploader = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "runeassist-telemetry-upload");
         t.setDaemon(true);
@@ -298,11 +304,23 @@ public class TelemetryService
                            int totalQuantity, int quantitySold, int spent)
     {
         if (!enabled()) return;
+        String acct = acctHash(rsn);
+        // Cache-only read (see getPriceIfCached doc) -- never blocks, so safe on any thread this
+        // is called from. Captures the live market context an offer was placed/repriced against,
+        // which can't be reconstructed retroactively (the wiki only exposes current prices).
+        WikiPriceService.PriceData market = wikiPriceService.getPriceIfCached(itemId);
+        Integer marketHigh = market != null ? market.high : null;
+        Integer marketLow = market != null ? market.low : null;
+        if (!claimGeOffer(acct, slot, state, itemId, price, totalQuantity, quantitySold, spent,
+                marketHigh, marketLow))
+        {
+            return;
+        }
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("v", SCHEMA_VERSION);
         r.put("type", "ge_offer");
         r.put("ts", System.currentTimeMillis());
-        r.put("acct", acctHash(rsn));
+        r.put("acct", acct);
         r.put("slot", slot);
         r.put("state", state);
         r.put("item_id", itemId);
@@ -310,13 +328,24 @@ public class TelemetryService
         r.put("total_quantity", totalQuantity);
         r.put("quantity_sold", quantitySold);
         r.put("spent", spent);
-        // Cache-only read (see getPriceIfCached doc) -- never blocks, so safe on any thread this
-        // is called from. Captures the live market context an offer was placed/repriced against,
-        // which can't be reconstructed retroactively (the wiki only exposes current prices).
-        WikiPriceService.PriceData market = wikiPriceService.getPriceIfCached(itemId);
-        r.put("market_high", market != null ? market.high : null);
-        r.put("market_low", market != null ? market.low : null);
+        r.put("market_high", marketHigh);
+        r.put("market_low", marketLow);
         write("ge_offer", r);
+    }
+
+    synchronized boolean claimGeOffer(String acct, int slot, String state, int itemId, int price,
+                                      int totalQuantity, int quantitySold, int spent,
+                                      Integer marketHigh, Integer marketLow)
+    {
+        String key = acct + "|" + slot;
+        String value = state + "|" + itemId + "|" + price + "|" + totalQuantity + "|"
+            + quantitySold + "|" + spent + "|" + marketHigh + "|" + marketLow;
+        if (value.equals(lastGeOfferByAccountSlot.get(key)))
+        {
+            return false;
+        }
+        lastGeOfferByAccountSlot.put(key, value);
+        return true;
     }
 
     /**
@@ -325,10 +354,13 @@ public class TelemetryService
      * chat, or raw RSN. {@code outcome} is shown | skip | abort | acted | ignored.
      * {@code kind} is buy | sell | abort | modify | wait | skip.
      */
-    public void logSuggestionDecision(String rsn, com.runeassist.flip.model.Suggestion s,
+    public void logSuggestionDecision(String rsn, Suggestion s,
                                       String outcome, String source)
     {
         if (!enabled() || s == null) return;
+        String normalizedOutcome = outcome == null || outcome.isEmpty() ? "shown" : outcome;
+        String suggestionId = claimSuggestionOutcome(s, normalizedOutcome);
+        if (suggestionId == null) return;
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("v", SCHEMA_VERSION);
         r.put("type", "suggestion_decision");
@@ -337,7 +369,8 @@ public class TelemetryService
             : (lastHash != null ? lastHash : "anon"));
         String kind = "skip".equals(outcome) ? "skip" : suggestionKind(s);
         r.put("kind", kind);
-        r.put("outcome", outcome == null || outcome.isEmpty() ? "shown" : outcome);
+        r.put("outcome", normalizedOutcome);
+        r.put("suggestion_id", suggestionId);
         int itemId = s.getItemId() > 0 ? s.getItemId() : s.getId();
         if (itemId > 0) r.put("item_id", itemId);
         if (s.getPrice() > 0) r.put("price", s.getPrice());
@@ -354,6 +387,17 @@ public class TelemetryService
         String src = source != null && !source.isEmpty() ? source : s.getPickSource();
         r.put("source", src != null && !src.isEmpty() ? src : "local");
         write("suggestion_decision", r);
+    }
+
+    synchronized String claimSuggestionOutcome(Suggestion suggestion, String outcome)
+    {
+        Set<String> outcomes = suggestionOutcomes.computeIfAbsent(suggestion, ignored -> new HashSet<>());
+        if (!outcomes.add(outcome))
+        {
+            return null;
+        }
+        return suggestionTelemetryIds.computeIfAbsent(suggestion,
+            ignored -> UUID.randomUUID().toString());
     }
 
     private static String suggestionKind(com.runeassist.flip.model.Suggestion s)
