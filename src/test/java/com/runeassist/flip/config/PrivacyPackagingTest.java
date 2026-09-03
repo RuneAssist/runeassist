@@ -53,7 +53,7 @@ public class PrivacyPackagingTest {
         assertFalse(descriptor.description().toLowerCase().contains("on by default"));
 
         Properties properties = new Properties();
-        properties.load(Files.newInputStream(Paths.get("runelite-plugin.properties")));
+        properties.load(Files.newBufferedReader(Paths.get("runelite-plugin.properties"), StandardCharsets.UTF_8));
         assertEquals("standard", properties.getProperty("build"));
         assertEquals("com.runeassist.flip.controller.RuneAssistPlugin", properties.getProperty("plugins"));
         String warning = properties.getProperty("warning");
@@ -68,7 +68,7 @@ public class PrivacyPackagingTest {
     @Test
     public void hubManifestWarningMatchesPluginProperties() throws Exception {
         Properties properties = new Properties();
-        properties.load(Files.newInputStream(Paths.get("runelite-plugin.properties")));
+        properties.load(Files.newBufferedReader(Paths.get("runelite-plugin.properties"), StandardCharsets.UTF_8));
         List<String> lines = Files.readAllLines(Paths.get("plugin-hub/plugins/runeassist-flipping"));
         String warningLine = lines.stream().filter(l -> l.startsWith("warning=")).findFirst().orElse(null);
         assertNotNull(warningLine);
