@@ -30,7 +30,7 @@ public class SuggestionPreferencesManager {
     /** Default total projected-GP floor on BUY. Auto (off) is stored as {@code 0}. */
     public static final long DEFAULT_MIN_PREDICTED_PROFIT = 20_000L;
 
-    public static final Path DEFAULT_PROFILE_PATH = Paths.get(Persistance.COPILOT_DIR.getPath(), "Default profile.profile.json");
+    public static final Path DEFAULT_PROFILE_PATH = Paths.get(Persistance.PLUGIN_DIR.getPath(), "Default profile.profile.json");
     public static final String PROFILE_SUFFIX = ".profile.json";
 
     // dependencies
@@ -49,7 +49,7 @@ public class SuggestionPreferencesManager {
 
     @Inject
     public SuggestionPreferencesManager(Gson gson,
-                                        @Named("copilotExecutor") ScheduledExecutorService executorService,
+                                        @Named("runeAssistExecutor") ScheduledExecutorService executorService,
                                         AccountSuggestionPreferencesRS osrsAccountPreferences) {
         this.gson = gson;
         this.executorService = executorService;
@@ -216,7 +216,7 @@ public class SuggestionPreferencesManager {
     }
 
     public synchronized void addProfile(String name) throws IOException {
-        Path p = Paths.get(Persistance.COPILOT_DIR.toString(), name + PROFILE_SUFFIX);
+        Path p = Paths.get(Persistance.PLUGIN_DIR.toString(), name + PROFILE_SUFFIX);
         createProfileFile(p);
         availableProfiles.add(p);
         selectedProfile = p;
@@ -273,7 +273,7 @@ public class SuggestionPreferencesManager {
     }
 
     private synchronized void loadAvailableProfiles() {
-        try (Stream<Path> paths = Files.list(Persistance.COPILOT_DIR.toPath())) {
+        try (Stream<Path> paths = Files.list(Persistance.PLUGIN_DIR.toPath())) {
             availableProfiles = paths
                     .filter(p -> p.toString().endsWith(PROFILE_SUFFIX))
                     .collect(Collectors.toList());
@@ -289,7 +289,7 @@ public class SuggestionPreferencesManager {
     }
 
     private Path fromDisplayName(String name) {
-        return Paths.get(Persistance.COPILOT_DIR.toString(), name + PROFILE_SUFFIX);
+        return Paths.get(Persistance.PLUGIN_DIR.toString(), name + PROFILE_SUFFIX);
     }
 
     public synchronized void deleteSelectedProfile() throws IOException {

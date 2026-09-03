@@ -1,6 +1,6 @@
 package com.runeassist.flip.controller;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.ui.NpcHighlightOverlay;
 import com.runeassist.flip.ui.WidgetHighlightOverlay;
@@ -46,7 +46,7 @@ public class HighlightController {
     private static final String BOB_BARTER_NAME = "Bob Barter";
 
     // dependencies
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final SuggestionManager suggestionManager;
     private final SuggestionPreferencesManager suggestionPreferencesManager;
     private final GrandExchange grandExchange;

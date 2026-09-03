@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 
 
 @ConfigGroup("runeassistflip")
-public interface FlippingCopilotConfig extends Config
+public interface RuneAssistConfig extends Config
 {
     // Keep this block first: RuneLite sorts sections by position, and users look at
     // Configuration → RuneAssist Flipping. Both toggles are opt-in (Hub requirement).
@@ -91,7 +91,7 @@ public interface FlippingCopilotConfig extends Config
 
     public enum PriceGraphWebsite
     {
-        FLIPPING_COPILOT("RuneAssist"),
+        RUNEASSIST("RuneAssist"),
         OSRS_WIKI("OSRS Wiki"),
         GE_TRACKER("GE Tracker"),
         PLATINUM_TOKENS("PlatinumTokens"),
@@ -264,7 +264,7 @@ public interface FlippingCopilotConfig extends Config
     )
     default PriceGraphWebsite priceGraphWebsite()
     {
-        return PriceGraphWebsite.FLIPPING_COPILOT;
+        return PriceGraphWebsite.RUNEASSIST;
     }
 
     @ConfigItem(

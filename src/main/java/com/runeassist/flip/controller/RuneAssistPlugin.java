@@ -1,6 +1,6 @@
 package com.runeassist.flip.controller;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.*;
 import com.runeassist.flip.ui.*;
@@ -34,26 +34,25 @@ import java.awt.image.BufferedImage;
 import java.util.concurrent.*;
 
 @Slf4j
-// RuneAssist fork: rebranded, self-wiring flipping plugin. It runs on RuneAssist's local
-// suggestion source (see RuneAssistSuggestionSource / SuggestionController) — no FC account
-// or FC servers. Kept as its own RuneLite plugin so FC's Guice @Provides + wiring stay intact.
+// Self-wiring flipping plugin. Suggestions come from RuneAssistSuggestionSource
+// (Ares /v1/flips + local engine + held-cost). No Flipping Copilot account or servers.
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
-		description = "Grand Exchange flip assistant. Based on Flipping Copilot (BSD-2). Optional contribution is under Configuration → Privacy.",
-		tags = {"runeassist", "flipping", "ge", "grand exchange", "money", "privacy", "contribute"}
+		description = "Local GE flip assistant: Ares /v1/flips suggestions, held-cost tracking, and an on-device flip engine. Optional contribution is under Configuration → Privacy.",
+		tags = {"runeassist", "flipping", "ge", "grand exchange", "money", "privacy", "held-cost"}
 )
 // RuneAssist fork: dropped @PluginDependency(BankTagsPlugin.class) -- a sideloaded plugin
 // depending on a core plugin makes RuneLite silently refuse to load it.
-public class FlippingCopilotPlugin extends Plugin {
+public class RuneAssistPlugin extends Plugin {
 
 	@Inject
-	private FlippingCopilotConfig config;
+	private RuneAssistConfig config;
 	@Inject
 	private Client client;
 	@Inject
 	private ClientThread clientThread;
 	@Inject
-	@Named("copilotExecutor")
+	@Named("runeAssistExecutor")
 	private ScheduledExecutorService executorService;
 	@Inject
 	private ClientToolbar clientToolbar;
@@ -76,11 +75,11 @@ public class FlippingCopilotPlugin extends Plugin {
 	@Inject
 	private KeybindHandler keybindHandler;
 	@Inject
-	private CopilotLoginController copilotLoginController;
+	private AccountLoginController accountLoginController;
 	@Inject
 	private OverlayManager overlayManager;
 	@Inject
-	private CopilotLoginRS copilotLoginRS;
+	private AccountLoginRS accountLoginRS;
 	@Inject
 	private HighlightController highlightController;
 	@Inject
@@ -112,7 +111,7 @@ public class FlippingCopilotPlugin extends Plugin {
 	@Inject
 	private OsrsLoginRS osrsLoginRS;
 	@Inject
-	private FlippingCopilotConfigRS configRS;
+	private RuneAssistConfigRS configRS;
 	@Inject
 	private InventorySlotTooltipOverlay inventorySlotTooltipOverlay;
 	@Inject
@@ -140,23 +139,23 @@ public class FlippingCopilotPlugin extends Plugin {
 	@Inject
 	private com.runeassist.flip.HeldCostTracker heldCostTracker;
 	@Inject
-	private com.osrsmcp.TelemetryService telemetry;
+	private com.runeassist.flip.TelemetryService telemetry;
 	@Inject
 	private com.runeassist.flip.controller.CloudSyncService cloudSyncService;
 	@Inject
-	private com.osrsmcp.GeHistoryDump geHistoryDump;
+	private com.runeassist.flip.GeHistoryDump geHistoryDump;
 
 	// We use our own ThreadPool since the default ScheduledExecutorService only has a single thread and we don't want to block it
 	@Provides
 	@Singleton
-	@Named("copilotExecutor")
+	@Named("runeAssistExecutor")
 	public ScheduledExecutorService provideCustomExecutorService() {
 		return Executors.newScheduledThreadPool(2);
 	}
 
 	@Provides
 	@Singleton
-	public ExecutorService provideExecutorService(@Named("copilotExecutor") ScheduledExecutorService scheduledExecutor) {
+	public ExecutorService provideExecutorService(@Named("runeAssistExecutor") ScheduledExecutorService scheduledExecutor) {
 		return scheduledExecutor;
 	}
 
@@ -184,14 +183,14 @@ public class FlippingCopilotPlugin extends Plugin {
 				.panel(mainPanel)
 				.build();
 		clientToolbar.addNavigation(navButton);
-		copilotLoginController.setLoginPanel(mainPanel.loginPanel);
-		copilotLoginController.setMainPanel(mainPanel);
-		suggestionController.setCopilotPanel(mainPanel.copilotPanel);
+		accountLoginController.setLoginPanel(mainPanel.loginPanel);
+		accountLoginController.setMainPanel(mainPanel);
+		suggestionController.setRuneAssistPanel(mainPanel.runeAssistPanel);
 		suggestionController.setMainPanel(mainPanel);
 		suggestionController.setLoginPanel(mainPanel.loginPanel);
-		suggestionController.setSuggestionPanel(mainPanel.copilotPanel.suggestionPanel);
-		grandExchangeCollectHandler.setSuggestionPanel(mainPanel.copilotPanel.suggestionPanel);
-		statsPanel = mainPanel.copilotPanel.statsPanel;
+		suggestionController.setSuggestionPanel(mainPanel.runeAssistPanel.suggestionPanel);
+		grandExchangeCollectHandler.setSuggestionPanel(mainPanel.runeAssistPanel.suggestionPanel);
+		statsPanel = mainPanel.runeAssistPanel.statsPanel;
 
 		mainPanel.refresh();
 		SwingUtilities.invokeLater(() -> patchNotesController.maybeShowOnStartup(mainPanel, hadExistingInstallation));
@@ -229,9 +228,9 @@ public class FlippingCopilotPlugin extends Plugin {
 		highlightController.deactivateAndRemoveAll();
 		clientThread.invokeLater(() -> slotProfitColorizer.resetAllSlots());
 		clientToolbar.removeNavigation(navButton);
-		if(copilotLoginRS.get().isLoggedIn()) {
+		if(accountLoginRS.get().isLoggedIn()) {
 			String displayName = osrsLoginManager.getLastDisplayName();
-			Integer accountId = copilotLoginRS.get().getAccountId(displayName);
+			Integer accountId = accountLoginRS.get().getAccountId(displayName);
 			if (accountId != null && accountId != -1) {
 				webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, false);
 			}
@@ -242,8 +241,8 @@ public class FlippingCopilotPlugin extends Plugin {
 	}
 
 	@Provides
-	public FlippingCopilotConfig provideConfig(ConfigManager configManager) {
-		return configManager.getConfig(FlippingCopilotConfig.class);
+	public RuneAssistConfig provideConfig(ConfigManager configManager) {
+		return configManager.getConfig(RuneAssistConfig.class);
 	}
 
 	//---------------------------- Event Handlers ----------------------------//
@@ -304,8 +303,8 @@ public class FlippingCopilotPlugin extends Plugin {
 		transactionManager.hydrateLocal(name);
 		transactionManager.seedLiveOffers(name, client.getGrandExchangeOffers());
 		int accountId = LocalFlipLedger.accountIdFor(name);
-		copilotLoginRS.addAccountIfMissing(accountId, name, LocalFlipLedger.LOCAL_USER_ID);
-		flipManager.setCopilotUserId(LocalFlipLedger.LOCAL_USER_ID);
+		accountLoginRS.addAccountIfMissing(accountId, name, LocalFlipLedger.LOCAL_USER_ID);
+		flipManager.setPluginUserId(LocalFlipLedger.LOCAL_USER_ID);
 		flipManager.setIntervalAccount(accountId);
 		if (statsPanel != null) {
 			statsPanel.resetIntervalDropdownToSession();
@@ -356,7 +355,7 @@ public class FlippingCopilotPlugin extends Plugin {
 		// calling FC's real /profit-tracking/toggle-item-portfolio endpoint, which needed an
 		// FC account JWT we never have and silently did nothing.
 		menuHandler.injectInventoryPortfolioMenuEntry(event);
-		menuHandler.injectCopilotPriceGraphMenuEntry(event);
+		menuHandler.injectPriceGraphMenuEntry(event);
 		menuHandler.injectConfirmMenuEntry(event);
 		menuHandler.injectSlotActionSwapMenuEntry(event);
 	}
@@ -420,7 +419,7 @@ public class FlippingCopilotPlugin extends Plugin {
 						return false;
 					}
 					bindOsrsSession(name);
-					if(copilotLoginRS.get().isLoggedIn()) {
+					if(accountLoginRS.get().isLoggedIn()) {
 						transactionManager.scheduleSyncIn(0, name);
 					}
 					return true;
@@ -438,9 +437,9 @@ public class FlippingCopilotPlugin extends Plugin {
 		log.debug("client shutdown event received");
 		cloudSyncService.flushNow();
 		offerManager.saveAll();
-		if(copilotLoginRS.get().isLoggedIn()) {
+		if(accountLoginRS.get().isLoggedIn()) {
 			String displayName = osrsLoginManager.getLastDisplayName();
-			Integer accountId = copilotLoginRS.get().getAccountId(displayName);
+			Integer accountId = accountLoginRS.get().getAccountId(displayName);
 			if (accountId != null && accountId != -1) {
 				webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, false);
 			}
@@ -449,9 +448,9 @@ public class FlippingCopilotPlugin extends Plugin {
 
 	@Subscribe
 	public void onPluginChanged(PluginChanged event) {
-		if (com.runeassist.flip.HubFlippingCopilot.isHubPlugin(event.getPlugin())) {
+		if (com.runeassist.flip.HubPluginConflict.isHubPlugin(event.getPlugin())) {
 			suggestionManager.setSuggestionNeeded(true);
-			if (mainPanel != null && mainPanel.copilotPanel != null) {
+			if (mainPanel != null && mainPanel.runeAssistPanel != null) {
 				clientThread.invokeLater(() -> suggestionController.getSuggestionAsync());
 			}
 		}
@@ -460,10 +459,10 @@ public class FlippingCopilotPlugin extends Plugin {
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event) {
 		if (event.getGroup().equals("runeassistflip")) {
-			log.debug("copilot config changed event received");
+			log.debug("runeassist config changed event received");
 			configRS.forceSet(config);
 			if (event.getKey().equals("profitAmountColor") || event.getKey().equals("lossAmountColor")) {
-				mainPanel.copilotPanel.statsPanel.refresh(true, osrsLoginManager.isValidLoginState());
+				mainPanel.runeAssistPanel.statsPanel.refresh(true, osrsLoginManager.isValidLoginState());
 			}
 			if (event.getKey().equals("suggestionHighlights")) {
 				clientThread.invokeLater(() -> highlightController.redraw());

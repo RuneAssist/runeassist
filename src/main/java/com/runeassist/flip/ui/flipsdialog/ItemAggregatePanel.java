@@ -1,10 +1,10 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.FlipManager;
 import com.runeassist.flip.model.ItemAggregate;
-import com.runeassist.flip.rs.CopilotLoginRS;
+import com.runeassist.flip.rs.AccountLoginRS;
 import com.runeassist.flip.ui.Paginator;
 import com.runeassist.flip.ui.components.*;
 import lombok.extern.slf4j.Slf4j;
@@ -37,9 +37,9 @@ public class ItemAggregatePanel extends JPanel {
 
     public ItemAggregatePanel(FlipManager flipsManager,
                               ItemController itemController,
-                              CopilotLoginRS copilotLoginRS,
-                              @Named("copilotExecutor") ExecutorService executorService,
-                              FlippingCopilotConfig config) {
+                              AccountLoginRS accountLoginRS,
+                              @Named("runeAssistExecutor") ExecutorService executorService,
+                              RuneAssistConfig config) {
         setFocusable(true);
         setLayout(new BorderLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -55,7 +55,7 @@ public class ItemAggregatePanel extends JPanel {
 
         IntervalDropdown timeIntervalDropdown = DialogUi.intervalDropdown(sortAndFilter::setInterval);
 
-        accountDropdown = DialogUi.accountDropdown(() -> copilotLoginRS.get().displayNameToAccountId, sortAndFilter::setAccountId);
+        accountDropdown = DialogUi.accountDropdown(() -> accountLoginRS.get().displayNameToAccountId, sortAndFilter::setAccountId);
         accountDropdown.refresh();
 
         tablePanel.leftControls().add(searchField);

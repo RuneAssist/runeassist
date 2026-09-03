@@ -31,12 +31,11 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * Self-contained source of the next flip {@link Suggestion} for the RuneAssist flipping
- * plugin — the local replacement for Flipping Copilot's server. Account state stays local;
- * market picking comes from Ares via {@link FlipScorer} (local wiki fallback if Ares is down).
- * Reads GE offers + coins on the client thread, scores off-thread, picks the
- * action with {@link LocalSuggestionEngine}, and delivers the Suggestion back on the client
- * thread. No FC account.
+ * Self-contained source of the next flip {@link Suggestion} for RuneAssist Flipping.
+ * Account state stays local; market picking comes from Ares {@code /v1/flips} via
+ * {@link FlipScorer} (wiki fallback if Ares is down). Reads GE offers + coins on the
+ * client thread, scores off-thread, picks the action with {@link LocalSuggestionEngine},
+ * and delivers the Suggestion back on the client thread.
  */
 @Slf4j
 @Singleton
@@ -96,10 +95,10 @@ public class RuneAssistSuggestionSource
         final int usedSlots = countUsed(offersBySlot);
         final int remainingSlots = Math.max(0, maxSlots - usedSlots);
 
-        if (HubFlippingCopilot.isEnabled(pluginManager))
+        if (HubPluginConflict.isEnabled(pluginManager))
         {
             Suggestion wait = LocalSuggestionEngine.waitFallback(
-                HubFlippingCopilot.WAIT_MESSAGE, offersBySlot, maxSlots);
+                HubPluginConflict.WAIT_MESSAGE, offersBySlot, maxSlots);
             wait.setWhy("");
             clientThread.invokeLater(() -> consumer.accept(wait));
             return;

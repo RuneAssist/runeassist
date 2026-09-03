@@ -1,6 +1,6 @@
 package com.runeassist.flip.controller;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.HeldItemSyncStateRS;
 import com.runeassist.flip.ui.OfferEditor;
@@ -40,9 +40,9 @@ public class GameUiChangesHandler {
     private final OfferHandler offerHandler;
     private final SlotProfitColorizer slotProfitColorizer;
     private final HeldItemSyncStateRS heldItemSyncStateRS;
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final AccountStatusManager accountStatusManager;
-    private final com.osrsmcp.TelemetryService telemetry;
+    private final com.runeassist.flip.TelemetryService telemetry;
     private final net.runelite.client.plugins.PluginManager pluginManager;
     // state
     boolean quantityOrPriceChatboxOpen;
@@ -94,10 +94,10 @@ public class GameUiChangesHandler {
         {
             // The Hub Flipping Copilot plugin injects its own "Press [X] to set to Y gp" text
             // into this exact same chatbox widget -- if both plugins are enabled at once (see
-            // HubFlippingCopilot's own doc comment), creating ours too makes the two overlap
+            // HubPluginConflict's own doc comment), creating ours too makes the two overlap
             // into unreadable garbled text rather than either one working. Go fully quiet here,
             // matching RuneAssistSuggestionSource's own suppression of its suggestion output.
-            if (com.runeassist.flip.HubFlippingCopilot.isEnabled(pluginManager)) {
+            if (com.runeassist.flip.HubPluginConflict.isEnabled(pluginManager)) {
                 return;
             }
             flippingWidget = new OfferEditor(offerManager, client.getWidget(ComponentID.CHATBOX_CONTAINER), offerHandler, client, config);

@@ -3,7 +3,7 @@ package com.runeassist.flip.model;
 import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.controller.CloudSyncService;
 import com.runeassist.flip.controller.Persistance;
-import com.runeassist.flip.rs.CopilotLoginRS;
+import com.runeassist.flip.rs.AccountLoginRS;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -24,7 +24,7 @@ public class TransactionManager {
     private final FlipManager flipManager;
     private final ScheduledExecutorService executorService;
     private final ApiRequestHandler api;
-    private final CopilotLoginRS copilotLoginRS;
+    private final AccountLoginRS accountLoginRS;
     private final OsrsLoginManager osrsLoginManager;
     private final LocalFlipLedger localFlipLedger;
     private final OfferManager offerManager;

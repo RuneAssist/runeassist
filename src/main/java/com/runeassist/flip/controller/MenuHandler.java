@@ -1,6 +1,6 @@
 package com.runeassist.flip.controller;
 
-import com.runeassist.flip.config.FlippingCopilotConfig;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.BankStateRS;
 import com.runeassist.flip.rs.PortfolioStateRS;
@@ -30,7 +30,7 @@ public class MenuHandler {
     private static final int BANK_INVENTORY_WIDGET_GROUP = 15;
     private static final int BANK_INVENTORY_WIDGET_CHILD = 3;
 
-    private final FlippingCopilotConfig config;
+    private final RuneAssistConfig config;
     private final Client client;
     private final OfferManager offerManager;
     private final GrandExchange grandExchange;
@@ -38,7 +38,7 @@ public class MenuHandler {
     private final FlipsDialogController flipsDialogController;
     private final ItemController itemController;
     private final PortfolioController portfolioController;
-    private final CopilotLoginController copilotLoginController;
+    private final AccountLoginController accountLoginController;
     private final ApiRequestHandler apiRequestHandler;
     private final PortfolioStateRS portfolioStateRS;
     private final BankStateRS bankStateRS;
@@ -56,7 +56,7 @@ public class MenuHandler {
     private enum MenuLocation { INVENTORY, BANK }
 
 
-    public void injectCopilotPriceGraphMenuEntry(MenuEntryAdded event) {
+    public void injectPriceGraphMenuEntry(MenuEntryAdded event) {
         if (!playerLocationController.isNearGE()) {
             return;
         }

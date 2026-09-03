@@ -39,6 +39,6 @@ tasks.withType(JavaCompile) {
 
 jar {
     manifest {
-        attributes('Plugin-Class': 'com.runeassist.flip.controller.FlippingCopilotPlugin')
+        attributes('Plugin-Class': 'com.runeassist.flip.controller.RuneAssistPlugin')
     }
 }

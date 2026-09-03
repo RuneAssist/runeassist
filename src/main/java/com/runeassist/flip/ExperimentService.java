@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>One experiment active at a time, one rung live at a time. A rung is considered
  * resolved (advance to the next, or finish if it was the last) when {@link
  * #onOfferResolved} sees the tracked item+side reach a terminal offer state -- see
- * {@code FlippingCopilotPlugin.onGrandExchangeOfferChanged}, which calls it.
+ * {@code RuneAssistPlugin.onGrandExchangeOfferChanged}, which calls it.
  */
 @Slf4j
 @Singleton

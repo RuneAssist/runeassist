@@ -25,7 +25,7 @@ public class GrandExchangeCollectHandler {
     private final Client client;
     private final HeldItemSyncStateRS heldItemSyncStateRS;
     private final AccountStatusManager accountStatusManager;
-    private final com.osrsmcp.TelemetryService telemetry;
+    private final com.runeassist.flip.TelemetryService telemetry;
 
     @Setter
     private SuggestionPanel suggestionPanel;

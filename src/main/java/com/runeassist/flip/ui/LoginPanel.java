@@ -5,9 +5,8 @@ import javax.inject.Singleton;
 import javax.swing.JPanel;
 
 /**
- * Stub kept for Guice wiring. Flipping Copilot email/Discord login UI is
- * disabled — RuneAssist uses local GE fills plus optional cloud pairing in
- * Preferences, not a legacy copilot account.
+ * Stub kept for Guice wiring. There is no email/Discord login UI: RuneAssist
+ * uses local GE fills plus optional cloud pairing in Preferences.
  */
 @Singleton
 public class LoginPanel extends JPanel {
