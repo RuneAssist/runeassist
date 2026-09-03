@@ -28,7 +28,7 @@ public class FlipPanel extends JPanel {
         itemNameLabel.setForeground(Color.WHITE);
         itemNameLabel.setFont(FontManager.getRunescapeSmallFont());
 
-        JLabel qtyLabel = new JLabel(flip.getClosedQuantity() + " closed");
+        JLabel qtyLabel = new JLabel(statusLine(flip));
         qtyLabel.setForeground(RuneAssistColors.MUTED);
         qtyLabel.setFont(FontManager.getRunescapeSmallFont());
 
@@ -103,5 +103,26 @@ public class FlipPanel extends JPanel {
                 component.addMouseListener(clickListener);
             }
         }
+    }
+
+    private static String statusLine(FlipV2 flip) {
+        if (flip.isClosed()) {
+            String qty = String.valueOf(flip.getClosedQuantity());
+            String hold = holdDuration(flip);
+            return hold == null ? qty + " closed" : qty + " · " + hold;
+        }
+        String age = holdDuration(flip);
+        return age == null ? "open" : "open · " + age;
+    }
+
+    private static String holdDuration(FlipV2 flip) {
+        int start = flip.getOpenedTime();
+        if (start <= 0) {
+            return null;
+        }
+        int end = flip.isClosed() && flip.getClosedTime() > 0
+                ? flip.getClosedTime()
+                : (int) (System.currentTimeMillis() / 1000L);
+        return UIUtilities.formatHoldDuration(end - start);
     }
 }

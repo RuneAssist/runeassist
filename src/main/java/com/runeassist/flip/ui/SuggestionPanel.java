@@ -21,6 +21,8 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.text.NumberFormat;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 import static com.runeassist.flip.ui.UIUtilities.*;
@@ -30,7 +32,8 @@ import static com.runeassist.flip.util.Constants.MIN_GP_NEEDED_TO_FLIP;
 @Singleton
 @Slf4j
 public class SuggestionPanel extends JPanel {
-    private static final int DEFAULT_PANEL_HEIGHT = 196;
+    private static final int DEFAULT_PANEL_HEIGHT = 168;
+    private static final int HEADER_TRAILING_INSET = 52;
     private static final String CARD_STRUCTURED = "structured";
     private static final String CARD_MESSAGE = "message";
     private static final String CARD_SPINNER = "spinner";
@@ -67,10 +70,9 @@ public class SuggestionPanel extends JPanel {
     private String innerSuggestionMessage;
     private final CardLayout bodyLayout = new CardLayout();
     private final JPanel bodyCards = new JPanel(bodyLayout);
-    private final JLabel brandLabel = RuneAssistColors.kicker("RUNEASSIST");
-    private final JLabel actionPill = new JLabel(" ");
-    private final JLabel itemNameLabel = new JLabel();
+    private final JLabel headlineLabel = new JLabel();
     private final JLabel qtyPriceLabel = new JLabel();
+    private final JPanel flagsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
 
     private String serverMessage = "";
 
@@ -112,8 +114,8 @@ public class SuggestionPanel extends JPanel {
 
         Dimension size = new Dimension(MainPanel.CONTENT_WIDTH, DEFAULT_PANEL_HEIGHT);
         setPreferredSize(size);
-        setMinimumSize(size);
-        setMaximumSize(new Dimension(Integer.MAX_VALUE, DEFAULT_PANEL_HEIGHT));
+        setMinimumSize(new Dimension(MainPanel.CONTENT_WIDTH, 120));
+        setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
         setLayout(new BorderLayout());
         setBackground(RuneAssistColors.SHELL);
 
@@ -137,46 +139,41 @@ public class SuggestionPanel extends JPanel {
 
     private JPanel buildHeader() {
         JPanel header = darkPanel(new BorderLayout(), RuneAssistColors.CARD);
-        header.setBorder(BorderFactory.createEmptyBorder(0, 0, 6, 22));
-        brandLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 6));
-        actionPill.setOpaque(true);
-        actionPill.setBackground(RuneAssistColors.ACCENT_MUTED);
-        actionPill.setForeground(RuneAssistColors.ACCENT);
-        actionPill.setFont(actionPill.getFont().deriveFont(Font.BOLD, 10f));
-        actionPill.setBorder(BorderFactory.createEmptyBorder(2, 7, 2, 7));
-        actionPill.setHorizontalAlignment(SwingConstants.CENTER);
-        header.add(brandLabel, BorderLayout.WEST);
-        header.add(actionPill, BorderLayout.EAST);
+        header.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, HEADER_TRAILING_INSET));
+        headlineLabel.setForeground(Color.WHITE);
+        headlineLabel.setFont(headlineLabel.getFont().deriveFont(Font.BOLD, 13f));
+        headlineLabel.setBorder(RuneAssistColors.sectionHeaderBorder());
+        suggestionIcon.setVisible(false);
+        suggestionIcon.setOpaque(true);
+        suggestionIcon.setBackground(RuneAssistColors.CARD);
+        suggestionIcon.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 6));
+        JPanel titleRow = darkPanel(new BorderLayout(), RuneAssistColors.CARD);
+        titleRow.add(suggestionIcon, BorderLayout.WEST);
+        titleRow.add(headlineLabel, BorderLayout.CENTER);
+        header.add(titleRow, BorderLayout.CENTER);
         return header;
     }
 
     private JPanel buildStructuredCard() {
-        JPanel structured = darkPanel(new BorderLayout(), RuneAssistColors.CARD);
+        JPanel structured = UIUtilities.verticalPanel(RuneAssistColors.CARD);
 
-        suggestionIcon.setVisible(false);
-        suggestionIcon.setOpaque(true);
-        suggestionIcon.setBackground(RuneAssistColors.CARD);
-        suggestionIcon.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 8));
-
-        itemNameLabel.setForeground(Color.WHITE);
-        itemNameLabel.setFont(itemNameLabel.getFont().deriveFont(Font.BOLD, 13f));
         qtyPriceLabel.setForeground(RuneAssistColors.ACCENT);
         qtyPriceLabel.setFont(qtyPriceLabel.getFont().deriveFont(11f));
-
-        JPanel textCol = UIUtilities.verticalPanel(RuneAssistColors.CARD);
-        textCol.add(itemNameLabel);
-        textCol.add(qtyPriceLabel);
-
-        JPanel itemRow = darkPanel(new BorderLayout(), RuneAssistColors.CARD);
-        itemRow.add(suggestionIcon, BorderLayout.WEST);
-        itemRow.add(textCol, BorderLayout.CENTER);
-        structured.add(itemRow, BorderLayout.NORTH);
+        qtyPriceLabel.setAlignmentX(LEFT_ALIGNMENT);
+        structured.add(qtyPriceLabel);
 
         additionalInfoText.setHorizontalAlignment(SwingConstants.LEFT);
         additionalInfoText.setForeground(RuneAssistColors.MUTED);
         additionalInfoText.setText("");
-        additionalInfoText.setBorder(BorderFactory.createEmptyBorder(6, 0, 4, 0));
-        structured.add(additionalInfoText, BorderLayout.CENTER);
+        additionalInfoText.setAlignmentX(LEFT_ALIGNMENT);
+        additionalInfoText.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
+        structured.add(additionalInfoText);
+
+        flagsRow.setOpaque(true);
+        flagsRow.setBackground(RuneAssistColors.CARD);
+        flagsRow.setAlignmentX(LEFT_ALIGNMENT);
+        flagsRow.setBorder(BorderFactory.createEmptyBorder(0, 0, 2, 0));
+        structured.add(flagsRow);
         return structured;
     }
 
@@ -192,15 +189,21 @@ public class SuggestionPanel extends JPanel {
         return suggestionTextContainer;
     }
 
-    private void setActionPill(String text) {
+    private void setHeadline(String text) {
         if (text == null || text.isBlank()) {
-            actionPill.setText(" ");
-            actionPill.setVisible(false);
+            headlineLabel.setText(" ");
             return;
         }
-        actionPill.setText(text.toUpperCase(Locale.ROOT));
-        actionPill.setVisible(true);
-        actionPill.revalidate();
+        headlineLabel.setText("<html>" + htmlEscape(text) + "</html>");
+        headlineLabel.revalidate();
+    }
+
+    private void setHeadline(String action, String itemName) {
+        if (itemName == null || itemName.isEmpty()) {
+            setHeadline(action);
+            return;
+        }
+        setHeadline(action + "  " + itemName);
     }
 
     private void showStructuredCard() {
@@ -212,27 +215,27 @@ public class SuggestionPanel extends JPanel {
     }
 
     private void setupButtonContainer() {
-        buttonContainer.setLayout(new BorderLayout(8, 0));
+        buttonContainer.setLayout(new FlowLayout(FlowLayout.LEFT, 6, 0));
         buttonContainer.setBackground(RuneAssistColors.CARD);
-        buttonContainer.setBorder(BorderFactory.createEmptyBorder(6, 0, 0, 0));
+        buttonContainer.setBorder(BorderFactory.createEmptyBorder(4, 0, 0, 0));
 
         pauseButton.setToolTipText("Pause suggestions");
-        buttonContainer.add(pauseButton, BorderLayout.WEST);
+        pauseButton.setPreferredSize(new Dimension(22, 22));
+        pauseButton.setMargin(new Insets(0, 0, 0, 0));
+        buttonContainer.add(pauseButton);
 
         skipButton = new JButton("Skip");
         skipButton.setToolTipText("Skip suggestion");
         skipButton.setUI(new javax.swing.plaf.basic.BasicButtonUI());
         RuneAssistColors.styleGhostButton(skipButton);
+        skipButton.setMargin(new Insets(1, 6, 1, 6));
         skipButton.addActionListener(e -> suggestionController.skipSuggestion());
-        JPanel skipWrap = darkPanel(new FlowLayout(FlowLayout.LEFT, 0, 0), RuneAssistColors.CARD);
-        skipWrap.add(skipButton);
-        buttonContainer.add(skipWrap, BorderLayout.CENTER);
+        buttonContainer.add(skipButton);
 
-        JPanel tools = darkPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0), RuneAssistColors.CARD);
         BufferedImage graphIcon = ImageUtil.loadImageResource(getClass(), "/graph.png");
-        tools.add(buildButton(graphIcon, "Price graph", flipsDialogController::openSuggestionPriceGraph));
+        buttonContainer.add(buildButton(graphIcon, "Price graph", flipsDialogController::openSuggestionPriceGraph));
         BufferedImage portfolioIcon = ImageUtil.loadImageResource(getClass(), "/pie-chart.png");
-        tools.add(buildButton(portfolioIcon, "Open portfolio", flipsDialogController::showPortfolioTab));
+        buttonContainer.add(buildButton(portfolioIcon, "Open portfolio", flipsDialogController::showPortfolioTab));
 
         BufferedImage blockImg = ImageUtil.loadImageResource(getClass(), "/block.png");
         ImageIcon blockIcon = new ImageIcon(blockImg);
@@ -242,11 +245,10 @@ public class SuggestionPanel extends JPanel {
         blockButton.setFocusPainted(false);
         blockButton.setBorderPainted(false);
         blockButton.setContentAreaFilled(false);
+        blockButton.setPreferredSize(new Dimension(22, 22));
         blockButton.addActionListener(e -> confirmAndBlock());
         addHoverIcons(blockButton, () -> blockIcon, () -> blockIconHover);
-        tools.add(blockButton);
-
-        buttonContainer.add(tools, BorderLayout.EAST);
+        buttonContainer.add(blockButton);
     }
 
     private void confirmAndBlock() {
@@ -287,10 +289,10 @@ public class SuggestionPanel extends JPanel {
         if (text == null || text.isEmpty()) {
             additionalInfoText.setText("");
         } else {
-            additionalInfoText.setText("<html>" + text + "</html>");
+        additionalInfoText.setText("<html><div style='width:200px'>" + text + "</div></html>");
         }
         additionalInfoText.setToolTipText(tooltip);
-        itemNameLabel.setToolTipText(tooltip);
+        headlineLabel.setToolTipText(tooltip);
         qtyPriceLabel.setToolTipText(tooltip);
     }
 
@@ -315,14 +317,12 @@ public class SuggestionPanel extends JPanel {
                 paintWait(suggestion);
                 return;
             case ABORT:
-                setActionPill("abort");
-                itemNameLabel.setText(suggestion.getName());
+                setHeadline("Abort", suggestion.getName());
                 qtyPriceLabel.setText("Abort this offer");
                 setItemIcon(suggestion.getItemId());
                 break;
             case BUY:
-                setActionPill(suggestion.isHold() ? "hold" : "buy");
-                itemNameLabel.setText(suggestion.getName());
+                setHeadline(suggestion.isHold() ? "Hold" : "Buy", suggestion.getName());
                 qtyPriceLabel.setText(qtyAndPriceLine(suggestion, formatter));
                 setItemIcon(suggestion.getItemId());
                 break;
@@ -330,20 +330,19 @@ public class SuggestionPanel extends JPanel {
             case MODIFY_BUY:
             case MODIFY_SELL:
                 if (suggestion.isModifySuggestion()) {
-                    setActionPill("modify");
-                    itemNameLabel.setText(suggestion.getName());
+                    setHeadline("Modify", suggestion.getName());
                     qtyPriceLabel.setText("to  " + formatter.format(suggestion.getPrice()) + " gp"
                             + "  ·  " + formatter.format(suggestion.getQuantity()));
                 } else {
-                    setActionPill(shouldSellFromBank(suggestion) ? "bank sell" : suggestion.isSellSuggestion() ? "sell" : "buy");
-                    itemNameLabel.setText(suggestion.getName());
+                    String action = shouldSellFromBank(suggestion) ? "Bank sell"
+                            : suggestion.isSellSuggestion() ? "Sell" : "Buy";
+                    setHeadline(action, suggestion.getName());
                     qtyPriceLabel.setText(qtyAndPriceLine(suggestion, formatter));
                 }
                 setItemIcon(suggestion.getItemId());
                 break;
             case DECANT:
-                setActionPill("decant");
-                itemNameLabel.setText(suggestion.getName());
+                setHeadline("Decant", suggestion.getName());
                 qtyPriceLabel.setText(!Strings.isNullOrEmpty(suggestion.getMessage())
                         ? suggestion.getMessage() : "Decant now");
                 setItemIcon(suggestion.getItemId());
@@ -353,6 +352,7 @@ public class SuggestionPanel extends JPanel {
                 showFetchingWait();
                 return;
         }
+        populateFlags(suggestion);
         String why = suggestion.getWhy();
         boolean hasWhy = !Strings.isNullOrEmpty(why);
         String additionalInfoMessage = "";
@@ -369,7 +369,7 @@ public class SuggestionPanel extends JPanel {
             String text = whyHtml;
             String profit = formatExpectedProfitAndDuration(suggestion.getExpectedProfit(), suggestion.getExpectedDuration());
             if (!profit.isEmpty()) {
-                text = profit + (text.isEmpty() ? "" : "<br>" + text);
+                text = text.isEmpty() ? profit : text + "<br>" + profit;
             }
             if (!hasWhy) {
                 text += additionalInfoMessage;
@@ -389,7 +389,7 @@ public class SuggestionPanel extends JPanel {
             }
             if (profit != null) {
                 String profitText = formatSellProfitLossAndDuration((double) profit, suggestion.getExpectedDuration());
-                text = profitText + (text.isEmpty() ? "" : "<br>" + text);
+                text = text.isEmpty() ? profitText : text + "<br>" + profitText;
             }
             if (!hasWhy) {
                 text += additionalInfoMessage;
@@ -411,8 +411,9 @@ public class SuggestionPanel extends JPanel {
 
     /** WAIT must always show a pill + why. Never a blank RUNEASSIST header. */
     private void paintWait(Suggestion suggestion) {
-        setActionPill("wait");
+        setHeadline("Wait");
         suggestionIcon.setVisible(false);
+        populateFlags(null);
         String message = suggestion.getMessage();
         if (HubPluginConflict.WAIT_MESSAGE.equals(message)) {
             showCenteredMessage("<FONT COLOR=gray>" + HubPluginConflict.WAIT_MESSAGE + "</FONT>");
@@ -421,13 +422,16 @@ public class SuggestionPanel extends JPanel {
         if (Strings.isNullOrEmpty(message)) {
             message = "Wait";
         }
-        itemNameLabel.setText("<html>" + htmlEscape(message) + "</html>");
         qtyPriceLabel.setText("");
         String why = suggestion.getWhy();
         if (Strings.isNullOrEmpty(why)) {
             why = formatWaitSlotStatus();
         }
-        setAdditionalInfoText(Strings.isNullOrEmpty(why) ? "" : htmlEscape(why), null);
+        String body = htmlEscape(message);
+        if (!Strings.isNullOrEmpty(why) && !why.equals(message)) {
+            body += "<br>" + htmlEscape(why);
+        }
+        setAdditionalInfoText(body, null);
         setButtonsVisible(false);
         showStructuredCard();
     }
@@ -438,39 +442,45 @@ public class SuggestionPanel extends JPanel {
     }
 
     public void suggestHubConflict() {
-        setActionPill("wait");
+        setHeadline("Wait");
+        populateFlags(null);
         setMessage("<FONT COLOR=gray>" + HubPluginConflict.WAIT_MESSAGE + "</FONT>");
         setButtonsVisible(false);
     }
 
     public void suggestCollect() {
-        setActionPill("collect");
+        setHeadline("Collect");
+        populateFlags(null);
         setMessage("Collect items");
         setButtonsVisible(false);
     }
 
     public void suggestAddGp() {
         NumberFormat formatter = NumberFormat.getNumberInstance();
-        setActionPill("cash");
+        setHeadline("Add gp");
+        populateFlags(null);
         setMessage("Add at least <FONT COLOR=" + RuneAssistColors.hex(RuneAssistColors.ACCENT) + ">" + formatter.format(MIN_GP_NEEDED_TO_FLIP)
                 + "</FONT> gp to your inventory to get a flip suggestion");
         setButtonsVisible(false);
     }
 
     public void suggestScanningForDumps() {
-        setActionPill("scan");
+        setHeadline("Scan");
+        populateFlags(null);
         setMessage("Waiting for dumps...");
         setButtonsVisible(false);
     }
 
     public void suggestOpenGe() {
-        setActionPill("ge");
+        setHeadline("Open GE");
+        populateFlags(null);
         setMessage("Open the Grand Exchange to get a flip suggestion");
         setButtonsVisible(false);
     }
 
     public void setIsPausedMessage() {
-        setActionPill("paused");
+        setHeadline("Paused");
+        populateFlags(null);
         setMessage("Suggestions are paused");
         setButtonsVisible(false);
     }
@@ -531,7 +541,8 @@ public class SuggestionPanel extends JPanel {
     }
 
     public void showLoading() {
-        setActionPill("…");
+        setHeadline("…");
+        populateFlags(null);
         setServerMessage("");
         bodyLayout.show(bodyCards, CARD_SPINNER);
         spinner.show();
@@ -608,7 +619,8 @@ public class SuggestionPanel extends JPanel {
     }
 
     private void showFetchingWait() {
-        setActionPill("wait");
+        setHeadline("Wait");
+        populateFlags(null);
         setMessage("Getting the next flip…");
     }
 
@@ -625,7 +637,8 @@ public class SuggestionPanel extends JPanel {
         if (errorMessage != null) {
             hideLoading();
             setServerMessage("");
-            setActionPill("login");
+            setHeadline("Login");
+            populateFlags(null);
             setMessage(errorMessage);
             return;
         }
@@ -639,7 +652,8 @@ public class SuggestionPanel extends JPanel {
         final HttpResponseException suggestionError = suggestionManager.getSuggestionError();
         if(suggestionError != null) {
             highlightController.redraw();
-            setActionPill("error");
+            setHeadline("Error");
+            populateFlags(null);
             setMessage("Error: " + suggestionError.getMessage());
             return;
         }
@@ -649,6 +663,26 @@ public class SuggestionPanel extends JPanel {
         } else {
             displaySuggestion();
         }
+    }
+
+    private void populateFlags(Suggestion suggestion) {
+        flagsRow.removeAll();
+        List<String> flags = suggestion == null ? Collections.emptyList() : suggestion.getFlags();
+        if (flags == null || flags.isEmpty()) {
+            flagsRow.setVisible(false);
+            flagsRow.revalidate();
+            flagsRow.repaint();
+            return;
+        }
+        flagsRow.setVisible(true);
+        for (String flag : flags) {
+            if (flag == null || flag.isEmpty()) {
+                continue;
+            }
+            flagsRow.add(RuneAssistColors.flagChip(flag));
+        }
+        flagsRow.revalidate();
+        flagsRow.repaint();
     }
 
     private String formatSellProfitLossAndDuration(Double expectedProfit, Double expectedDuration) {
@@ -777,7 +811,7 @@ public class SuggestionPanel extends JPanel {
     private void clearSuggestionTooltips() {
         additionalInfoText.setToolTipText(null);
         suggestionText.setToolTipText(null);
-        itemNameLabel.setToolTipText(null);
+        headlineLabel.setToolTipText(null);
         qtyPriceLabel.setToolTipText(null);
     }
 

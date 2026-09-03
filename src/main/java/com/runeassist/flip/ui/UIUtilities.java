@@ -109,6 +109,13 @@ public class UIUtilities {
         return Math.max(1, remainingMinutes) + "m";
     }
 
+    public static String formatHoldDuration(int durationSeconds) {
+        if (durationSeconds <= 0) {
+            return "0m";
+        }
+        return formatDurationMinutes(durationSeconds / 60);
+    }
+
     public static String truncateString(String string, int length) {
         if (string.length() > length) {
             return string.substring(0, length) + "...";

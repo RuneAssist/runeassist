@@ -46,22 +46,33 @@ public final class RuneAssistColors {
     }
 
     public static Border cardBorder() {
-        return BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 3, 0, 0, ACCENT),
-                BorderFactory.createEmptyBorder(8, 10, 8, 8));
+        return BorderFactory.createEmptyBorder(8, 8, 8, 8);
     }
 
-    public static Border hairlineBottom() {
+    public static Border sectionHeaderBorder() {
         return BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, HAIRLINE),
-                BorderFactory.createEmptyBorder(0, 0, 8, 0));
+                BorderFactory.createMatteBorder(0, 0, 1, 0, ACCENT),
+                BorderFactory.createEmptyBorder(0, 0, 4, 0));
     }
 
     public static JLabel kicker(String text) {
         JLabel label = new JLabel(text);
         label.setForeground(ACCENT);
         label.setFont(label.getFont().deriveFont(Font.BOLD, 10f));
+        label.setBorder(sectionHeaderBorder());
         return label;
+    }
+
+    public static JLabel flagChip(String text) {
+        JLabel chip = new JLabel(text);
+        chip.setOpaque(true);
+        chip.setBackground(ACCENT_MUTED);
+        chip.setForeground(ACCENT);
+        chip.setFont(chip.getFont().deriveFont(Font.PLAIN, 9f));
+        chip.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(ACCENT_HOVER),
+                BorderFactory.createEmptyBorder(1, 5, 1, 5)));
+        return chip;
     }
 
     public static JLabel caption(String text) {

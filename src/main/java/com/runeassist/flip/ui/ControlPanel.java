@@ -28,19 +28,18 @@ public class ControlPanel extends JPanel
     private static final int PRESET_2H  = 2 * 60;
     private static final int PRESET_8H  = 8 * 60;
 
+    private static final String[] TIMEFRAME_ITEMS = {"5m", "30m", "2h", "8h", "Custom"};
+    private static final String VOLUME_TOOLTIP =
+            "Sizes how much 5m/1h volume each offer covers. This is not a reprice timer.";
+
     private final SuggestionManager suggestionManager;
     private final SuggestionPreferencesManager preferencesManager;
     private final JPanel timeframePanel;
-    private final JToggleButton btn5m;
-    private final JToggleButton btn30m;
-    private final JToggleButton btn2h;
-    private final JToggleButton btn8h;
-    private final JToggleButton btnCustom; // "..." button
-    private final JToggleButton btnRiskLow;
-    private final JToggleButton btnRiskMedium;
-    private final JToggleButton btnRiskHigh;
+    private final JComboBox<String> timeframeCombo;
+    private final JComboBox<String> riskCombo;
 
     private boolean suppressTimeframeSliderEvents;
+    private boolean suppressComboEvents;
     private boolean customExplicitlySelected;
 
     private static final Color RISK_LOW_SELECTED_COLOR = RuneAssistColors.RISK_LOW;
@@ -76,66 +75,78 @@ public class ControlPanel extends JPanel
         setBackground(RuneAssistColors.CARD);
         setBorder(RuneAssistColors.cardBorder());
 
-        // --- Timeframe buttons ---
         timeframePanel = new JPanel();
         timeframePanel.setLayout(new BoxLayout(timeframePanel, BoxLayout.Y_AXIS));
         timeframePanel.setOpaque(false);
+        timeframePanel.setAlignmentX(LEFT_ALIGNMENT);
 
-        JLabel timeframeLabel = RuneAssistColors.kicker("VOLUME WINDOW");
-        timeframeLabel.setHorizontalAlignment(SwingConstants.LEFT);
-        timeframeLabel.setToolTipText("Sizes how much 5m/1h volume each offer covers. This is not a reprice timer.");
-        timeframeLabel.setAlignmentX(LEFT_ALIGNMENT);
+        JLabel settingsLabel = RuneAssistColors.kicker("WINDOW / RISK");
+        settingsLabel.setHorizontalAlignment(SwingConstants.LEFT);
+        settingsLabel.setToolTipText(VOLUME_TOOLTIP);
+        settingsLabel.setAlignmentX(LEFT_ALIGNMENT);
+        JPanel settingsHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        settingsHeader.setOpaque(false);
+        settingsHeader.setAlignmentX(LEFT_ALIGNMENT);
+        settingsHeader.add(settingsLabel);
+        timeframePanel.add(settingsHeader);
+        UIUtilities.addVerticalGap(timeframePanel, 4);
 
-        JPanel labelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        labelPanel.setOpaque(false);
-        labelPanel.add(timeframeLabel);
-
-        JPanel buttonPanel = new JPanel();
-        buttonPanel.setLayout(new GridLayout(1, 5, 4, 0));
-        buttonPanel.setOpaque(false);
-        buttonPanel.setToolTipText("Sizes how much 5m/1h volume each offer covers. This is not a reprice timer.");
-
-        ButtonGroup timeframeButtonGroup = new ButtonGroup();
-
-        btn5m     = createPresetButton("5m",   PRESET_5M);
-        btn30m    = createPresetButton("30m",  PRESET_30M);
-        btn2h     = createPresetButton("2h",   PRESET_2H);
-        btn8h     = createPresetButton("8h",   PRESET_8H);
-        btnCustom = createCustomButton("Custom");
-
-        timeframeButtonGroup.add(btn5m);
-        timeframeButtonGroup.add(btn30m);
-        timeframeButtonGroup.add(btn2h);
-        timeframeButtonGroup.add(btn8h);
-        timeframeButtonGroup.add(btnCustom);
-
-        buttonPanel.add(btn5m);
-        buttonPanel.add(btn30m);
-        buttonPanel.add(btn2h);
-        buttonPanel.add(btn8h);
-        buttonPanel.add(btnCustom);
-
-        timeframePanel.add(labelPanel);
-        UIUtilities.addVerticalGap(timeframePanel, 3);
-        timeframePanel.add(buttonPanel);
-
-        // --- Custom slider panel (hidden unless "..." selected) ---
-        customPanel = new JPanel();
-        customPanel.setLayout(new BoxLayout(customPanel, BoxLayout.Y_AXIS));
-        customPanel.setOpaque(false);
-
-        // small spacing above the slider row
-        UIUtilities.addVerticalGap(customPanel, 8);
+        JPanel strip = new JPanel(new GridLayout(1, 2, 8, 0));
+        strip.setOpaque(false);
+        strip.setAlignmentX(LEFT_ALIGNMENT);
+        strip.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        strip.setToolTipText(VOLUME_TOOLTIP);
 
         int initMinutes = clampMinutes(preferencesManager.getTimeframe());
         customExplicitlySelected = !isPreset(initMinutes);
+
+        timeframeCombo = new JComboBox<>(TIMEFRAME_ITEMS);
+        styleCompactCombo(timeframeCombo);
+        timeframeCombo.setToolTipText(VOLUME_TOOLTIP);
+        timeframeCombo.addActionListener(e -> {
+            if (suppressComboEvents)
+            {
+                return;
+            }
+            onTimeframeComboChanged();
+        });
+
+        RiskLevel initialRiskLevel = preferencesManager.getRiskLevel();
+        if (initialRiskLevel == null)
+        {
+            initialRiskLevel = RiskLevel.MEDIUM;
+            preferencesManager.setRiskLevel(initialRiskLevel);
+        }
+        riskCombo = new JComboBox<>(new String[]{RISK_LOW_LABEL, RISK_MEDIUM_LABEL, RISK_HIGH_LABEL});
+        styleCompactCombo(riskCombo);
+        riskCombo.setToolTipText("Risk level for suggested flips");
+        riskCombo.addActionListener(e -> {
+            if (suppressComboEvents)
+            {
+                return;
+            }
+            applyRiskLevel(riskFromCombo());
+        });
+
+        JPanel windowCell = labeledCombo("Window", timeframeCombo);
+        windowCell.setToolTipText(VOLUME_TOOLTIP);
+        strip.add(windowCell);
+        strip.add(labeledCombo("Risk", riskCombo));
+        timeframePanel.add(strip);
+
+        customPanel = new JPanel();
+        customPanel.setLayout(new BoxLayout(customPanel, BoxLayout.Y_AXIS));
+        customPanel.setOpaque(false);
+        customPanel.setAlignmentX(LEFT_ALIGNMENT);
+
+        UIUtilities.addVerticalGap(customPanel, 8);
+
         timeframeSlider = new JSlider(JSlider.HORIZONTAL, 0, STEPS, minutesToPos(initMinutes));
         timeframeSlider.setOpaque(false);
-        timeframeSlider.setPaintTicks(false);   // NO TICKS
-        timeframeSlider.setPaintLabels(false);  // NO LABELS
+        timeframeSlider.setPaintTicks(false);
+        timeframeSlider.setPaintLabels(false);
         timeframeSlider.setSnapToTicks(false);
 
-        // Stable slider height/width
         timeframeSlider.setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH - 100, 24));
         timeframeSlider.setMinimumSize(new Dimension(100, 24));
         timeframeSlider.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
@@ -145,7 +156,6 @@ public class ControlPanel extends JPanel
         valueLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         valueLabel.setToolTipText("Click to enter a custom time interval");
 
-        // Fixed label size based on widest expected text
         String widest = "24h 00m";
         FontMetrics fm = valueLabel.getFontMetrics(valueLabel.getFont());
         int labelWidth = fm.stringWidth(widest);
@@ -224,62 +234,16 @@ public class ControlPanel extends JPanel
             if (!timeframeSlider.getValueIsAdjusting())
             {
                 applyTimeframe(minutesPreview, /*updateSlider*/ false);
-                // Keep "..." selected for non-preset custom values
                 if (!isPreset(minutesPreview)) {
-                    btnCustom.setSelected(true);
+                    customExplicitlySelected = true;
+                    setTimeframeComboSelection("Custom");
                 }
             }
         });
 
         customPanel.add(sliderRow);
-
         timeframePanel.add(customPanel);
 
-        UIUtilities.addVerticalGap(timeframePanel, 10);
-        JSeparator riskRule = new JSeparator();
-        riskRule.setForeground(RuneAssistColors.HAIRLINE);
-        riskRule.setBackground(RuneAssistColors.HAIRLINE);
-        riskRule.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
-        timeframePanel.add(riskRule);
-        UIUtilities.addVerticalGap(timeframePanel, 8);
-
-        JLabel riskLabel = RuneAssistColors.kicker("RISK");
-        riskLabel.setHorizontalAlignment(SwingConstants.LEFT);
-        riskLabel.setAlignmentX(LEFT_ALIGNMENT);
-
-        JPanel riskButtonPanel = new JPanel();
-        riskButtonPanel.setLayout(new GridLayout(1, 3, 6, 0));
-        riskButtonPanel.setOpaque(false);
-
-        ButtonGroup riskButtonGroup = new ButtonGroup();
-        RiskLevel initialRiskLevel = preferencesManager.getRiskLevel();
-        if (initialRiskLevel == null)
-        {
-            initialRiskLevel = RiskLevel.MEDIUM;
-            preferencesManager.setRiskLevel(initialRiskLevel);
-        }
-
-        btnRiskLow = createRiskButton(RISK_LOW_LABEL, RiskLevel.LOW);
-        btnRiskMedium = createRiskButton(RISK_MEDIUM_LABEL, RiskLevel.MEDIUM);
-        btnRiskHigh = createRiskButton(RISK_HIGH_LABEL, RiskLevel.HIGH);
-
-        riskButtonGroup.add(btnRiskLow);
-        riskButtonGroup.add(btnRiskMedium);
-        riskButtonGroup.add(btnRiskHigh);
-
-        riskButtonPanel.add(btnRiskLow);
-        riskButtonPanel.add(btnRiskMedium);
-        riskButtonPanel.add(btnRiskHigh);
-
-        JPanel riskHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        riskHeader.setOpaque(false);
-        riskHeader.add(riskLabel);
-
-        timeframePanel.add(riskHeader);
-        UIUtilities.addVerticalGap(timeframePanel, 4);
-        timeframePanel.add(riskButtonPanel);
-
-        updateRiskButtons(initialRiskLevel);
         add(timeframePanel);
 
         // Initial sync & visibility
@@ -333,7 +297,7 @@ public class ControlPanel extends JPanel
 
     private void updateCustomVisibility()
     {
-        boolean show = btnCustom.isSelected();
+        boolean show = customExplicitlySelected || "Custom".equals(timeframeCombo.getSelectedItem());
         customPanel.setVisible(show);
         customPanel.revalidate();
         customPanel.repaint();
@@ -520,33 +484,95 @@ public class ControlPanel extends JPanel
         }
     }
 
-    private void updateRiskButtons(RiskLevel level)
+    private void updateRiskCombo(RiskLevel level)
     {
         RiskLevel effective = level != null ? level : RiskLevel.MEDIUM;
-        btnRiskLow.setSelected(effective == RiskLevel.LOW);
-        btnRiskMedium.setSelected(effective == RiskLevel.MEDIUM);
-        btnRiskHigh.setSelected(effective == RiskLevel.HIGH);
-    }
-
-    private void applyRiskButtonStyle(JToggleButton button, String label, RiskLevel level, boolean selected)
-    {
+        String label;
         Color accent;
-        switch (level)
+        switch (effective)
         {
             case LOW:
+                label = RISK_LOW_LABEL;
                 accent = RISK_LOW_SELECTED_COLOR;
                 break;
             case HIGH:
+                label = RISK_HIGH_LABEL;
                 accent = RISK_HIGH_SELECTED_COLOR;
                 break;
             case MEDIUM:
             default:
+                label = RISK_MEDIUM_LABEL;
                 accent = RuneAssistColors.ACCENT;
                 break;
         }
-        RuneAssistColors.styleChip(button, selected, accent);
-        button.setText(label);
-        button.setForeground(selected ? accent : RuneAssistColors.CHIP_TEXT_UNSELECTED);
+        suppressComboEvents = true;
+        try
+        {
+            riskCombo.setSelectedItem(label);
+        }
+        finally
+        {
+            suppressComboEvents = false;
+        }
+        riskCombo.setForeground(accent);
+    }
+
+    private RiskLevel riskFromCombo()
+    {
+        Object selected = riskCombo.getSelectedItem();
+        if (RISK_LOW_LABEL.equals(selected))
+        {
+            return RiskLevel.LOW;
+        }
+        if (RISK_HIGH_LABEL.equals(selected))
+        {
+            return RiskLevel.HIGH;
+        }
+        return RiskLevel.MEDIUM;
+    }
+
+    private void onTimeframeComboChanged()
+    {
+        Object selected = timeframeCombo.getSelectedItem();
+        if ("Custom".equals(selected))
+        {
+            customExplicitlySelected = true;
+            int current = clampMinutes(preferencesManager.getTimeframe());
+            suppressTimeframeSliderEvents = true;
+            timeframeSlider.setValue(minutesToPos(current));
+            suppressTimeframeSliderEvents = false;
+            updateValueLabel(current);
+            updateCustomVisibility();
+            return;
+        }
+        customExplicitlySelected = false;
+        int minutes = PRESET_5M;
+        if ("30m".equals(selected))
+        {
+            minutes = PRESET_30M;
+        }
+        else if ("2h".equals(selected))
+        {
+            minutes = PRESET_2H;
+        }
+        else if ("8h".equals(selected))
+        {
+            minutes = PRESET_8H;
+        }
+        applyTimeframe(minutes, /*updateSlider*/ true);
+    }
+
+    private void setTimeframeComboSelection(String item)
+    {
+        suppressComboEvents = true;
+        try
+        {
+            timeframeCombo.setSelectedItem(item);
+        }
+        finally
+        {
+            suppressComboEvents = false;
+        }
     }
 
     // ---------- UI wiring ----------
@@ -555,7 +581,7 @@ public class ControlPanel extends JPanel
         RiskLevel effective = level != null ? level : RiskLevel.MEDIUM;
         preferencesManager.setRiskLevel(effective);
         suggestionManager.setSuggestionNeeded(true);
-        updateRiskButtons(effective);
+        updateRiskCombo(effective);
     }
 
     private void applyTimeframe(int minutes, boolean updateSlider)
@@ -576,11 +602,11 @@ public class ControlPanel extends JPanel
             }
             updateValueLabel(minutes);
         }
-        syncTimeframeButtons(minutes);
+        syncTimeframeCombo(minutes);
         updateCustomVisibility();
     }
 
-    private void syncTimeframeButtons(int minutes)
+    private void syncTimeframeCombo(int minutes)
     {
         if (!isPreset(minutes))
         {
@@ -589,83 +615,67 @@ public class ControlPanel extends JPanel
 
         if (customExplicitlySelected)
         {
-            btn5m.setSelected(false);
-            btn30m.setSelected(false);
-            btn2h.setSelected(false);
-            btn8h.setSelected(false);
-            btnCustom.setSelected(true);
+            setTimeframeComboSelection("Custom");
+        }
+        else if (minutes == PRESET_5M)
+        {
+            setTimeframeComboSelection("5m");
+        }
+        else if (minutes == PRESET_30M)
+        {
+            setTimeframeComboSelection("30m");
+        }
+        else if (minutes == PRESET_2H)
+        {
+            setTimeframeComboSelection("2h");
+        }
+        else if (minutes == PRESET_8H)
+        {
+            setTimeframeComboSelection("8h");
         }
         else
         {
-            boolean matched = false;
-            btn5m.setSelected(matched = (minutes == PRESET_5M));
-            if (!matched) btn30m.setSelected(matched = (minutes == PRESET_30M));
-            if (!matched) btn2h.setSelected(matched = (minutes == PRESET_2H));
-            if (!matched) btn8h.setSelected(matched = (minutes == PRESET_8H));
-            btnCustom.setSelected(!matched);
-            customExplicitlySelected = !matched;
+            customExplicitlySelected = true;
+            setTimeframeComboSelection("Custom");
         }
     }
 
-    private JToggleButton createPresetButton(String label, int value)
+    private static JPanel labeledCombo(String caption, JComboBox<String> combo)
     {
-        return createTimeframeButton(label, () -> {
-            customExplicitlySelected = false;
-            applyTimeframe(value, /*updateSlider*/ true);
+        JPanel cell = new JPanel(new BorderLayout(4, 0));
+        cell.setOpaque(false);
+        JLabel label = RuneAssistColors.caption(caption);
+        cell.add(label, BorderLayout.WEST);
+        cell.add(combo, BorderLayout.CENTER);
+        return cell;
+    }
+
+    private static void styleCompactCombo(JComboBox<String> combo)
+    {
+        combo.setBackground(RuneAssistColors.CARD);
+        combo.setForeground(RuneAssistColors.TEXT);
+        combo.setFocusable(false);
+        combo.setMaximumRowCount(5);
+        combo.setPreferredSize(new Dimension(90, 24));
+        combo.setMinimumSize(new Dimension(72, 22));
+        combo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+        combo.setBorder(BorderFactory.createLineBorder(RuneAssistColors.HAIRLINE));
+        combo.setRenderer(new DefaultListCellRenderer()
+        {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                          boolean isSelected, boolean cellHasFocus)
+            {
+                Component c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                c.setBackground(isSelected ? RuneAssistColors.ACCENT_MUTED : RuneAssistColors.CARD);
+                c.setForeground(isSelected ? RuneAssistColors.ACCENT : RuneAssistColors.TEXT);
+                if (c instanceof JComponent)
+                {
+                    ((JComponent) c).setBorder(BorderFactory.createEmptyBorder(1, 4, 1, 4));
+                }
+                return c;
+            }
         });
-    }
-
-    private JToggleButton createCustomButton(String label)
-    {
-        return createTimeframeButton(label, () -> {
-            customExplicitlySelected = true;
-            // Selecting "..." reveals the slider and shows current value
-            int current = clampMinutes(preferencesManager.getTimeframe());
-            suppressTimeframeSliderEvents = true;
-            timeframeSlider.setValue(minutesToPos(current));
-            suppressTimeframeSliderEvents = false;
-            updateValueLabel(current);
-            updateCustomVisibility(); // shows slider
-        });
-    }
-
-    private JToggleButton createTimeframeButton(String label, Runnable action)
-    {
-        JToggleButton button = createToggleButton();
-        button.addActionListener(e -> action.run());
-        button.addChangeListener(e -> applyTimeframeButtonStyle(button, label));
-        applyTimeframeButtonStyle(button, label);
-        return button;
-    }
-
-    private JToggleButton createToggleButton()
-    {
-        JToggleButton button = new JToggleButton();
-        button.setMargin(new Insets(3, 4, 3, 4));
-        button.setFocusPainted(false);
-        button.setOpaque(true);
-        button.setBorderPainted(true);
-        button.setContentAreaFilled(true);
-        button.setUI(new javax.swing.plaf.basic.BasicToggleButtonUI());
-        RuneAssistColors.styleChip(button, false, RuneAssistColors.ACCENT);
-        return button;
-    }
-
-    private void applyTimeframeButtonStyle(JToggleButton button, String label)
-    {
-        boolean selected = button.isSelected();
-        RuneAssistColors.styleChip(button, selected, RuneAssistColors.ACCENT);
-        button.setText(label);
-        button.setForeground(selected ? RuneAssistColors.ACCENT : RuneAssistColors.CHIP_TEXT_UNSELECTED);
-    }
-
-    private JToggleButton createRiskButton(String label, RiskLevel level)
-    {
-        JToggleButton button = createToggleButton();
-        button.addActionListener(e -> applyRiskLevel(level));
-        button.addChangeListener(e2 -> applyRiskButtonStyle(button, label, level, button.isSelected()));
-        applyRiskButtonStyle(button, label, level, false);
-        return button;
     }
 
     public void refresh()
@@ -673,9 +683,8 @@ public class ControlPanel extends JPanel
         if (!UIUtilities.ensureEdt(this::refresh)) return;
 
         int tf = clampMinutes(preferencesManager.getTimeframe());
-        syncTimeframeButtons(tf);
+        syncTimeframeCombo(tf);
 
-        // Sync slider & label
         try
         {
             suppressTimeframeSliderEvents = true;
@@ -687,10 +696,8 @@ public class ControlPanel extends JPanel
         }
         updateValueLabel(tf);
 
-        // Sync risk level buttons
-        updateRiskButtons(preferencesManager.getRiskLevel());
+        updateRiskCombo(preferencesManager.getRiskLevel());
 
-        // Show/hide custom area
         updateCustomVisibility();
     }
 }
