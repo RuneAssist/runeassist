@@ -41,11 +41,16 @@ public class StatusOfferList extends ArrayList<Offer> {
                 numEmptySlots++;
             }
         }
-        int requiredSlots = reservedSlots;
+        int requiredSlots = Math.max(0, reservedSlots);
         if (suggestion != null) {
             SuggestionType type = suggestion.getType();
             if (SuggestionType.BUY == type || SuggestionType.SELL == type) {
                 requiredSlots += 1;
+            } else if (SuggestionType.WAIT == type) {
+                // WAIT cannot list held stock without a free slot. A finished
+                // BOUGHT/SOLD box is collectable — prompt Collect even when
+                // reserved-slots is 0 (otherwise 8/8 + holds looks stuck).
+                requiredSlots = Math.max(requiredSlots, 1);
             }
         }
         return requiredSlots > numEmptySlots && completeOfferExists();
