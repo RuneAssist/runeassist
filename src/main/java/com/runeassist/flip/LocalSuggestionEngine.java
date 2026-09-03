@@ -987,12 +987,28 @@ public final class LocalSuggestionEngine {
         return false;
     }
 
+    /**
+     * True only while a live BUYING/SELLING offer still has remaining quantity.
+     * A finished BOUGHT/SOLD box (awaiting collect) must not block selling the
+     * just-filled stack into a free slot — otherwise the engine skips SELL and
+     * emits another BUY (e.g. runes never highlighted to sell).
+     */
     private static boolean hasActiveOffer(long[][] offersBySlot, int itemId) {
         if (offersBySlot == null) {
             return false;
         }
         for (long[] offer : offersBySlot) {
-            if (offer != null && offer.length > O_ITEM_ID && (int) offer[O_ITEM_ID] == itemId) {
+            if (offer == null || offer.length <= O_ITEM_ID) {
+                continue;
+            }
+            if ((int) offer[O_ITEM_ID] != itemId) {
+                continue;
+            }
+            boolean filling = offer.length > O_FILLING_IS_1 && offer[O_FILLING_IS_1] == 1L;
+            int remaining = offer.length > O_TOTAL
+                    ? (int) Math.max(0L, offer[O_TOTAL] - offer[O_SOLD])
+                    : 0;
+            if (filling && remaining > 0) {
                 return true;
             }
         }
