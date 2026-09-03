@@ -223,8 +223,13 @@ public class Suggestion {
         return null;
     }
 
+    /**
+     * Unactioned dump must stick until Confirm or Skip. A 10s recency window let
+     * {@code shouldFetchNewSuggestion} overwrite the alert when the user clicked
+     * Back from a sell setup more than 10s after the dump arrived.
+     */
     public boolean isRecentUnActionedDumpAlert() {
-        return isDumpAlert && actionedTick == -1 && dumpAlertReceived.isAfter(Instant.now().minusSeconds(10));
+        return isDumpAlert && actionedTick == -1;
     }
 
     public boolean isBuyDumpSuggestion() {

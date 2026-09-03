@@ -184,26 +184,45 @@ public class GrandExchangeOfferEventHandler {
 
     public Transaction inferTransaction(int slot, SavedOffer offer, SavedOffer prev, boolean consistent) {
         boolean login = client.getTickCount() <= osrsLoginManager.getLastLoginTick() + GE_LOGIN_BURST_WINDOW;
-        boolean isNewOffer = isNewOffer(prev, offer);
-        int quantityDiff = isNewOffer ? offer.getQuantitySold() : offer.getQuantitySold() - prev.getQuantitySold();
-        long amountSpentDiff = isNewOffer ? offer.getSpent() : offer.getSpent() - prev.getSpent();
-        if (quantityDiff > 0 && amountSpentDiff > 0) {
-            Transaction t = new Transaction();
-            t.setId(UUID.randomUUID());
-            t.setType(offer.getOfferStatus());
-            t.setItemId(offer.getItemId());
-            t.setPrice(offer.getPrice());
-            t.setQuantity(quantityDiff);
-            t.setBoxId(slot);
-            t.setAmountSpent(amountSpentDiff);
-            t.setTimestamp(Instant.now());
-            t.setCopilotPriceUsed(offer.isCopilotPriceUsed());
-            t.setWasCopilotSuggestion(offer.isWasCopilotSuggestion());
-            t.setLogin(login);
-            t.setConsistent(consistent);
-            return t;
+        return inferFill(slot, offer, prev, consistent, login);
+    }
+
+    /**
+     * Infer a fill from consecutive offer snapshots. Instant same-tick sells often
+     * arrive as EMPTY→SOLD (or SELLING→SOLD) with {@code quantitySold} set but
+     * {@code spent} still 0 (GE tax item-sink / client lag). Require a quantity
+     * increase and fall back to {@code price * qty} when spent did not move —
+     * same fallback {@link LocalFlipLedger#seedFromSavedOffers} already uses.
+     */
+    static Transaction inferFill(int slot, SavedOffer offer, SavedOffer prev, boolean consistent, boolean login) {
+        boolean newOffer = isNewOffer(prev, offer);
+        int prevSold = (newOffer || prev == null) ? 0 : prev.getQuantitySold();
+        long prevSpent = (newOffer || prev == null) ? 0L : prev.getSpent();
+        int quantityDiff = offer.getQuantitySold() - prevSold;
+        long amountSpentDiff = offer.getSpent() - prevSpent;
+        if (quantityDiff <= 0) {
+            return null;
         }
-        return null;
+        if (amountSpentDiff <= 0) {
+            amountSpentDiff = offer.getPrice() * (long) quantityDiff;
+        }
+        if (amountSpentDiff <= 0) {
+            return null;
+        }
+        Transaction t = new Transaction();
+        t.setId(UUID.randomUUID());
+        t.setType(offer.getOfferStatus());
+        t.setItemId(offer.getItemId());
+        t.setPrice(offer.getPrice());
+        t.setQuantity(quantityDiff);
+        t.setBoxId(slot);
+        t.setAmountSpent(amountSpentDiff);
+        t.setTimestamp(Instant.now());
+        t.setCopilotPriceUsed(offer.isCopilotPriceUsed());
+        t.setWasCopilotSuggestion(offer.isWasCopilotSuggestion());
+        t.setLogin(login);
+        t.setConsistent(consistent);
+        return t;
     }
 
     private boolean isConsistent(SavedOffer prev, SavedOffer updated) {
@@ -222,7 +241,7 @@ public class GrandExchangeOfferEventHandler {
                 || prev.getTotalQuantity() == updated.getTotalQuantity();
     }
 
-    private boolean isNewOffer(SavedOffer prev, SavedOffer updated) {
+    static boolean isNewOffer(SavedOffer prev, SavedOffer updated) {
         if (prev == null) {
             return true;
         }

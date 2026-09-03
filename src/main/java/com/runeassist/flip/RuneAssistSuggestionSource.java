@@ -855,12 +855,16 @@ public class RuneAssistSuggestionSource
         return decantProfit > normalProfit;
     }
 
+    /** Filling offers with remaining qty only — finished BOUGHT/SOLD boxes do not block SELL. */
     private static boolean hasActiveOffer(long[][] offersBySlot, int itemId)
     {
         if (offersBySlot == null) return false;
         for (long[] o : offersBySlot)
         {
-            if (o != null && o.length > 0 && (int) o[0] == itemId) return true;
+            if (o == null || o.length < 6 || (int) o[0] != itemId) continue;
+            boolean filling = o[5] == 1L;
+            int remaining = (int) Math.max(0L, o[4] - o[3]);
+            if (filling && remaining > 0) return true;
         }
         return false;
     }
