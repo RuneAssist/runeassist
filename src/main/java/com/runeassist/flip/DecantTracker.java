@@ -1,6 +1,10 @@
 package com.runeassist.flip;
 
+import net.runelite.api.ItemComposition;
+
+import java.util.HashMap;
 import java.util.Map;
+import java.util.function.IntUnaryOperator;
 
 /**
  * Live phase detection for a decant opportunity from {@link FlipScorer#topDecants()}, read
@@ -13,6 +17,11 @@ import java.util.Map;
  * this is evaluated from the background suggestion-scoring thread — the caller must snapshot
  * the counts on the client thread first (see
  * {@code RuneAssistSuggestionSource.snapshotOwnedQty()}).</p>
+ *
+ * <p>Wiki / GE item ids are always the unnoted form. Notes collected from the GE (the usual
+ * way a finished buy lands in inventory) have a different id, so the snapshot must collapse
+ * noted ids onto their unnoted counterparts before {@link #phaseFor} runs — otherwise held
+ * Super defence(4) notes look like "no 4s" and the suggestion stays on buy-3s-to-decant.</p>
  */
 final class DecantTracker
 {
@@ -41,5 +50,34 @@ final class DecantTracker
     {
         Long qty = ownedQty.get(itemId);
         return qty != null ? qty : 0L;
+    }
+
+    /**
+     * Merge noted and unnoted stacks of the same item so dose matching uses wiki/GE ids.
+     * {@code toUnnoted} maps a raw container item id to its unnoted linked id (identity if
+     * the item is already unnoted).
+     */
+    static Map<Integer, Long> collapseToUnnoted(Map<Integer, Long> raw, IntUnaryOperator toUnnoted)
+    {
+        Map<Integer, Long> out = new HashMap<>();
+        if (raw == null || raw.isEmpty() || toUnnoted == null) return out;
+        for (Map.Entry<Integer, Long> e : raw.entrySet())
+        {
+            if (e.getKey() == null || e.getValue() == null || e.getValue() <= 0L) continue;
+            int id = toUnnoted.applyAsInt(e.getKey());
+            if (id <= 0) continue;
+            out.merge(id, e.getValue(), Long::sum);
+        }
+        return out;
+    }
+
+    /** Unnoted GE/wiki id for a container item, or {@code itemId} if it is not a note. */
+    static int unnotedId(ItemComposition composition, int itemId)
+    {
+        if (composition != null && composition.getNote() != -1 && composition.getLinkedNoteId() > 0)
+        {
+            return composition.getLinkedNoteId();
+        }
+        return itemId;
     }
 }
