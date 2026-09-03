@@ -11,6 +11,7 @@ public class RuneAssistPanel extends JPanel {
     public final SuggestionPanel suggestionPanel;
     public final StatsPanelV2 statsPanel;
     public final ControlPanel controlPanel;
+    public final StatusStrip statusStrip;
 
     private final PreferencesPanel preferencesPanel;
     private final ShopFlipPanel shopFlipPanel;
@@ -25,11 +26,13 @@ public class RuneAssistPanel extends JPanel {
     public RuneAssistPanel(SuggestionPanel suggestionPanel,
                         StatsPanelV2 statsPanel,
                         ControlPanel controlPanel,
+                        StatusStrip statusStrip,
                         PreferencesPanel preferencesPanel,
                         ShopFlipPanel shopFlipPanel) {
         this.statsPanel = statsPanel;
         this.suggestionPanel = suggestionPanel;
         this.controlPanel = controlPanel;
+        this.statusStrip = statusStrip;
         this.preferencesPanel = preferencesPanel;
         this.shopFlipPanel = shopFlipPanel;
 
@@ -43,6 +46,8 @@ public class RuneAssistPanel extends JPanel {
         topPanel.add(suggestionPanel);
         topPanel.add(Box.createRigidArea(new Dimension(MainPanel.CONTENT_WIDTH, 8)));
         topPanel.add(controlPanel);
+        topPanel.add(Box.createRigidArea(new Dimension(MainPanel.CONTENT_WIDTH, 8)));
+        topPanel.add(statusStrip);
         topPanel.add(Box.createRigidArea(new Dimension(MainPanel.CONTENT_WIDTH, 8)));
 
         mainContent.setOpaque(true);
@@ -182,6 +187,7 @@ public class RuneAssistPanel extends JPanel {
         }
         suggestionPanel.refresh();
         controlPanel.refresh();
+        statusStrip.refresh();
         statsPanel.refresh();
     }
 }
