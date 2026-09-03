@@ -291,6 +291,43 @@ public class LocalSuggestionEngineTest {
     }
 
     @Test
+    public void doesNotRepriceSellBelowHeldCostBasis() {
+        LocalSuggestionEngine.Input in = baseInput();
+        in.offersBySlot = new long[8][];
+        in.offersBySlot[0] = offer(RUBY_NECKLACE, false, 2_100, 0, 1_000, 0L);
+
+        Map<String, Object> market = flip(RUBY_NECKLACE, "Ruby necklace", 1_850, 2_000, 150_000);
+        Map<String, Object> heldCost = flip(RUBY_NECKLACE, "Ruby necklace", 2_025, 2_000, -25_000);
+        heldCost.put("side", "sell");
+        heldCost.put("dead", Boolean.TRUE);
+        heldCost.put("dead_reason", "Margin gone after tax.");
+        in.scoredFlips = new ArrayList<>();
+        in.scoredFlips.add(market);
+        in.scoredFlips.add(heldCost);
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertTrue(s.getType() != SuggestionType.MODIFY_SELL);
+        assertTrue(s.getItemId() != RUBY_NECKLACE);
+    }
+
+    @Test
+    public void doesNotRepriceBuyBelowConfiguredProfitFloor() {
+        LocalSuggestionEngine.Input in = baseInput();
+        in.offersBySlot = new long[8][];
+        in.offersBySlot[0] = offer(RUBY_NECKLACE, true, 1_800, 0, 1_000, 0L);
+        in.minPredictedProfit = 20_000L;
+        in.scoredFlips = new ArrayList<>();
+        Map<String, Object> marginal = flip(RUBY_NECKLACE, "Ruby necklace", 1_900, 1_905, 5_000);
+        marginal.put("suggested_qty", 1_000L);
+        in.scoredFlips.add(marginal);
+        in.scoredFlips.add(flip(DRAGON_ARROWS, "Dragon arrow(p++)", 1770, 1900, 421_000));
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertTrue(s.getType() != SuggestionType.MODIFY_BUY);
+        assertTrue(s.getItemId() != RUBY_NECKLACE);
+    }
+
+    @Test
     public void fillingDeadMarginIsNotAbortedUnlessStale() {
         LocalSuggestionEngine.Input in = baseInput();
         in.offersBySlot = new long[8][];
