@@ -68,7 +68,8 @@ public class PrivacyPackagingTest {
                     .forEach(p -> {
                         try {
                             String text = Files.readString(p, StandardCharsets.UTF_8);
-                            assertFalse(text.contains("api.flippingcopilot.com"),
+                            String host = "api.flipping" + "copilot.com";
+                            assertFalse(text.contains(host),
                                     "leftover host in " + p);
                         } catch (Exception e) {
                             throw new RuntimeException(e);
