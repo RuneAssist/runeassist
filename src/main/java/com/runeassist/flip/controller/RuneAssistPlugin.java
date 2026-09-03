@@ -38,8 +38,8 @@ import java.util.concurrent.*;
 // (Ares /v1/flips + local engine + held-cost). No Flipping Copilot account or servers.
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
-		description = "Local GE flip assistant: Ares /v1/flips suggestions, held-cost tracking, and an on-device flip engine. Optional contribution is under Configuration → Privacy.",
-		tags = {"runeassist", "flipping", "ge", "grand exchange", "money", "privacy", "held-cost"}
+		description = "Grand Exchange flipping assistant with an on-device suggestion engine, held-cost tracking, and server-ranked flip candidates. Contribution and cloud sync are opt-in (Configuration -> Privacy).",
+		tags = {"runeassist", "flipping", "ge", "grand exchange", "merch", "money making", "profit"}
 )
 // RuneAssist fork: dropped @PluginDependency(BankTagsPlugin.class) -- a sideloaded plugin
 // depending on a core plugin makes RuneLite silently refuse to load it.
