@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -358,6 +359,7 @@ public class LocalSuggestionEngineTest {
         assertEquals(SuggestionType.WAIT, s.getType());
         assertEquals(LocalSuggestionEngine.WAIT_SLOTS_FULL, s.getMessage());
         assertTrue(s.getWhy() != null && s.getWhy().contains("held"));
+        assertFalse(s.getWhy().contains("stale"));
     }
 
     @Test
@@ -388,6 +390,64 @@ public class LocalSuggestionEngineTest {
         Suggestion s = LocalSuggestionEngine.next(in);
         assertEquals(SuggestionType.SELL, s.getType());
         assertEquals(RUBY_NECKLACE, s.getItemId());
+    }
+
+    @Test
+    public void slotsFullWaitAppendsStalestFillingAge() {
+        LocalSuggestionEngine.Input in = fullBoardInput();
+        long now = 1_700_000_000_000L;
+        in.nowMs = now;
+        in.scoredFlips.add(0, flip(90_000, "Dragon dart", 1858, 1900, 1_000));
+        in.offersBySlot[0] = offer(90_000, true, 1858, 90, 100, now - 5L * 60_000L);
+        in.offersBySlot[1] = offer(90_001, true, 1858, 10, 100, now - 18L * 60_000L);
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertEquals(SuggestionType.WAIT, s.getType());
+        assertEquals(LocalSuggestionEngine.WAIT_SLOTS_FULL, s.getMessage());
+        assertTrue(s.getWhy().contains("8/8 slots"));
+        assertTrue(s.getWhy().contains("Dragon dart 90/100 filling"), s.getWhy());
+        assertTrue(s.getWhy().contains("stale 18m"), s.getWhy());
+        assertFalse(s.getWhy().contains("stale 5m"), s.getWhy());
+    }
+
+    @Test
+    public void slotsFullWaitStaleCountsUnfilledOffer() {
+        LocalSuggestionEngine.Input in = fullBoardInput();
+        long now = 1_700_000_000_000L;
+        in.nowMs = now;
+        in.offersBySlot[0] = offer(90_000, true, 1858, 90, 100, now - 2L * 60_000L);
+        in.offersBySlot[1] = offer(90_001, true, 1858, 0, 100, now - 45L * 60_000L);
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertEquals(SuggestionType.WAIT, s.getType());
+        assertTrue(s.getWhy().contains("90/100 filling"), s.getWhy());
+        assertTrue(s.getWhy().contains("stale 45m"), s.getWhy());
+    }
+
+    @Test
+    public void freeSlotWaitDoesNotAppendStaleAge() {
+        LocalSuggestionEngine.Input in = baseInput();
+        in.offersBySlot = new long[8][];
+        long now = 1_700_000_000_000L;
+        in.nowMs = now;
+        in.coins = 1L;
+        in.scoredFlips = new ArrayList<>();
+        in.scoredFlips.add(flip(DRAGON_ARROWS, "Dragon arrow(p++)", 1770, 1900, 421_000));
+        in.offersBySlot[0] = offer(DRAGON_ARROWS, true, 1770, 10, 100, now - 18L * 60_000L);
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertEquals(SuggestionType.WAIT, s.getType());
+        assertFalse(s.getWhy().contains("stale"), s.getWhy());
+        assertTrue(s.getWhy().contains("1/8 slots"), s.getWhy());
+    }
+
+    @Test
+    public void compactAgeFormatsMinutesHoursAndDays() {
+        assertEquals("18m", LocalSuggestionEngine.compactAge(18L * 60_000L));
+        assertEquals("2h", LocalSuggestionEngine.compactAge(2L * 60L * 60_000L));
+        assertEquals("2h 5m", LocalSuggestionEngine.compactAge((2L * 60L + 5L) * 60_000L));
+        assertEquals("1d", LocalSuggestionEngine.compactAge(24L * 60L * 60_000L));
+        assertEquals("1d 3h", LocalSuggestionEngine.compactAge((24L + 3L) * 60L * 60_000L));
     }
 
     private static LocalSuggestionEngine.Input fullBoardInput() {
