@@ -27,6 +27,8 @@ public class SuggestionPreferencesManager {
 
     private static final int DEFAULT_TIMEFRAME = 5;
     private static final long DEFAULT_DUMP_MIN_PROFIT = 100_000;
+    /** Default total projected-GP floor on BUY. Auto (off) is stored as {@code 0}. */
+    public static final long DEFAULT_MIN_PREDICTED_PROFIT = 20_000L;
 
     public static final Path DEFAULT_PROFILE_PATH = Paths.get(Persistance.COPILOT_DIR.getPath(), "Default profile.profile.json");
     public static final String PROFILE_SUFFIX = ".profile.json";
@@ -132,8 +134,13 @@ public class SuggestionPreferencesManager {
         osrsAccountPreferences.updateAndPersist(preferences);
     }
 
+    /**
+     * Total projected-GP floor for BUY. {@code null} (never set / old saves) is 20k.
+     * {@code 0} is Auto (filter off). Any other stored value is used as-is.
+     */
     public synchronized Long getMinPredictedProfit() {
-        return osrsAccountPreferences.get().getMinPredictedProfit();
+        Long v = osrsAccountPreferences.get().getMinPredictedProfit();
+        return v == null ? DEFAULT_MIN_PREDICTED_PROFIT : v;
     }
 
     public synchronized void setDumpMinPredictedProfit(Long dumpMinPredictedProfit) {
@@ -236,6 +243,17 @@ public class SuggestionPreferencesManager {
             } finally {
                 Files.deleteIfExists(lockFile);
                 Files.deleteIfExists(tmpFile);
+            }
+            // Keep the in-memory cache consistent with what was just written, for the same
+            // profile only. Without this, blockItem()/setBlockedItems() apply their change to
+            // cachedPreferences immediately for instant feedback, but this write runs async
+            // (executorService.submit) on the same 2-thread pool as the periodic 5s
+            // loadCurrentProfile() reload -- if that reload's disk read-and-overwrite runs
+            // before this write lands, it silently reverts the just-made change (the
+            // "blocking an item doesn't work" bug: the block looked instant, then vanished a
+            // few seconds later because the reload clobbered it with the still-old file).
+            if (profile.equals(selectedProfile)) {
+                cachedPreferences = preferences;
             }
         } catch (IOException e) {
             log.warn("error saving preferences json file {}", profile, e);

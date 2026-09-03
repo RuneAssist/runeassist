@@ -7,13 +7,27 @@ import com.runeassist.flip.model.SuggestionManager;
 import com.runeassist.flip.ui.components.ItemSearchMultiSelect;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.ui.DrawManager;
+import net.runelite.client.util.LinkBrowser;
 
+import javax.imageio.ImageIO;
 import javax.inject.Inject;
+import javax.inject.Named;
 import javax.inject.Singleton;
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ScheduledExecutorService;
 
 import static com.runeassist.flip.ui.UIUtilities.*;
 import java.util.List;
@@ -22,8 +36,8 @@ import java.util.List;
 @Singleton
 public class PreferencesPanel extends JPanel {
     private static final Option[] MIN_PREDICTED_PROFIT_OPTIONS = new Option[]{
-            new Option("Auto (off)", null),
-            new Option("20K", 20_000L),
+            new Option("Auto (off)", 0L),
+            new Option("20K", SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT),
             new Option("50K", 50_000L),
             new Option("100K", 100_000L),
             new Option("200K", 200_000L),
@@ -56,6 +70,13 @@ public class PreferencesPanel extends JPanel {
 
     private final SuggestionPreferencesManager preferencesManager;
     private final AccountSuggestionPreferencesRS accountPreferences;
+    private final CloudSyncService cloudSyncService;
+    private final net.runelite.api.Client client;
+    private final DrawManager drawManager;
+    private final com.runeassist.flip.ExperimentService experimentService;
+    private final ItemController itemController;
+    private final JLabel experimentLink;
+    private final ScheduledExecutorService executorService;
     private final PreferencesToggleButton sellOnlyModeToggleButton;
     private final PreferencesToggleButton buyAndHoldToggleButton;
     private final PreferencesToggleButton f2pOnlyModeToggleButton;
@@ -68,6 +89,17 @@ public class PreferencesPanel extends JPanel {
     private final JPanel preferencesContent;
     private final JPanel loginPromptPanel;
     private final JComboBox<Option> minPredictedProfitDropdown;
+    private final JLabel cloudStatusLabel;
+    private final JPanel pairingCodePanel;
+    private final JTextField pairingCodeField;
+    private final JButton copyCodeButton;
+    private final JButton openLinkButton;
+    private final JLabel pairingCodeHint;
+    private final JButton linkDeviceBtn;
+    private final JButton redeemBtn;
+    private final JButton linkWebBtn;
+    private final JLabel openDashboardLink;
+    private boolean pairingIsWebLink;
     private boolean suppressMinProfitEvents;
     private boolean suppressReservedSlotsEvents;
     private boolean suppressDumpAlertsEvents;
@@ -78,10 +110,21 @@ public class PreferencesPanel extends JPanel {
             SuggestionPreferencesManager preferencesManager,
             ItemController itemController,
             AccountSuggestionPreferencesRS accountPreferences,
-            DumpsStreamController dumpsStreamController) {
+            DumpsStreamController dumpsStreamController,
+            CloudSyncService cloudSyncService,
+            net.runelite.api.Client client,
+            DrawManager drawManager,
+            com.runeassist.flip.ExperimentService experimentService,
+            @Named("copilotExecutor") ScheduledExecutorService executorService) {
         super();
         this.preferencesManager = preferencesManager;
         this.accountPreferences = accountPreferences;
+        this.cloudSyncService = cloudSyncService;
+        this.client = client;
+        this.drawManager = drawManager;
+        this.experimentService = experimentService;
+        this.itemController = itemController;
+        this.executorService = executorService;
 
         blocklistDropdownPanel = new ItemSearchMultiSelect(
                 () -> new HashSet<>(preferencesManager.blockedItems()),
@@ -95,17 +138,16 @@ public class PreferencesPanel extends JPanel {
                 SwingUtilities.getWindowAncestor(this));
 
         setLayout(new CardLayout());
+        setOpaque(true);
         setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
+        setBorder(BorderFactory.createEmptyBorder(8, 10, 10, 28));
 
-        preferencesContent = verticalPanel(ColorScheme.DARKER_GRAY_COLOR);
+        preferencesContent = new PrefsBody();
 
         JLabel preferencesTitle = new JLabel("Suggestion Settings");
         preferencesTitle.setForeground(Color.WHITE);
         preferencesTitle.setFont(preferencesTitle.getFont().deriveFont(Font.BOLD));
-        preferencesTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
-        setFixedSize(preferencesTitle, MainPanel.CONTENT_WIDTH - 30, preferencesTitle.getPreferredSize().height);
-        preferencesTitle.setHorizontalAlignment(SwingConstants.CENTER);
+        preferencesTitle.setHorizontalAlignment(SwingConstants.LEFT);
         preferencesContent.add(preferencesTitle);
         addVerticalGap(preferencesContent, 8);
 
@@ -114,7 +156,7 @@ public class PreferencesPanel extends JPanel {
         loginPromptLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
         loginPromptPanel.add(loginPromptLabel);
 
-        add(preferencesContent, "preferences");
+        add(scrollPreferences(preferencesContent), "preferences");
         add(loginPromptPanel, "login");
 
         // Profile selector panel
@@ -243,11 +285,14 @@ public class PreferencesPanel extends JPanel {
                 return;
             }
             Option option = (Option) minPredictedProfitDropdown.getSelectedItem();
-            preferencesManager.setMinPredictedProfit(option == null || option.value == null ? null : option.value.longValue());
+            long v = option == null || option.value == null
+                    ? SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT
+                    : option.value.longValue();
+            preferencesManager.setMinPredictedProfit(v);
             suggestionManager.setSuggestionNeeded(true);
         });
         JPanel minProfitRow = formRow("Min. predicted profit", minPredictedProfitDropdown);
-        String minProfitTip = "Auto means no floor (filter off). Other values drop suggestions below that profit.";
+        String minProfitTip = "Default is 20K projected GP. Auto turns the floor off.";
         minPredictedProfitDropdown.setToolTipText(minProfitTip);
         minProfitRow.setToolTipText(minProfitTip);
         preferencesContent.add(minProfitRow);
@@ -285,9 +330,473 @@ public class PreferencesPanel extends JPanel {
             suggestionManager.setSuggestionNeeded(true);
         });
         preferencesContent.add(formRow("Reserved slots", reservedSlotsDropdown));
+        addVerticalGap(preferencesContent, 10);
+
+        JLabel cloudTitle = new JLabel("Cloud sync");
+        cloudTitle.setForeground(Color.WHITE);
+        cloudTitle.setFont(cloudTitle.getFont().deriveFont(Font.BOLD));
+        preferencesContent.add(cloudTitle);
+        addVerticalGap(preferencesContent, 4);
+
+        cloudStatusLabel = new JLabel();
+        cloudStatusLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        cloudStatusLabel.setFont(cloudStatusLabel.getFont().deriveFont(11f));
+        cloudStatusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        preferencesContent.add(cloudStatusLabel);
         addVerticalGap(preferencesContent, 6);
 
+        pairingCodeField = new JTextField();
+        pairingCodeField.setEditable(false);
+        pairingCodeField.setFont(new Font(Font.MONOSPACED, Font.BOLD, 16));
+        pairingCodeField.setHorizontalAlignment(SwingConstants.CENTER);
+        pairingCodeField.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        pairingCodeField.setForeground(Color.WHITE);
+        pairingCodeField.setCaretColor(Color.WHITE);
+        pairingCodeField.setToolTipText("Select and copy, or use Copy");
+
+        copyCodeButton = new JButton("Copy");
+        copyCodeButton.setToolTipText("Copy pairing code");
+        RuneAssistColors.stylePrimaryButton(copyCodeButton);
+        copyCodeButton.addActionListener(e -> copyPairingCode());
+
+        openLinkButton = new JButton("Open");
+        openLinkButton.setToolTipText("Open the dashboard with this code filled in");
+        RuneAssistColors.stylePrimaryButton(openLinkButton);
+        openLinkButton.addActionListener(e -> openPairingInBrowser());
+        openLinkButton.setVisible(false);
+
+        JLabel codeLabel = new JLabel("Pairing code");
+        codeLabel.setForeground(RuneAssistColors.ACCENT);
+        codeLabel.setFont(codeLabel.getFont().deriveFont(Font.BOLD, 11f));
+        codeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        pairingCodeHint = RuneAssistColors.caption("Expires in 10 minutes.");
+        pairingCodeHint.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel codeButtonRow = transparentPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        codeButtonRow.add(openLinkButton);
+        codeButtonRow.add(copyCodeButton);
+
+        JPanel codeRow = transparentPanel(new BorderLayout(6, 0));
+        codeRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        codeRow.add(pairingCodeField, BorderLayout.CENTER);
+        codeRow.add(codeButtonRow, BorderLayout.EAST);
+
+        pairingCodePanel = verticalPanel(ColorScheme.DARKER_GRAY_COLOR);
+        pairingCodePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        pairingCodePanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(RuneAssistColors.ACCENT),
+                BorderFactory.createEmptyBorder(6, 8, 6, 8)));
+        pairingCodePanel.add(codeLabel);
+        addVerticalGap(pairingCodePanel, 4);
+        pairingCodePanel.add(codeRow);
+        addVerticalGap(pairingCodePanel, 4);
+        pairingCodePanel.add(pairingCodeHint);
+        pairingCodePanel.setVisible(false);
+        preferencesContent.add(pairingCodePanel);
+        addVerticalGap(preferencesContent, 6);
+
+        linkDeviceBtn = pairingActionButton("Link another device",
+                "Show a pairing code to enter on a second PC");
+        linkDeviceBtn.addActionListener(e -> startPairing("Link another device",
+                "Enter this code on the other PC (Preferences → Enter pairing code).", false));
+        preferencesContent.add(linkDeviceBtn);
+        addVerticalGap(preferencesContent, 4);
+
+        redeemBtn = pairingActionButton("Enter pairing code",
+                "Redeem a code from another device or from the website");
+        redeemBtn.addActionListener(e -> redeemPairing());
+        preferencesContent.add(redeemBtn);
+        addVerticalGap(preferencesContent, 4);
+
+        linkWebBtn = pairingActionButton("Link a website login",
+                "Show a pairing code to attach an email on the dashboard");
+        linkWebBtn.addActionListener(e -> startPairing("Link a website login",
+                "On the dashboard choose Pair plugin and enter this code plus your email.", true));
+        preferencesContent.add(linkWebBtn);
+        addVerticalGap(preferencesContent, 8);
+
+        openDashboardLink = RuneAssistColors.caption("Open dashboard");
+        openDashboardLink.setForeground(RuneAssistColors.ACCENT);
+        openDashboardLink.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        openDashboardLink.setAlignmentX(Component.LEFT_ALIGNMENT);
+        openDashboardLink.setToolTipText(cloudSyncService.websiteUrl());
+        openDashboardLink.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                LinkBrowser.browse(cloudSyncService.websiteUrl());
+            }
+        });
+        preferencesContent.add(openDashboardLink);
+        addVerticalGap(preferencesContent, 4);
+
+        JLabel reportBugLink = RuneAssistColors.caption("Report a bug");
+        reportBugLink.setForeground(RuneAssistColors.ACCENT);
+        reportBugLink.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        reportBugLink.setAlignmentX(Component.LEFT_ALIGNMENT);
+        reportBugLink.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                captureScreenshotThenPrompt();
+            }
+        });
+        preferencesContent.add(reportBugLink);
+
+        // Price-offset ladder experiments -- see ExperimentService's doc comment. Hidden for
+        // everyone except the hardcoded RSN allowlist there; this label doesn't even get shown,
+        // let alone clickable, for any other account (checked fresh in refresh(), not just once
+        // at construction, since the logged-in account can change without restarting).
+        experimentLink = RuneAssistColors.caption("Price experiment (advanced)");
+        experimentLink.setForeground(RuneAssistColors.ACCENT);
+        experimentLink.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        experimentLink.setAlignmentX(Component.LEFT_ALIGNMENT);
+        experimentLink.setVisible(false);
+        experimentLink.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                promptExperiment();
+            }
+        });
+        preferencesContent.add(experimentLink);
+
+        for (Component c : preferencesContent.getComponents()) {
+            if (c instanceof JComponent && !(c instanceof Box.Filler)) {
+                stretchWidth((JComponent) c);
+            }
+        }
+        preferencesContent.add(Box.createVerticalGlue());
+
+        cloudSyncService.addStatusListener(this::refreshCloudStatus);
+        refreshCloudStatus();
+
         // RuneAssist fork: FC premium-instance UI requires a cloud JWT; hide it.
+    }
+
+    private static JScrollPane scrollPreferences(JPanel content) {
+        JScrollPane scroll = new JScrollPane(content);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(true);
+        scroll.getViewport().setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scroll.getVerticalScrollBar().setUnitIncrement(12);
+        return scroll;
+    }
+
+    private static JButton pairingActionButton(String text, String tip) {
+        JButton button = new JButton(text);
+        button.setToolTipText(tip);
+        button.setAlignmentX(Component.LEFT_ALIGNMENT);
+        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        button.setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH - 40, 28));
+        RuneAssistColors.styleGhostButton(button);
+        return button;
+    }
+
+    private static void stretchWidth(JComponent component) {
+        component.setAlignmentX(Component.LEFT_ALIGNMENT);
+        int height = Math.max(component.getPreferredSize().height, 16);
+        component.setMaximumSize(new Dimension(Integer.MAX_VALUE, height));
+    }
+
+    private void startPairing(String title, String how, boolean isWebLink) {
+        pairingIsWebLink = isWebLink;
+        setPairingBusy(true);
+        cloudStatusLabel.setText("Getting pairing code…");
+        executorService.execute(() -> {
+            try {
+                String code = cloudSyncService.startPairing();
+                SwingUtilities.invokeLater(() -> {
+                    setPairingBusy(false);
+                    showPairingCode(code, how);
+                });
+            } catch (Exception ex) {
+                log.warn("pairing start failed", ex);
+                SwingUtilities.invokeLater(() -> {
+                    setPairingBusy(false);
+                    refreshCloudStatus();
+                    cloudStatusLabel.setText("Could not get a pairing code. Check Cloud sync flip history is on.");
+                    JOptionPane.showMessageDialog(
+                            SwingUtilities.getWindowAncestor(this),
+                            "Could not get a pairing code. Check cloud sync is on and the server is reachable.",
+                            title,
+                            JOptionPane.WARNING_MESSAGE);
+                });
+            }
+        });
+    }
+
+    private void showPairingCode(String code, String how) {
+        String trimmed = code == null ? "" : code.trim();
+        if (trimmed.isEmpty() || looksLikeUrl(trimmed)) {
+            pairingCodeField.setText("");
+            pairingCodePanel.setVisible(false);
+            openLinkButton.setVisible(false);
+            refreshCloudStatus();
+            revalidate();
+            repaint();
+            return;
+        }
+        pairingCodeField.setText(trimmed);
+        pairingCodeField.setCaretPosition(0);
+        pairingCodeField.selectAll();
+        pairingCodeHint.setText("<html><body style='width:" + statusWrapPx() + "px'>"
+                + how + " Expires in 10 minutes.</body></html>");
+        pairingCodePanel.setVisible(true);
+        openLinkButton.setVisible(pairingIsWebLink);
+        stretchWidth(pairingCodePanel);
+        pairingCodePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE,
+                Math.max(96, pairingCodePanel.getPreferredSize().height)));
+        refreshCloudStatus();
+        copyPairingCode();
+        revalidate();
+        repaint();
+    }
+
+    private static boolean looksLikeUrl(String value) {
+        String lower = value.toLowerCase(Locale.ROOT);
+        return lower.startsWith("http://") || lower.startsWith("https://") || lower.contains("://");
+    }
+
+    private void openPairingInBrowser() {
+        String code = pairingCodeField.getText();
+        if (code == null || code.isEmpty()) {
+            return;
+        }
+        String encoded;
+        try {
+            encoded = URLEncoder.encode(code, StandardCharsets.UTF_8.name());
+        } catch (UnsupportedEncodingException ex) {
+            encoded = code;
+        }
+        LinkBrowser.browse(cloudSyncService.websiteUrl() + "#/login?code=" + encoded);
+    }
+
+    private static final int SCREENSHOT_MAX_WIDTH = 1280;
+
+    /** Grabs the next rendered frame before showing the report dialog, so there's something to
+     * attach/preview immediately rather than the player having to take and find a screenshot
+     * themselves. Only reachable from the "Report a bug" link, which is itself only reachable
+     * while logged into the game (see the "preferences"/"login" CardLayout switch in the
+     * constructor) -- so a frame should always be available to capture. */
+    private void captureScreenshotThenPrompt() {
+        drawManager.requestNextFrameListener(image -> {
+            byte[] png = null;
+            try {
+                BufferedImage captured = new BufferedImage(
+                        image.getWidth(null), image.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+                Graphics g = captured.getGraphics();
+                g.drawImage(image, 0, 0, null);
+                g.dispose();
+                png = encodePng(scaleDown(captured, SCREENSHOT_MAX_WIDTH));
+            } catch (Exception e) {
+                log.warn("bug report screenshot capture failed", e);
+            }
+            byte[] finalPng = png;
+            SwingUtilities.invokeLater(() -> promptAndSubmitBugReport(finalPng));
+        });
+    }
+
+    private static BufferedImage scaleDown(BufferedImage src, int maxWidth) {
+        if (src.getWidth() <= maxWidth) {
+            return src;
+        }
+        int newHeight = Math.round(src.getHeight() * (maxWidth / (float) src.getWidth()));
+        BufferedImage scaled = new BufferedImage(maxWidth, newHeight, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = scaled.createGraphics();
+        g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g2.drawImage(src, 0, 0, maxWidth, newHeight, null);
+        g2.dispose();
+        return scaled;
+    }
+
+    private static byte[] encodePng(BufferedImage image) {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", baos);
+            return baos.toByteArray();
+        } catch (IOException e) {
+            log.warn("bug report screenshot encode failed", e);
+            return null;
+        }
+    }
+
+    private void promptExperiment() {
+        net.runelite.api.Player localPlayer = client.getLocalPlayer();
+        String rsn = localPlayer != null ? localPlayer.getName() : null;
+        if (!com.runeassist.flip.ExperimentService.isAllowed(rsn)) {
+            return;
+        }
+        if (experimentService.hasActive(rsn)) {
+            int stop = JOptionPane.showConfirmDialog(
+                    SwingUtilities.getWindowAncestor(this),
+                    "Stop the running price experiment?",
+                    "Price experiment",
+                    JOptionPane.YES_NO_OPTION);
+            if (stop == JOptionPane.YES_OPTION) {
+                experimentService.stop(rsn);
+                refresh();
+            }
+            return;
+        }
+
+        JTextField itemField = new JTextField(20);
+        JComboBox<String> sideBox = new JComboBox<>(new String[]{"Buy ladder (0%, -1%, -3%, -5%)", "Sell ladder (0%, +1%, +3%, +5%)"});
+        JTextField qtyField = new JTextField("10", 6);
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.add(new JLabel("Item name:"));
+        content.add(itemField);
+        content.add(Box.createVerticalStrut(6));
+        content.add(sideBox);
+        content.add(Box.createVerticalStrut(6));
+        content.add(new JLabel("Quantity per rung:"));
+        content.add(qtyField);
+
+        int result = JOptionPane.showConfirmDialog(
+                SwingUtilities.getWindowAncestor(this),
+                content,
+                "Start a price-offset ladder experiment",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) {
+            return;
+        }
+        String itemName = itemField.getText() == null ? "" : itemField.getText().trim();
+        int qty;
+        try {
+            qty = Integer.parseInt(qtyField.getText().trim());
+        } catch (NumberFormatException ex) {
+            qty = 0;
+        }
+        if (itemName.isEmpty() || qty <= 0) {
+            return;
+        }
+        List<com.runeassist.flip.model.ItemIdName> matches = itemController.search(itemName, java.util.Collections.emptySet());
+        if (matches.isEmpty()) {
+            JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(this),
+                    "No item found matching \"" + itemName + "\".", "Price experiment", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        com.runeassist.flip.model.ItemIdName match = matches.get(0);
+        boolean buy = sideBox.getSelectedIndex() == 0;
+        experimentService.start(rsn, match.itemId, match.name, buy, qty);
+        refresh();
+    }
+
+    private void promptAndSubmitBugReport(byte[] screenshotPng) {
+        JTextArea textArea = new JTextArea(6, 30);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.add(new JScrollPane(textArea));
+
+        JCheckBox includeScreenshot = new JCheckBox("Include screenshot", screenshotPng != null);
+        if (screenshotPng != null) {
+            try {
+                BufferedImage preview = ImageIO.read(new ByteArrayInputStream(screenshotPng));
+                Image thumb = preview.getScaledInstance(220, -1, Image.SCALE_SMOOTH);
+                JLabel thumbLabel = new JLabel(new ImageIcon(thumb));
+                content.add(Box.createVerticalStrut(6));
+                content.add(includeScreenshot);
+                content.add(thumbLabel);
+            } catch (IOException e) {
+                log.warn("bug report screenshot preview failed", e);
+            }
+        }
+
+        int result = JOptionPane.showConfirmDialog(
+                SwingUtilities.getWindowAncestor(this),
+                content,
+                "Report a bug — what happened?",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) {
+            return;
+        }
+        String message = textArea.getText() == null ? "" : textArea.getText().trim();
+        if (message.isEmpty()) {
+            return;
+        }
+        byte[] attach = (screenshotPng != null && includeScreenshot.isSelected()) ? screenshotPng : null;
+        net.runelite.api.Player localPlayer = client.getLocalPlayer();
+        String displayName = localPlayer != null ? localPlayer.getName() : null;
+        cloudSyncService.reportBug(displayName, message, attach, ok -> {
+            JOptionPane.showMessageDialog(
+                    SwingUtilities.getWindowAncestor(this),
+                    ok ? "Thanks — logged." : "Couldn't submit right now (check cloud sync is on and reachable).",
+                    "Report a bug",
+                    ok ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
+        });
+    }
+
+    private void copyPairingCode() {
+        String code = pairingCodeField.getText();
+        if (code == null || code.isEmpty()) {
+            return;
+        }
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(code), null);
+        copyCodeButton.setText("Copied");
+        executorService.schedule(() -> SwingUtilities.invokeLater(() -> copyCodeButton.setText("Copy")),
+                2, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private void setPairingBusy(boolean busy) {
+        linkDeviceBtn.setEnabled(!busy);
+        redeemBtn.setEnabled(!busy);
+        linkWebBtn.setEnabled(!busy);
+    }
+
+    private void refreshCloudStatus() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::refreshCloudStatus);
+            return;
+        }
+        cloudStatusLabel.setText("<html><body style='width:" + statusWrapPx() + "px'>"
+                + cloudSyncService.statusMessage() + "</body></html>");
+        cloudStatusLabel.setForeground(cloudSyncService.isLinked()
+                ? ColorScheme.GRAND_EXCHANGE_PRICE
+                : ColorScheme.LIGHT_GRAY_COLOR);
+        stretchWidth(cloudStatusLabel);
+        if (!hasPairingCode()) {
+            pairingCodePanel.setVisible(false);
+        }
+    }
+
+    private boolean hasPairingCode() {
+        String code = pairingCodeField.getText();
+        return code != null && !code.isBlank() && !looksLikeUrl(code);
+    }
+
+    private void redeemPairing() {
+        String code = JOptionPane.showInputDialog(
+                SwingUtilities.getWindowAncestor(this),
+                "Enter the pairing code from your other device or the website:",
+                "Enter pairing code",
+                JOptionPane.PLAIN_MESSAGE);
+        if (code == null || code.trim().isEmpty()) {
+            return;
+        }
+        executorService.execute(() -> {
+            try {
+                cloudSyncService.redeemPairing(code);
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                        SwingUtilities.getWindowAncestor(this),
+                        "This client is now linked to that RuneAssist login.",
+                        "Enter pairing code",
+                        JOptionPane.INFORMATION_MESSAGE));
+            } catch (Exception ex) {
+                log.warn("pairing redeem failed", ex);
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                        SwingUtilities.getWindowAncestor(this),
+                        "Could not redeem that code. It may be expired or already used.",
+                        "Enter pairing code",
+                        JOptionPane.WARNING_MESSAGE));
+            }
+        });
     }
 
 
@@ -311,6 +820,17 @@ public class PreferencesPanel extends JPanel {
         model.removeAllElements();
         model.addAll(correctOptions);
         model.setSelectedItem(preferencesManager.getCurrentProfile());
+        refreshCloudStatus();
+        net.runelite.api.Player localPlayer = client.getLocalPlayer();
+        String currentRsn = localPlayer != null ? localPlayer.getName() : null;
+        experimentLink.setVisible(com.runeassist.flip.ExperimentService.isAllowed(currentRsn));
+        if (experimentService.hasActive(currentRsn)) {
+            com.runeassist.flip.ExperimentService.Experiment exp = experimentService.get(currentRsn);
+            experimentLink.setText(String.format("Price experiment: %s rung %d/%d running (click to stop)",
+                    exp.itemName, exp.rung + 1, exp.offsets().length));
+        } else {
+            experimentLink.setText("Price experiment (advanced)");
+        }
     }
 
     private void syncMinPredictedProfit(Long value) {
@@ -341,13 +861,23 @@ public class PreferencesPanel extends JPanel {
     }
 
     private Option findMinProfitOption(Long value) {
+        long effective = value == null
+                ? SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT
+                : value;
+        Option fallback = null;
         for (int i = 0; i < minPredictedProfitDropdown.getItemCount(); i++) {
             Option option = minPredictedProfitDropdown.getItemAt(i);
-            if (Objects.equals(option.value, value)) {
+            if (option.value == null) {
+                continue;
+            }
+            if (option.value.longValue() == effective) {
                 return option;
             }
+            if (option.value.longValue() == SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT) {
+                fallback = option;
+            }
         }
-        return minPredictedProfitDropdown.getItemAt(0);
+        return fallback != null ? fallback : minPredictedProfitDropdown.getItemAt(1);
     }
 
     private Option findDumpAlertOption(boolean enabled, Long minProfit) {
@@ -372,6 +902,47 @@ public class PreferencesPanel extends JPanel {
             }
         }
         return reservedSlotsDropdown.getItemAt(0);
+    }
+
+    private int statusWrapPx() {
+        int width = getWidth();
+        if (width <= 0) {
+            width = MainPanel.CONTENT_WIDTH;
+        }
+        return Math.max(140, width - 48);
+    }
+
+    private static final class PrefsBody extends JPanel implements Scrollable {
+        PrefsBody() {
+            setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+            setOpaque(true);
+            setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        }
+
+        @Override
+        public Dimension getPreferredScrollableViewportSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 12;
+        }
+
+        @Override
+        public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(12, visible.height - 12);
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportHeight() {
+            return false;
+        }
     }
 
     private static final class Option {

@@ -25,5 +25,39 @@ gradle-app.setting
 research/*.jsonl
 .claude/worktrees/
 
+# Build output
+build/
+out/
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Logs
+*.log
+
+# WOM/ML crawled data outputs (do not commit bulk data)
+research/*.jsonl
+.claude/worktrees/
+
 # Offline fill-time ML caches (wiki-archive copies, ingest dumps). Do not commit.
 tools/.cache/
+
+# Website / ingest node
+website/node_modules/
+website/dist/
+server/node_modules/
+server/website-dist/
+

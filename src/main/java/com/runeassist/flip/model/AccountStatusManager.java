@@ -47,6 +47,8 @@ public class AccountStatusManager {
     private final Map<Integer, Long> skipOfferUntil = new HashMap<>();
     /** itemId -> expire-at: listings we suggested, protected from immediate ABORT. */
     private final Map<Integer, Long> protectAbortUntil = new HashMap<>();
+    /** GE modify cancels the slot first; hold that listing until confirm/skip/collect/close. */
+    private OwnedModify ownedModify;
 
     public synchronized AccountStatus getAccountStatus() {
         Long accountHash =  osrsLoginManager.getAccountHash();
@@ -174,6 +176,7 @@ public class AccountStatusManager {
         }
         skipItem(itemId);
         skipOffer(itemId);
+        clearOwnedModify();
         skipSuggestion = itemId;
         if (itemId <= 0) {
             log.warn("Skip clicked but suggestion has no item id (type={})", suggestion.getType());
@@ -210,8 +213,141 @@ public class AccountStatusManager {
     }
 
     /**
-     * We suggested BUY/SELL for this item — do not ABORT it on the next tick for
-     * dead-margin. MODIFY is still allowed.
+     * User is acting on a MODIFY (clicked the highlight / offer editor open).
+     * Keep this listing owned until {@link #clearOwnedModify()}.
+     */
+    public synchronized void beginOwnedModify(Suggestion s) {
+        if (s == null || !s.isModifySuggestion() || s.getItemId() <= 0) {
+            return;
+        }
+        if (ownedModify != null && ownedModify.itemId == s.getItemId()) {
+            return;
+        }
+        OwnedModify owned = new OwnedModify();
+        owned.slot = s.getBoxId();
+        owned.itemId = s.getItemId();
+        owned.buy = s.getType() == SuggestionType.MODIFY_BUY;
+        owned.targetPrice = s.getPrice();
+        owned.quantity = s.getQuantity();
+        owned.name = s.getName() == null ? "" : s.getName();
+        try {
+            GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
+            if (offers != null) {
+                int matched = -1;
+                if (owned.slot >= 0 && owned.slot < offers.length) {
+                    GrandExchangeOffer o = offers[owned.slot];
+                    if (o != null && o.getItemId() == owned.itemId) {
+                        matched = owned.slot;
+                    }
+                }
+                if (matched < 0) {
+                    for (int i = 0; i < offers.length; i++) {
+                        GrandExchangeOffer o = offers[i];
+                        if (o != null && o.getItemId() == owned.itemId) {
+                            matched = i;
+                            break;
+                        }
+                    }
+                }
+                if (matched >= 0) {
+                    GrandExchangeOffer o = offers[matched];
+                    owned.slot = matched;
+                    owned.offerPrice = o.getPrice();
+                    int remaining = Math.max(0, o.getTotalQuantity() - o.getQuantitySold());
+                    if (remaining > 0) {
+                        owned.quantity = remaining;
+                    }
+                    GrandExchangeOfferState st = o.getState();
+                    if (st == GrandExchangeOfferState.BUYING || st == GrandExchangeOfferState.BOUGHT
+                            || st == GrandExchangeOfferState.CANCELLED_BUY) {
+                        owned.buy = true;
+                    } else if (st == GrandExchangeOfferState.SELLING || st == GrandExchangeOfferState.SOLD
+                            || st == GrandExchangeOfferState.CANCELLED_SELL) {
+                        owned.buy = false;
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            log.debug("beginOwnedModify could not read live offers", e);
+        }
+        ownedModify = owned;
+        protectListing(owned.itemId);
+        log.debug("owned modify item {} slot {}", owned.itemId, owned.slot);
+    }
+
+    public synchronized void clearOwnedModify() {
+        ownedModify = null;
+    }
+
+    /**
+     * Drop a MODIFY lock that is no longer being acted on. Cancel-then-relist
+     * empties the slot while the offer editor is still open — keep the lock in
+     * that case only. Logout, GE home, skip, and a different live offer must
+     * not leave a ghost card that blocks BUY into empty slots.
+     *
+     * @return true if a lock was released
+     */
+    public synchronized boolean releaseStaleOwnedModify(GrandExchangeOffer[] offers, boolean editorOpen) {
+        if (ownedModify == null || ownedModify.itemId <= 0) {
+            return false;
+        }
+        if (!editorOpen) {
+            log.info("releasing stale owned modify item {} slot {} (editor closed)",
+                    ownedModify.itemId, ownedModify.slot);
+            ownedModify = null;
+            return true;
+        }
+        if (offers == null) {
+            return false;
+        }
+        int slot = ownedModify.slot;
+        int itemId = ownedModify.itemId;
+        if (slot >= 0 && slot < offers.length) {
+            GrandExchangeOffer o = offers[slot];
+            if (o != null && o.getItemId() > 0 && o.getItemId() != itemId
+                    && isFillingState(o.getState())) {
+                log.info("releasing owned modify item {} — slot {} is now item {}",
+                        itemId, slot, o.getItemId());
+                ownedModify = null;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Slot went EMPTY and the offer editor is not open for this modify.
+     *
+     * @return true if a lock was released
+     */
+    public synchronized boolean releaseOwnedModifyIfSlotEmpty(int slot, boolean editorOpen) {
+        if (ownedModify == null || ownedModify.itemId <= 0) {
+            return false;
+        }
+        if (editorOpen || ownedModify.slot != slot) {
+            return false;
+        }
+        log.info("releasing owned modify item {} — slot {} empty, editor closed",
+                ownedModify.itemId, slot);
+        ownedModify = null;
+        return true;
+    }
+
+    private static boolean isFillingState(GrandExchangeOfferState st) {
+        return st == GrandExchangeOfferState.BUYING || st == GrandExchangeOfferState.SELLING;
+    }
+
+    public synchronized boolean isOwnedModifyActive() {
+        return ownedModify != null && ownedModify.itemId > 0;
+    }
+
+    public synchronized OwnedModify getOwnedModify() {
+        return ownedModify;
+    }
+
+    /**
+     * We suggested BUY/SELL/MODIFY for this item — do not ABORT it for ~10 min
+     * (list-then-abort, including leftover qty after a GE modify).
      */
     public synchronized void protectListing(int itemId) {
         if (itemId <= 0) {
@@ -247,5 +383,16 @@ public class AccountStatusManager {
         skippedItemUntil.clear();
         skipOfferUntil.clear();
         protectAbortUntil.clear();
+        ownedModify = null;
+    }
+
+    public static final class OwnedModify {
+        public int slot = -1;
+        public int itemId;
+        public boolean buy;
+        public long targetPrice;
+        public int quantity;
+        public String name = "";
+        public long offerPrice;
     }
 }

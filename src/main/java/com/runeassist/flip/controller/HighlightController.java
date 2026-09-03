@@ -5,6 +5,7 @@ import com.runeassist.flip.model.*;
 import com.runeassist.flip.ui.NpcHighlightOverlay;
 import com.runeassist.flip.ui.WidgetHighlightOverlay;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.InterfaceID;
@@ -29,6 +30,7 @@ import java.util.function.Supplier;
 
 
 
+@Slf4j
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class HighlightController {
@@ -41,6 +43,7 @@ public class HighlightController {
     private static final Rectangle CLOSE_BUTTON_HIGHLIGHT_BOUNDS = new Rectangle(2, 2, 19, 19);
     private static final String GE_CLERK_NAME = "Grand Exchange Clerk";
     private static final String BANKER_NAME = "Banker";
+    private static final String BOB_BARTER_NAME = "Bob Barter";
 
     // dependencies
     private final FlippingCopilotConfig config;
@@ -91,16 +94,24 @@ public class HighlightController {
             return;
         }
         if(!config.suggestionHighlights()) {
+            log.info("highlight redraw: suggestionHighlights config is OFF");
             return;
         }
         if (offerManager.isOfferJustPlaced()) {
+            log.info("highlight redraw: skipped, offer just placed");
             return;
         }
         if(suggestionManager.getSuggestionError() != null) {
+            log.info("highlight redraw: skipped, suggestion error={}", suggestionManager.getSuggestionError());
             return;
         }
         Suggestion suggestion = suggestionManager.getSuggestion();
         if (suggestion == null) {
+            log.info("highlight redraw: skipped, suggestion is null");
+            return;
+        }
+        if (suggestion.isDecantSuggestion()) {
+            highlightDecant(suggestion);
             return;
         }
         AccountStatus accountStatus = accountStatusManager.getAccountStatus();
@@ -109,6 +120,10 @@ public class HighlightController {
         // sending them to the bank is wrong — they have to go to the GE clerk first.
         boolean isCollectNeeded = accountStatus != null && accountStatus.isCollectNeeded(suggestion, grandExchange.isSetupOfferOpen());
         boolean goToBank = sellFromBank && !isCollectNeeded;
+        log.info("highlight redraw: type={} item={} geOpen={} homeScreen={} slotOpen={} bankOpen={} goToBank={} accountStatusNull={}",
+                suggestion.getType(), suggestion.getItemId(), grandExchange.isOpen(),
+                grandExchange.isHomeScreenOpen(), grandExchange.isSlotOpen(), isBankOpen(), goToBank,
+                accountStatus == null);
         if (goToBank && grandExchange.isOpen() && highlightGrandExchangeCloseButton(suggestion)) {
             return;
         }
@@ -125,10 +140,43 @@ public class HighlightController {
             return;
         }
         if (grandExchange.isHomeScreenOpen()) {
-            drawHomeScreenHighLights(suggestion);
+            boolean drew = drawHomeScreenHighLights(suggestion);
+            log.info("highlight redraw: drawHomeScreenHighLights returned {}", drew);
         } else if (grandExchange.isSlotOpen()) {
             drawOfferScreenHighlights(suggestion);
+        } else {
+            log.info("highlight redraw: GE open but neither home screen nor slot screen detected");
         }
+    }
+
+    /**
+     * Bob Barter (the GE's decanting NPC, SW corner) is reached via a right-click world
+     * interaction, not a widget -- so the only automatable help is: get any open GE/bank
+     * interface out of the way (same close-button highlight already used elsewhere), then
+     * outline Bob himself once he's visible. No further automation is possible -- decanting
+     * itself is his NPC dialogue, which RuneLite plugins must not script.
+     */
+    private void highlightDecant(Suggestion suggestion) {
+        if (grandExchange.isOpen()) {
+            highlightGrandExchangeCloseButton(suggestion);
+            return;
+        }
+        if (isBankOpen()) {
+            highlightBankCloseButton(suggestion);
+            return;
+        }
+        NPC bob = findClosestNpcByName(BOB_BARTER_NAME);
+        if (bob == null) {
+            return;
+        }
+        boolean flashHighlight = suggestion.isBuyDumpSuggestion();
+        addNpcHighlight(bob, () -> {
+            Color base = highlightColorController.getBlueColor(flashHighlight);
+            if (base == null) {
+                return null;
+            }
+            return new Color(base.getRed(), base.getGreen(), base.getBlue(), Math.min(255, base.getAlpha() * 3));
+        });
     }
 
     private void highlightNpcAtGrandExchange(Suggestion suggestion, AccountStatus accountStatus, boolean goToBank) {
@@ -221,14 +269,19 @@ public class HighlightController {
             return true;
         }
         else if (suggestion.isAbortSuggestion()) {
-            Widget slotWidget = grandExchange.getSlotWidget(suggestion.getBoxId());
-            add(slotWidget, redHighlight);
+            int slot = grandExchange.slotForSuggestion(suggestion);
+            if (slot >= 0) {
+                add(grandExchange.getSlotWidget(slot), redHighlight);
+            }
             return true;
         }
         else if (suggestion.isModifySuggestion()) {
-            Widget slotWidget = grandExchange.getSlotWidget(suggestion.getBoxId());
-            if (slotWidget != null && !slotWidget.isHidden()) {
-                add(slotWidget, amberHighlight);
+            int slot = grandExchange.slotForSuggestion(suggestion);
+            if (slot >= 0) {
+                Widget slotWidget = grandExchange.getSlotWidget(slot);
+                if (slotWidget != null && !slotWidget.isHidden()) {
+                    add(slotWidget, amberHighlight);
+                }
             }
             return true;
         }
@@ -241,11 +294,19 @@ public class HighlightController {
             return true;
         }
         else if (suggestion.isSellSuggestion() && accountStatus.hasSufficientInventoryForSellSuggestion(suggestion)) {
+            Widget geInvGroup = client.getWidget(467, 0);
             Widget itemWidget = getInventoryItemWidget(suggestion.getItemId());
+            log.info("highlight sell branch: geInvGroupNull={} itemWidgetNull={} itemWidgetHidden={}",
+                    geInvGroup == null, itemWidget == null,
+                    itemWidget != null && itemWidget.isHidden());
             if (itemWidget != null && !itemWidget.isHidden()) {
                 add(itemWidget, blueHighlight, new Rectangle(0, 0, 34, 32));
             }
             return true;
+        }
+        else if (suggestion.isSellSuggestion()) {
+            log.info("highlight sell branch: hasSufficientInventoryForSellSuggestion=false for item={}",
+                    suggestion.getItemId());
         }
         return false;
     }
@@ -339,8 +400,9 @@ public class HighlightController {
             return;
         }
 
-        // Custom item choice case
-        if (isCustomChoiceItem(s, offerTypeMatches, itemMatches)) {
+        // Custom item choice case — not while a MODIFY card is active (wrong slot
+        // would look like a new BUY/SELL of the editor item).
+        if (isCustomChoiceItem(s, offerTypeMatches, itemMatches) && !suggestion.isModifySuggestion()) {
             if (s.offerPrice == offerManager.getViewedSlotItemPrice()) {
                 highlightConfirm(blueHighlight);
             } else {

@@ -1,9 +1,12 @@
 package com.runeassist.flip.controller;
 
 import com.runeassist.flip.model.GEOfferScreenSetupOfferState;
+import com.runeassist.flip.model.Suggestion;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.GrandExchangeOffer;
+import net.runelite.api.GrandExchangeOfferState;
 import net.runelite.api.gameval.*;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.Widget;
@@ -25,7 +28,7 @@ public class GrandExchange {
         return isOpen() && !isSlotOpen();
     }
 
-    boolean isSlotOpen() {
+    public boolean isSlotOpen() {
         return getOpenSlot() != -1;
     }
 
@@ -45,12 +48,53 @@ public class GrandExchange {
         return Arrays.stream(children).anyMatch(c -> !c.isHidden() && "Collect".equals(c.getText()));
     }
 
-    int getOpenSlot() {
+    public int getOpenSlot() {
         return client.getVarbitValue(VarbitID.GE_SELECTEDSLOT) - 1;
     }
 
     Widget getSlotWidget(int slot) {
         return client.getWidget(InterfaceID.GE_OFFERS, 7 + slot);
+    }
+
+    /**
+     * Slot to highlight / left-click-swap for a suggestion. Prefer the live filling
+     * offer whose itemId matches the card, not a stale boxId (wrong-item editor).
+     */
+    int slotForSuggestion(Suggestion suggestion) {
+        if (suggestion == null) {
+            return -1;
+        }
+        return slotMatchingItem(suggestion.getItemId(), suggestion.getBoxId());
+    }
+
+    int slotMatchingItem(int itemId, int fallbackSlot) {
+        GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
+        if (offers == null || itemId <= 0) {
+            return fallbackSlot;
+        }
+        if (fallbackSlot >= 0 && fallbackSlot < offers.length && isFillingOffer(offers[fallbackSlot])
+                && offers[fallbackSlot].getItemId() == itemId) {
+            return fallbackSlot;
+        }
+        for (int i = 0; i < offers.length; i++) {
+            GrandExchangeOffer o = offers[i];
+            if (isFillingOffer(o) && o.getItemId() == itemId) {
+                return i;
+            }
+        }
+        return fallbackSlot;
+    }
+
+    boolean hasFillingOffer(int itemId) {
+        return slotMatchingItem(itemId, -1) >= 0;
+    }
+
+    private static boolean isFillingOffer(GrandExchangeOffer o) {
+        if (o == null) {
+            return false;
+        }
+        GrandExchangeOfferState st = o.getState();
+        return st == GrandExchangeOfferState.BUYING || st == GrandExchangeOfferState.SELLING;
     }
 
     Widget getBuyButton(int slot) {

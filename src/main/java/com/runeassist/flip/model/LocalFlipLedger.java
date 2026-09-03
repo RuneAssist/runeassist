@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.runeassist.flip.controller.Persistance;
 import com.runeassist.flip.rs.CopilotLoginRS;
-import com.runeassist.flip.util.ProfitCalculator;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.GrandExchangeOfferState;
 
@@ -311,98 +310,66 @@ public class LocalFlipLedger {
         return out.toByteArray();
     }
 
+    /**
+     * Raw GE fills for cloud upload. Oldest first. Reconstructs from signed acked rows
+     * when a ledger file predates {@code sourceTransactions}.
+     */
+    public synchronized List<Transaction> listSourceTransactions(String displayName) {
+        if (displayName == null || displayName.isEmpty()) {
+            return Collections.emptyList();
+        }
+        hydrate(displayName);
+        AccountBook book = books.get(displayName);
+        if (book == null) {
+            return Collections.emptyList();
+        }
+        if (!book.sourceTransactions.isEmpty()) {
+            List<Transaction> copy = new ArrayList<>(book.sourceTransactions.size());
+            for (Transaction t : book.sourceTransactions) {
+                copy.add(copyTransaction(t));
+            }
+            return copy;
+        }
+        List<Transaction> reconstructed = new ArrayList<>();
+        for (int i = book.transactions.size() - 1; i >= 0; i--) {
+            Transaction t = fromAcked(book.transactions.get(i));
+            if (t != null) {
+                reconstructed.add(t);
+            }
+        }
+        return reconstructed;
+    }
+
     private long applyToBook(AccountBook book, Transaction transaction) {
         UUID txId = transaction.getId() != null ? transaction.getId() : UUID.randomUUID();
         transaction.setId(txId);
 
+        FlipLedgerEngine.Book engineBook = new FlipLedgerEngine.Book();
+        engineBook.accountId = book.accountId;
+        engineBook.flips = book.flips;
+        engineBook.openByItemId = book.openByItemId;
+
+        FlipLedgerEngine.ApplyResult result = FlipLedgerEngine.apply(engineBook, transaction);
+        if (result.touched != null) {
+            push(result.touched);
+        }
+
         int now = transaction.getTimestamp() != null
                 ? (int) transaction.getTimestamp().getEpochSecond()
                 : (int) Instant.now().getEpochSecond();
-        boolean buy = OfferStatus.BUY.equals(transaction.getType());
-        FlipV2 open = book.openByItemId.get(transaction.getItemId());
-        UUID flipId = UUID.fromString("00000000-0000-0000-0000-000000000000");
-        long profitThisTx = 0L;
-
-        if (buy) {
-            if (open == null || FlipStatus.FINISHED.equals(open.getStatus())) {
-                open = newOpenFlip(book, transaction, now);
-            } else {
-                open.setOpenedQuantity(open.getOpenedQuantity() + transaction.getQuantity());
-                open.setSpent(open.getSpent() + transaction.getAmountSpent());
-                open.setUpdatedTime(now);
-                open.setSeqNo(open.getSeqNo() + 1);
-                open.setStatus(open.getClosedQuantity() > 0 ? FlipStatus.SELLING : FlipStatus.BUYING);
-            }
-            flipId = open.getId();
-            book.flips.put(open.getId(), copyFlip(open));
-            push(open);
-        } else if (open != null && !FlipStatus.FINISHED.equals(open.getStatus())) {
-            int remaining = open.getOpenedQuantity() - open.getClosedQuantity();
-            int amountToClose = Math.min(remaining, transaction.getQuantity());
-            if (amountToClose > 0) {
-                long sellPrice = transaction.getQuantity() > 0
-                        ? transaction.getAmountSpent() / transaction.getQuantity()
-                        : transaction.getPrice();
-                long sellPostTax = ProfitCalculator.getPostTaxPrice(transaction.getItemId(), sellPrice);
-                long taxEach = sellPrice - sellPostTax;
-                long gpOut = (open.getSpent() * amountToClose) / Math.max(1, open.getOpenedQuantity());
-                long gpIn = (long) amountToClose * sellPostTax;
-                profitThisTx = gpIn - gpOut;
-
-                open.setClosedQuantity(open.getClosedQuantity() + amountToClose);
-                open.setReceivedPostTax(open.getReceivedPostTax() + gpIn);
-                open.setTaxPaid(open.getTaxPaid() + taxEach * amountToClose);
-                open.setProfit(open.getProfit() + profitThisTx);
-                open.setClosedTime(now);
-                open.setUpdatedTime(now);
-                open.setSeqNo(open.getSeqNo() + 1);
-                if (open.getClosedQuantity() >= open.getOpenedQuantity()) {
-                    open.setStatus(FlipStatus.FINISHED);
-                    book.openByItemId.remove(transaction.getItemId());
-                } else {
-                    open.setStatus(FlipStatus.SELLING);
-                }
-                flipId = open.getId();
-                book.flips.put(open.getId(), copyFlip(open));
-                push(open);
-            }
-        }
-
         AckedTransaction acked = new AckedTransaction();
         acked.setId(txId);
-        acked.setClientFlipId(flipId);
+        acked.setClientFlipId(result.flipId);
         acked.setAccountId(book.accountId);
         acked.setTime(now);
         acked.setItemId(transaction.getItemId());
-        acked.setQuantity(buy ? transaction.getQuantity() : -transaction.getQuantity());
+        acked.setQuantity(result.buy ? transaction.getQuantity() : -transaction.getQuantity());
         acked.setPrice(transaction.getPrice());
-        acked.setAmountSpent(buy ? transaction.getAmountSpent() : -transaction.getAmountSpent());
+        acked.setAmountSpent(result.buy ? transaction.getAmountSpent() : -transaction.getAmountSpent());
         book.transactions.add(0, acked);
         book.appliedTxIds.add(txId);
-        return profitThisTx;
-    }
-
-    private FlipV2 newOpenFlip(AccountBook book, Transaction transaction, int now) {
-        FlipV2 flip = new FlipV2();
-        flip.setId(UUID.randomUUID());
-        flip.setAccountId(book.accountId);
-        flip.setItemId(transaction.getItemId());
-        flip.setOpenedTime(now);
-        flip.setOpenedQuantity(transaction.getQuantity());
-        flip.setSpent(transaction.getAmountSpent());
-        flip.setClosedTime(0);
-        flip.setClosedQuantity(0);
-        flip.setReceivedPostTax(0);
-        flip.setProfit(0);
-        flip.setTaxPaid(0);
-        flip.setStatus(FlipStatus.BUYING);
-        flip.setUpdatedTime(now);
-        flip.setDeleted(false);
-        flip.setPortfolioId(PortfolioId.PERSONAL_PORTFOLIO);
-        flip.setSeqNo(1);
-        flip.setUserId(LOCAL_USER_ID);
-        book.openByItemId.put(transaction.getItemId(), flip);
-        return flip;
+        book.sourceTransactions.add(copyTransaction(transaction));
+        return result.profitThisTx;
     }
 
     private void push(FlipV2 flip) {
@@ -466,6 +433,13 @@ public class LocalFlipLedger {
                     book.cancelled.put(row.id, row);
                 }
             }
+            if (saved.sourceTransactions != null) {
+                for (Transaction t : saved.sourceTransactions) {
+                    if (t != null) {
+                        book.sourceTransactions.add(t);
+                    }
+                }
+            }
             log.info("loaded {} local flips / {} transactions / {} cancelled leftovers for {}",
                     book.flips.size(), book.transactions.size(), book.cancelled.size(), displayName);
         } catch (Exception e) {
@@ -491,6 +465,10 @@ public class LocalFlipLedger {
                 state.appliedTransactionIds.add(id.toString());
             }
             state.cancelled = new ArrayList<>(book.cancelled.values());
+            state.sourceTransactions = new ArrayList<>(book.sourceTransactions.size());
+            for (Transaction t : book.sourceTransactions) {
+                state.sourceTransactions.add(copyTransaction(t));
+            }
             File file = bookFile(book.displayName);
             Files.writeString(file.toPath(), gson.toJson(state), StandardCharsets.UTF_8);
         } catch (IOException e) {
@@ -511,26 +489,45 @@ public class LocalFlipLedger {
     }
 
     private static FlipV2 copyFlip(FlipV2 src) {
-        FlipV2 f = new FlipV2();
-        f.setId(src.getId());
-        f.setAccountId(src.getAccountId());
-        f.setItemId(src.getItemId());
-        f.setOpenedTime(src.getOpenedTime());
-        f.setOpenedQuantity(src.getOpenedQuantity());
-        f.setSpent(src.getSpent());
-        f.setClosedTime(src.getClosedTime());
-        f.setClosedQuantity(src.getClosedQuantity());
-        f.setReceivedPostTax(src.getReceivedPostTax());
-        f.setProfit(src.getProfit());
-        f.setTaxPaid(src.getTaxPaid());
-        f.setStatus(src.getStatus());
-        f.setUpdatedTime(src.getUpdatedTime());
-        f.setDeleted(src.isDeleted());
-        f.setPortfolioId(src.getPortfolioId());
-        f.setSeqNo(src.getSeqNo());
-        f.setUserId(src.getUserId());
-        f.setCachedItemName(src.getCachedItemName());
-        return f;
+        return FlipLedgerEngine.copyFlip(src);
+    }
+
+    public static Transaction copyTransaction(Transaction src) {
+        if (src == null) {
+            return null;
+        }
+        Transaction t = new Transaction();
+        t.setId(src.getId());
+        t.setType(src.getType());
+        t.setItemId(src.getItemId());
+        t.setPrice(src.getPrice());
+        t.setQuantity(src.getQuantity());
+        t.setBoxId(src.getBoxId());
+        t.setAmountSpent(src.getAmountSpent());
+        t.setTimestamp(src.getTimestamp());
+        t.setCopilotPriceUsed(src.isCopilotPriceUsed());
+        t.setWasCopilotSuggestion(src.isWasCopilotSuggestion());
+        t.setLogin(src.isLogin());
+        t.setConsistent(src.isConsistent());
+        return t;
+    }
+
+    static Transaction fromAcked(AckedTransaction acked) {
+        if (acked == null || acked.getId() == null) {
+            return null;
+        }
+        Transaction t = new Transaction();
+        t.setId(acked.getId());
+        boolean buy = acked.getQuantity() >= 0;
+        t.setType(buy ? OfferStatus.BUY : OfferStatus.SELL);
+        t.setItemId(acked.getItemId());
+        t.setPrice(acked.getPrice());
+        t.setQuantity(Math.abs(acked.getQuantity()));
+        t.setBoxId(0);
+        t.setAmountSpent(Math.abs(acked.getAmountSpent()));
+        t.setTimestamp(Instant.ofEpochSecond(acked.getTime()));
+        t.setConsistent(true);
+        return t;
     }
 
     private static final class AccountBook {
@@ -541,6 +538,7 @@ public class LocalFlipLedger {
         final List<AckedTransaction> transactions = new ArrayList<>();
         final Set<UUID> appliedTxIds = new HashSet<>();
         final Map<String, CancelledLeftover> cancelled = new LinkedHashMap<>();
+        final List<Transaction> sourceTransactions = new ArrayList<>();
     }
 
     static final class PersistedState {
@@ -550,6 +548,7 @@ public class LocalFlipLedger {
         List<AckedTransaction> transactions;
         List<String> appliedTransactionIds;
         List<CancelledLeftover> cancelled;
+        List<Transaction> sourceTransactions;
     }
 
     public static final class CancelledLeftover {

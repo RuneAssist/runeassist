@@ -2,6 +2,7 @@ package com.runeassist.flip;
 
 import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.model.SuggestionType;
+import com.runeassist.flip.util.Constants;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -24,13 +25,29 @@ public final class LocalSuggestionEngine {
     private LocalSuggestionEngine() {
     }
 
-    // offersBySlot entry layout: {itemId, buyIs1, price, sold, total, fillingIs1}
+    // offersBySlot entry layout: {itemId, buyIs1, price, sold, total, fillingIs1, lastProgressMs?, listedMs?}
     private static final int O_ITEM_ID = 0;
     private static final int O_BUY_IS_1 = 1;
     private static final int O_PRICE = 2;
     private static final int O_SOLD = 3;
     private static final int O_TOTAL = 4;
     private static final int O_FILLING_IS_1 = 5;
+    private static final int O_LAST_PROGRESS_MS = 6;
+    private static final int O_LISTED_MS = 7;
+
+    /**
+     * Don't reprice an offer within this long of being listed unless it's mispriced by more
+     * than {@link #MODIFY_GRACE_THRESHOLD_MULT}x the normal bar. Without this, a listing that
+     * happens to sit a fraction of a percent off the live wiki quote (routine short-term
+     * jitter, not a real mispricing) gets an immediate MODIFY suggestion seconds after being
+     * placed — "just told me to list it, then immediately wanted to modify it."
+     */
+    static final long MODIFY_GRACE_MS = 90_000L;
+    private static final long MODIFY_GRACE_THRESHOLD_MULT = 3L;
+
+    static final String WHY_ABORT_STALE = "No fill progress — cancel this offer";
+    /** Minimum stall before a filling (or loss-making) hold is abandoned. */
+    static final long STALE_HOLD_MIN_MS = 2L * 60L * 60L * 1000L;
 
     static final String WAIT_SLOTS_FULL =
         "All GE slots are full. Wait for a fill, or modify a mispriced offer.";
@@ -42,6 +59,10 @@ public final class LocalSuggestionEngine {
         "Skipped or blocked every candidate.";
     static final String WAIT_NOT_ENOUGH_COINS =
         "Not enough coins for the next flip.";
+    static final String WAIT_NO_CANDIDATES =
+        "Market scorer returned no flips.";
+    static final String WAIT_ARES_DOWN =
+        "Ares is down — local scorer found no flips.";
     static final String WAIT_GENERIC =
         "No actionable flip right now.";
 
@@ -57,13 +78,31 @@ public final class LocalSuggestionEngine {
         /** User-skipped items: do not ABORT/MODIFY these live offers. */
         public Set<Integer> skipOfferItemIds = Collections.emptySet();
         /**
-         * Item ids we suggested BUY/SELL for this session recently. Do not ABORT those
-         * live offers on the next tick for dead-margin (list-then-abort loop).
+         * Item ids we suggested BUY/SELL/MODIFY for this session recently, or that
+         * just listed. Do not ABORT those live offers for ~10 min (list-then-abort,
+         * including leftover qty after a GE modify).
          */
         public Set<Integer> protectAbortItemIds = Collections.emptySet();
+        /**
+         * In-progress MODIFY: the user clicked the highlight / has the offer editor
+         * open for this listing. Empty remaining slots must not outrank it with BUY/SELL
+         * of another item (the cancelled-then-relist GE modify flow makes the slot look
+         * empty). Same owned-offer idea as list-then-abort.
+         */
+        public int ownedModifySlot = -1;
+        public int ownedModifyItemId = 0;
+        public boolean ownedModifyBuy;
+        public long ownedModifyTargetPrice;
+        public int ownedModifyQuantity;
+        public String ownedModifyName = "";
+        public long ownedModifyOfferPrice;
         /** itemId -> remaining 4h GE buy-limit. Missing key = unknown (do not cap). 0 = exhausted. */
         public Map<Integer, Integer> remainingBuyLimit = Collections.emptyMap();
         public long minPredictedProfit;
+        /** Offer-adjust timeframe in minutes (volume window). Used for stale-hold abort. */
+        public int timeframeMinutes = 5;
+        /** Clock for stale-hold / tests. 0 = use {@link System#currentTimeMillis()}. */
+        public long nowMs;
     }
 
     /**
@@ -71,7 +110,7 @@ public final class LocalSuggestionEngine {
      *
      * @param scoredFlips  our market flips, best first (each a Map of the documented keys)
      * @param offersBySlot length 8; each entry null (empty slot) or
-     *                     {itemId, buyIs1, price, sold, total, fillingIs1}
+     *                     {itemId, buyIs1, price, sold, total, fillingIs1, lastProgressMs?}
      * @param held         itemId -> {qty, avgBuy} currently held
      * @param coins        available coins
      * @param maxSlots     maximum GE slots we may use
@@ -106,12 +145,22 @@ public final class LocalSuggestionEngine {
         Map<Integer, Integer> remainingLimit = in.remainingBuyLimit != null
             ? in.remainingBuyLimit : Collections.emptyMap();
 
-        // 1) Live offers are owned until they fill, stall (sold==0 and dead), or Skip.
-        //    Never abort a filling offer (sold > 0). Never abort an offer we just
-        //    suggested listing. Do not abort a SELL for wiki/cost-basis "margin gone
-        //    after tax" (that is the list-then-abort loop). MODIFY only when the
-        //    price is clearly wrong — 1gp wiki jitter is not a reprice. User-skipped
-        //    items are left alone (do not abort/modify them).
+        // 0) In-progress MODIFY is owned: keep it even if the GE slot already went
+        //    EMPTY (modify cancels first, then opens the editor). Do this before
+        //    scanning other filling offers or empty-slot BUY/SELL.
+        if (in.ownedModifyItemId > 0) {
+            Suggestion owned = nextOwnedModify(in, scoredFlips, remainingLimit, skipped, blocked, skipOffers);
+            if (owned != null) {
+                return owned;
+            }
+        }
+
+        // 1) Live offers are owned until they fill, stall, or Skip. Never abort an
+        //    offer we just listed or modified (~10 min protect, including leftover
+        //    qty after a GE cancel-relist). Filling (sold > 0) is not aborted for
+        //    "margin gone after tax" unless the hold is stale. Do not SELL/BUY/MODIFY
+        //    into a dead margin. User-skipped items are left alone.
+        long nowMs = in.nowMs > 0L ? in.nowMs : System.currentTimeMillis();
         if (offersBySlot != null) {
             for (int slot = 0; slot < offersBySlot.length; slot++) {
                 long[] offer = offersBySlot[slot];
@@ -132,9 +181,12 @@ public final class LocalSuggestionEngine {
                 boolean buy = offer[O_BUY_IS_1] == 1L;
                 boolean fillingProgress = offer[O_SOLD] > 0L;
                 boolean recentlySuggested = protectAbort.contains(offerItemId);
+                long lastProgressMs = offer.length > O_LAST_PROGRESS_MS
+                    ? offer[O_LAST_PROGRESS_MS] : 0L;
+                boolean stale = isStaleHold(lastProgressMs, in.timeframeMinutes, nowMs);
                 Map<String, Object> market = findMarketFlip(scoredFlips, offerItemId);
                 Map<String, Object> sellRow = findFlip(scoredFlips, offerItemId);
-                if (shouldAbortOffer(market, buy, fillingProgress, recentlySuggested)) {
+                if (shouldAbortOffer(market, buy, fillingProgress, recentlySuggested, stale)) {
                     String name = getString(market, "name");
                     if (name == null) {
                         name = getString(sellRow, "name");
@@ -142,7 +194,7 @@ public final class LocalSuggestionEngine {
                     Suggestion abort = build(SuggestionType.ABORT, slot, offerItemId,
                             offer[O_PRICE], remaining, name, null, null);
                     applyLimit(abort, market != null ? market : sellRow, remainingLimit);
-                    applyWhy(abort, market != null ? market : sellRow, offer[O_PRICE]);
+                    applyWhy(abort, market != null ? market : sellRow, offer[O_PRICE], stale);
                     return abort;
                 }
 
@@ -151,14 +203,20 @@ public final class LocalSuggestionEngine {
                 if (quote == null) {
                     continue;
                 }
+                // Never reprice into a book we'd abort (dead margin / leftover loop).
+                if (isDeadMargin(quote) || isDeadMargin(market)) {
+                    continue;
+                }
                 long offerPrice = offer[O_PRICE];
                 String name = getString(quote, "name");
                 Double hours = getNullableDouble(quote, "est_fill_hours");
                 Double profit = modifyProfit(quote, remaining);
+                long listedMs = offer.length > O_LISTED_MS ? offer[O_LISTED_MS] : 0L;
+                boolean inModifyGrace = listedMs > 0L && nowMs - listedMs < MODIFY_GRACE_MS;
 
                 if (buy) {
                     long buyAt = getLong(quote, "buy_at");
-                    if (clearlyMispriced(offerPrice, buyAt)) {
+                    if (clearlyMispriced(offerPrice, buyAt, inModifyGrace)) {
                         Suggestion s = build(SuggestionType.MODIFY_BUY, slot, offerItemId,
                                 buyAt, remaining, name, profit, hours);
                         applyLimit(s, quote, remainingLimit);
@@ -167,7 +225,7 @@ public final class LocalSuggestionEngine {
                     }
                 } else {
                     long sellAt = getLong(quote, "sell_at");
-                    if (clearlyMispriced(offerPrice, sellAt)) {
+                    if (clearlyMispriced(offerPrice, sellAt, inModifyGrace)) {
                         Suggestion s = build(SuggestionType.MODIFY_SELL, slot, offerItemId,
                                 sellAt, remaining, name, profit, hours);
                         applyLimit(s, quote, remainingLimit);
@@ -234,6 +292,8 @@ public final class LocalSuggestionEngine {
         boolean sawLimitExhausted = false;
         boolean sawBlocked = false;
         boolean sawPriced = false;
+        boolean sawBelowMinProfit = false;
+        boolean sawBuyRow = false;
 
         if (scoredFlips != null && !slotsFull) {
             for (Map<String, Object> flip : scoredFlips) {
@@ -243,6 +303,7 @@ public final class LocalSuggestionEngine {
                 if ("sell".equals(getString(flip, "side"))) {
                     continue;
                 }
+                sawBuyRow = true;
                 int itemId = getInt(flip, "id");
                 if (skipped.contains(itemId) || blocked.contains(itemId)) {
                     sawBlocked = true;
@@ -288,6 +349,7 @@ public final class LocalSuggestionEngine {
                 }
                 Double profit = scaledProfit(flip, qty);
                 if (in.minPredictedProfit > 0 && (profit == null || profit < in.minPredictedProfit)) {
+                    sawBelowMinProfit = true;
                     continue;
                 }
                 Suggestion s = build(SuggestionType.BUY, freeSlot, itemId, buyAt,
@@ -302,6 +364,7 @@ public final class LocalSuggestionEngine {
                 if (flip == null || "sell".equals(getString(flip, "side"))) {
                     continue;
                 }
+                sawBuyRow = true;
                 int itemId = getInt(flip, "id");
                 if (skipped.contains(itemId) || blocked.contains(itemId)) {
                     sawBlocked = true;
@@ -326,30 +389,139 @@ public final class LocalSuggestionEngine {
         }
 
         return wait(waitReason(slotsFull, anyUnblocked, anyWithLimitLeft, anyAffordable,
-                sawLimitExhausted, sawBlocked, sawPriced), offersBySlot, maxSlots, scoredFlips);
+                sawLimitExhausted, sawBlocked, sawPriced, sawBelowMinProfit, sawBuyRow,
+                in.minPredictedProfit, coins), offersBySlot, maxSlots, scoredFlips);
     }
 
     /**
-     * First matching reason: slots, 4h limit, coins, skipped/blocked, then no margin.
-     * Never returns {@link #WAIT_GENERIC}.
+     * Keep the MODIFY the user is already acting on. The live slot is often EMPTY
+     * because GE modify cancels first; other filling offers and free slots must not
+     * replace it with BUY/SELL/MODIFY of a different item.
+     *
+     * <p>Returns {@code null} when this lock cannot be honored (skipped / blocked /
+     * dead margin / slot now holds a different item) so empty-slot BUY can run.
+     */
+    private static Suggestion nextOwnedModify(Input in, List<Map<String, Object>> scoredFlips,
+                                              Map<Integer, Integer> remainingLimit,
+                                              Set<Integer> skipped, Set<Integer> blocked,
+                                              Set<Integer> skipOffers) {
+        int itemId = in.ownedModifyItemId;
+        if (itemId <= 0) {
+            return null;
+        }
+        if (skipped.contains(itemId) || blocked.contains(itemId) || skipOffers.contains(itemId)) {
+            return null;
+        }
+        int slot = in.ownedModifySlot;
+        boolean buy = in.ownedModifyBuy;
+        int qty = Math.max(0, in.ownedModifyQuantity);
+        long offerPrice = in.ownedModifyOfferPrice;
+        long[][] offers = in.offersBySlot;
+        boolean foundOnGe = false;
+        if (offers != null) {
+            int matched = -1;
+            if (slot >= 0 && slot < offers.length && offers[slot] != null
+                    && offers[slot].length > O_ITEM_ID
+                    && (int) offers[slot][O_ITEM_ID] == itemId) {
+                matched = slot;
+            } else {
+                for (int i = 0; i < offers.length; i++) {
+                    long[] offer = offers[i];
+                    if (offer != null && offer.length > O_ITEM_ID && (int) offer[O_ITEM_ID] == itemId) {
+                        matched = i;
+                        break;
+                    }
+                }
+            }
+            if (matched >= 0) {
+                foundOnGe = true;
+                long[] offer = offers[matched];
+                slot = matched;
+                buy = offer.length > O_BUY_IS_1 && offer[O_BUY_IS_1] == 1L;
+                if (offer.length > O_PRICE) {
+                    offerPrice = offer[O_PRICE];
+                }
+                if (offer.length > O_TOTAL) {
+                    int remaining = (int) Math.max(0L, offer[O_TOTAL] - (offer.length > O_SOLD ? offer[O_SOLD] : 0L));
+                    if (remaining > 0) {
+                        qty = remaining;
+                    }
+                }
+            } else if (slot >= 0 && slot < offers.length && offers[slot] != null
+                    && offers[slot].length > O_ITEM_ID
+                    && (int) offers[slot][O_ITEM_ID] > 0
+                    && (int) offers[slot][O_ITEM_ID] != itemId) {
+                // Live offer in the owned slot is a different item — lock is stale.
+                return null;
+            }
+        }
+        Map<String, Object> market = findMarketFlip(scoredFlips, itemId);
+        Map<String, Object> sellRow = findFlip(scoredFlips, itemId);
+        Map<String, Object> quote = buy ? market : (market != null ? market : sellRow);
+        if (isDeadMargin(quote) || isDeadMargin(market)) {
+            return null;
+        }
+        long target = in.ownedModifyTargetPrice;
+        if (quote != null) {
+            long quoted = buy ? getLong(quote, "buy_at") : getLong(quote, "sell_at");
+            if (quoted > 0) {
+                target = quoted;
+            }
+        }
+        if (target <= 0) {
+            target = offerPrice;
+        }
+        if (target <= 0 && !foundOnGe) {
+            return null;
+        }
+        if (qty <= 0) {
+            qty = 1;
+        }
+        String name = in.ownedModifyName;
+        if (name == null || name.isEmpty()) {
+            name = getString(quote, "name");
+        }
+        Double hours = getNullableDouble(quote, "est_fill_hours");
+        Double profit = modifyProfit(quote, qty);
+        Suggestion s = build(buy ? SuggestionType.MODIFY_BUY : SuggestionType.MODIFY_SELL,
+                Math.max(slot, 0), itemId, target, qty, name, profit, hours);
+        applyLimit(s, quote != null ? quote : sellRow, remainingLimit);
+        applyWhy(s, quote != null ? quote : sellRow, offerPrice > 0 ? offerPrice : target);
+        return s;
+    }
+
+    /**
+     * First matching reason: slots, 4h limit, coins, skipped/blocked, profit floor,
+     * empty scorer, then no margin. Never returns {@link #WAIT_GENERIC}.
      */
     private static String waitReason(boolean slotsFull, boolean anyUnblocked,
                                      boolean anyWithLimitLeft, boolean anyAffordable,
                                      boolean sawLimitExhausted, boolean sawBlocked,
-                                     boolean sawPriced) {
+                                     boolean sawPriced, boolean sawBelowMinProfit,
+                                     boolean sawBuyRow, long minPredictedProfit, long coins) {
         if (slotsFull) {
             return WAIT_SLOTS_FULL;
         }
         if (!anyWithLimitLeft && sawLimitExhausted) {
             return WAIT_LIMIT_EXHAUSTED;
         }
-        if (sawPriced && !anyAffordable) {
+        if ((sawPriced && !anyAffordable) || coins < Constants.MIN_GP_NEEDED_TO_FLIP) {
             return WAIT_NOT_ENOUGH_COINS;
         }
         if (!anyUnblocked && sawBlocked) {
             return WAIT_SKIPPED_BLOCKED;
         }
+        if (sawBelowMinProfit && minPredictedProfit > 0) {
+            return waitMinProfit(minPredictedProfit);
+        }
+        if (!sawBuyRow) {
+            return WAIT_NO_CANDIDATES;
+        }
         return WAIT_NO_MARGIN;
+    }
+
+    static String waitMinProfit(long minPredictedProfit) {
+        return "No flips pass the " + compact(minPredictedProfit) + " gp profit floor.";
     }
 
     /** Fallback Wait with a specific reason + slot numbers. Never uses {@link #WAIT_GENERIC}. */
@@ -463,6 +635,10 @@ public final class LocalSuggestionEngine {
 
     /** Stamp a one-line why on BUY/SELL/MODIFY/ABORT. WAIT keeps {@code message}. */
     private static void applyWhy(Suggestion s, Map<String, Object> flip, long offerPrice) {
+        applyWhy(s, flip, offerPrice, false);
+    }
+
+    private static void applyWhy(Suggestion s, Map<String, Object> flip, long offerPrice, boolean staleAbort) {
         if (s == null || s.getType() == null) {
             return;
         }
@@ -479,7 +655,7 @@ public final class LocalSuggestionEngine {
                 why = whyModify(s, offerPrice);
                 break;
             case ABORT:
-                why = whyAbort(flip);
+                why = whyAbort(flip, staleAbort);
                 break;
             default:
                 return;
@@ -549,7 +725,10 @@ public final class LocalSuggestionEngine {
                 + gp(target) + qty;
     }
 
-    private static String whyAbort(Map<String, Object> market) {
+    private static String whyAbort(Map<String, Object> market, boolean stale) {
+        if (stale) {
+            return WHY_ABORT_STALE;
+        }
         String reason = deadReason(market);
         if (reason.endsWith(".")) {
             reason = reason.substring(0, reason.length() - 1);
@@ -675,21 +854,44 @@ public final class LocalSuggestionEngine {
     }
 
     /**
-     * Abort only stuck BUY offers. Filling with {@code quantitySold > 0} is never
-     * aborted. Offers we just suggested listing are never aborted on the next tick.
-     * SELL offers are not aborted for wiki/cost-basis "margin gone after tax" —
-     * that is the list-then-abort loop (ruby necklace, black chinchompa). Odd /
-     * untradeable names can still cancel a sell. wide-spread is noise.
+     * Abort a stuck BUY for dead margin, an odd-named SELL, or any hold (buy or sell)
+     * that has made no {@code quantitySold} progress for the stale stall — even if it
+     * is filling and even if post-tax vs cost is negative. Never abort an offer we
+     * just listed or modified ({@code recentlySuggested}, ~10 min). Filling with
+     * {@code quantitySold > 0} is not aborted for "margin gone after tax" unless stale.
      */
     private static boolean shouldAbortOffer(Map<String, Object> market, boolean buy,
-                                           boolean fillingProgress, boolean recentlySuggested) {
-        if (fillingProgress || recentlySuggested) {
+                                           boolean fillingProgress, boolean recentlySuggested,
+                                           boolean stale) {
+        if (recentlySuggested) {
+            return false;
+        }
+        if (stale) {
+            return true;
+        }
+        if (fillingProgress) {
             return false;
         }
         if (!buy) {
             return isOddDead(market);
         }
         return isDeadMargin(market);
+    }
+
+    /**
+     * No {@code quantitySold} increase for {@code max(2h, 4 × volume-window minutes)}.
+     * Unknown last-progress (0) is not treated as stale.
+     */
+    static boolean isStaleHold(long lastProgressMs, int timeframeMinutes, long nowMs) {
+        if (lastProgressMs <= 0L || nowMs <= lastProgressMs) {
+            return false;
+        }
+        return nowMs - lastProgressMs >= staleAfterMs(timeframeMinutes);
+    }
+
+    static long staleAfterMs(int timeframeMinutes) {
+        long tfMin = Math.max(1, timeframeMinutes);
+        return Math.max(STALE_HOLD_MIN_MS, 4L * tfMin * 60L * 1000L);
     }
 
     /** Untradeable / odd-named item — the only remaining reason to abort a live sell. */
@@ -702,12 +904,23 @@ public final class LocalSuggestionEngine {
      * Threshold is 0.5% of the quote, at least 2gp. Does not invent a price; quoted
      * must already be a positive wiki average.
      */
-    private static boolean clearlyMispriced(long offerPrice, long quoted) {
+    /**
+     * Reprice only when the live quote is clearly off the offer. Base threshold is 0.5% of
+     * the quote (min 2gp) — normal short-term wiki jitter shouldn't trigger a reprice. Within
+     * {@link #MODIFY_GRACE_MS} of listing, that threshold widens {@link
+     * #MODIFY_GRACE_THRESHOLD_MULT}x (~1.5%) so a freshly-placed offer isn't immediately
+     * flagged for a routine price move — only a genuinely bad initial price still corrects
+     * quickly during the grace window.
+     */
+    private static boolean clearlyMispriced(long offerPrice, long quoted, boolean inModifyGrace) {
         if (quoted <= 0 || offerPrice == quoted) {
             return false;
         }
         long delta = Math.abs(offerPrice - quoted);
         long threshold = Math.max(2L, quoted / 200L);
+        if (inModifyGrace) {
+            threshold *= MODIFY_GRACE_THRESHOLD_MULT;
+        }
         return delta >= threshold;
     }
 

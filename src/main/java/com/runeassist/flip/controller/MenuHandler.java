@@ -45,6 +45,8 @@ public class MenuHandler {
     private final ClientThread clientThread;
     private final PlayerLocationController playerLocationController;
     private final ChatboxPanelManager chatboxPanelManager;
+    private final com.runeassist.flip.HeldCostTracker heldCostTracker;
+    private final com.runeassist.flip.FlipScorer flipScorer;
 
     private static final String MENU_ADD = "Add-All to portfolio";
     private static final String MENU_ADD_X = "Add-X to portfolio";
@@ -110,6 +112,20 @@ public class MenuHandler {
         }
     }
 
+    /**
+     * RuneAssist fork: local replacement for FC's cloud "add/remove item portfolio" (which
+     * called their {@code /profit-tracking/toggle-item-portfolio} endpoint — needs an FC
+     * account JWT we never have, so it silently did nothing). This is for stock RuneAssist
+     * never saw bought — "forgotten" items already sitting in the bank/inventory before the
+     * plugin tracked them, or bought outside a tracked GE offer — so they start showing up in
+     * sell suggestions and portfolio value like anything else. Adds a {@link
+     * com.runeassist.flip.HeldCostTracker} lot at the current market buy quote as an
+     * estimated cost basis (the real price paid is unknown for stock we never saw bought) —
+     * same estimation caveat already used for decant-carried-over cost. No "remove" side:
+     * unlike the old cloud feature, this only ever adds a tracked lot: to stop something
+     * being suggested, use the existing per-item Skip/Block action on the resulting
+     * suggestion instead of trying to un-track it here.
+     */
     public void injectInventoryPortfolioMenuEntry(MenuEntryAdded event) {
         if (!playerLocationController.isNearGE()) {
             return;
@@ -119,44 +135,64 @@ public class MenuHandler {
         if (menuItem == null) {
             return;
         }
-        if (!portfolioStateRS.get().isLoaded()) {
+
+        int locationQty = getLocationQuantity(menuItem.unnotedItemId, menuItem.location);
+        if (locationQty <= 0) {
             return;
         }
 
-        Integer accountId = copilotLoginController.getActiveAccountId();
-        PortfolioItemCardData cardData = portfolioStateRS.get().getItemCardDataByItemId().get(menuItem.unnotedItemId);
-
-        int notInPortfolio = cardData == null ? 0 : cardData.getNotInPortfolioQuantity();
-        int portfolioQty = cardData == null ? 0 : cardData.getPortfolioQuantity();
-        int locationQty = getLocationQuantity(menuItem.unnotedItemId, menuItem.location);
-        boolean showAdd = locationQty > 0 && (cardData == null || !cardData.isInPortfolio() || notInPortfolio > 0);
-        boolean showRemove = locationQty > 0 && portfolioQty > 0;
-
         // Menu entries are added in reverse display order (last added = top of menu)
 
-        // Remove X — cross-location custom amount, when portfolioQuantity > 1
-        if (portfolioQty > 1) {
-            addPortfolioMenuEntry(MENU_REMOVE_X, menuItem,
-                    e -> promptQuantityAndToggle(menuItem, accountId, ToggleItemPortfolioRequest.REMOVE, "Enter quantity to remove:"));
-        }
-
-        // Remove (location-scoped) — removes only the qty present at the clicked location
-        if (showRemove) {
-            addPortfolioMenuEntry(MENU_REMOVE, menuItem,
-                    e -> onTogglePortfolioClicked(menuItem, accountId, ToggleItemPortfolioRequest.REMOVE, locationQty));
-        }
-
-        // Add X — cross-location custom amount, when notInPortfolio > 1
-        if (notInPortfolio > 1) {
+        // Add X — custom amount, when more than 1 is available at this location
+        if (locationQty > 1) {
             addPortfolioMenuEntry(MENU_ADD_X, menuItem,
-                    e -> promptQuantityAndToggle(menuItem, accountId, PortfolioId.COFLIP_PORTFOLIO, "Enter quantity to add:"));
+                    e -> promptQuantityAndTrackHeld(menuItem, locationQty));
         }
 
-        // Add (location-scoped) — adds only the qty present at the clicked location
-        if (showAdd) {
-            addPortfolioMenuEntry(MENU_ADD, menuItem,
-                    e -> onTogglePortfolioClicked(menuItem, accountId, PortfolioId.COFLIP_PORTFOLIO, locationQty));
+        // Add-All — track everything present at the clicked location
+        addPortfolioMenuEntry(MENU_ADD, menuItem, e -> trackHeld(menuItem, locationQty));
+    }
+
+    private void promptQuantityAndTrackHeld(InventoryMenuItem menuItem, int maxQty) {
+        chatboxPanelManager.openTextInput("Enter quantity to add to portfolio:")
+                .charValidator(c -> c >= '0' && c <= '9')
+                .onDone((String input) -> {
+                    if (input == null || input.isEmpty()) {
+                        return;
+                    }
+                    try {
+                        int qty = Integer.parseInt(input);
+                        if (qty > 0) {
+                            trackHeld(menuItem, Math.min(qty, maxQty));
+                        }
+                    } catch (NumberFormatException ignored) {
+                    }
+                })
+                .build();
+    }
+
+    /** Registers a manual held lot. Blocks on HTTP (market quote) -- off the client thread. */
+    private void trackHeld(InventoryMenuItem menuItem, int qty) {
+        if (qty <= 0) {
+            return;
         }
+        int itemId = menuItem.unnotedItemId;
+        Player localPlayer = client.getLocalPlayer();
+        String displayName = localPlayer != null ? localPlayer.getName() : null;
+        new Thread(() -> {
+            long unitCost = 0;
+            try {
+                Map<String, Object> quote = flipScorer.quote(itemId);
+                if (quote != null && quote.get("buy_at") instanceof Number) {
+                    unitCost = ((Number) quote.get("buy_at")).longValue();
+                }
+            } catch (Exception ex) {
+                log.warn("market quote failed while adding item {} to portfolio", itemId, ex);
+            }
+            heldCostTracker.addManualLot(displayName, itemId, qty, unitCost);
+            suggestionManager.setSuggestionNeeded(true);
+            log.info("added {} x item {} to local portfolio at estimated cost {} gp", qty, itemId, unitCost);
+        }, "runeassist-add-portfolio").start();
     }
 
     private void addPortfolioMenuEntry(String option, InventoryMenuItem menuItem, Consumer<MenuEntry> onClick) {
@@ -182,53 +218,6 @@ public class MenuHandler {
         return 0;
     }
 
-    private void promptQuantityAndToggle(InventoryMenuItem menuItem, Integer accountId, int portfolioId, String prompt) {
-        chatboxPanelManager.openTextInput(prompt)
-                .charValidator(c -> c >= '0' && c <= '9')
-                .onDone((String input) -> {
-                    if (input == null || input.isEmpty()) {
-                        return;
-                    }
-                    try {
-                        int qty = Integer.parseInt(input);
-                        if (qty > 0) {
-                            onTogglePortfolioClicked(menuItem, accountId, portfolioId, qty);
-                        }
-                    } catch (NumberFormatException ignored) {
-                    }
-                })
-                .build();
-    }
-
-    private void onTogglePortfolioClicked(InventoryMenuItem menuItem, Integer accountId, int portfolioId, int quantity) {
-        if (accountId == null) {
-            return;
-        }
-        clientThread.invokeLater(() -> {
-            Map<Integer, Integer> runeliteInventory = itemController.getRunliteInventory();
-            int bagQuantity = runeliteInventory == null ? 0 : Math.max(0, runeliteInventory.getOrDefault(menuItem.unnotedItemId, 0));
-
-            int bankQuantity;
-            if (bankStateRS.get().isLoaded()) {
-                bankQuantity = Math.max(0, bankStateRS.get().getItems().getOrDefault(menuItem.unnotedItemId, 0));
-            } else {
-                bankQuantity = -1;
-            }
-
-            ToggleItemPortfolioRequest request = new ToggleItemPortfolioRequest(accountId, menuItem.unnotedItemId, portfolioId, bagQuantity, bankQuantity, quantity);
-            apiRequestHandler.toggleItemPortfolioAsync(
-                    request,
-                    (userId, result) -> {
-                        portfolioStateRS.updatePortfolioState(suggestionManager.getSuggestion(), result);
-                        suggestionManager.setSuggestionNeeded(true);
-                        int itemsUpdated = result == null || result.getPortfolioItems() == null ? 0 : result.getPortfolioItems().size();
-                        log.info("toggle portfolio succeeded for item_id={}, account_id={}, portfolio_id={}, quantity={}, portfolio_items_updated={}", menuItem.unnotedItemId, accountId, portfolioId, quantity, itemsUpdated);
-                    },
-                    error -> log.warn("toggle portfolio failed for item_id={}, account_id={}, portfolio_id={}, quantity={}, status={}, message={}", menuItem.unnotedItemId, accountId, portfolioId, quantity, error.getResponseCode(), error.getResponseMessage())
-            );
-            return true;
-        });
-    }
 
     private boolean shouldAddInventoryPriceGraphEntry(MenuEntryAdded event) {
         if (!grandExchange.isOpen() || !event.getOption().equals("Examine")) {
@@ -403,7 +392,11 @@ public class MenuHandler {
             return;
         }
 
-        Widget slotWidget = grandExchange.getSlotWidget(suggestion.getBoxId());
+        int slot = grandExchange.slotForSuggestion(suggestion);
+        if (slot < 0) {
+            return;
+        }
+        Widget slotWidget = grandExchange.getSlotWidget(slot);
         if (slotWidget == null || slotWidget.getId() != event.getActionParam1()) {
             return;
         }

@@ -50,6 +50,14 @@ public class OfferHandler {
             if (currentItemId == -1 || currentItemId == 0) return;
 
             var suggestion = suggestionManager.getSuggestion();
+            if (suggestion != null && suggestion.isModifySuggestion()
+                    && suggestion.getItemId() != currentItemId) {
+                // Offer editor is on a different item than the MODIFY card — do not
+                // treat it as a custom quote (that looks like a new BUY/SELL).
+                viewedSlotPriceErrorText = null;
+                highlightController.redraw();
+                return;
+            }
             if (suggestion != null && suggestion.getItemId() == currentItemId &&
                     Objects.equals(suggestion.offerType(), getOfferType())) {
                 offerManager.setViewedSlotItemPrice(suggestion.getPrice());

@@ -1,6 +1,7 @@
 package com.runeassist.flip.model;
 
 import com.runeassist.flip.controller.ApiRequestHandler;
+import com.runeassist.flip.controller.CloudSyncService;
 import com.runeassist.flip.controller.Persistance;
 import com.runeassist.flip.rs.CopilotLoginRS;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ public class TransactionManager {
     private final OsrsLoginManager osrsLoginManager;
     private final LocalFlipLedger localFlipLedger;
     private final OfferManager offerManager;
+    private final CloudSyncService cloudSyncService;
 
     // state
     private final ConcurrentMap<String, List<Transaction>> cachedUnAckedTransactions = new ConcurrentHashMap<>();
@@ -145,6 +147,7 @@ public class TransactionManager {
         }
         hydrateLocal(displayName);
         long profit = localFlipLedger.apply(transaction, displayName);
+        cloudSyncService.enqueue(transaction, displayName);
         // Drop from the old unacked queue so a later hydrate does not double-book.
         synchronized (this) {
             List<Transaction> unAckedTransactions = getUnAckedTransactions(displayName);

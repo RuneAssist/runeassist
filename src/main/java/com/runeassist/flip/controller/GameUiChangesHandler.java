@@ -42,7 +42,9 @@ public class GameUiChangesHandler {
     private final SlotProfitColorizer slotProfitColorizer;
     private final HeldItemSyncStateRS heldItemSyncStateRS;
     private final FlippingCopilotConfig config;
+    private final AccountStatusManager accountStatusManager;
     private final com.osrsmcp.TelemetryService telemetry;
+    private final net.runelite.client.plugins.PluginManager pluginManager;
     // state
     boolean quantityOrPriceChatboxOpen;
     boolean itemSearchChatboxOpen = false;
@@ -91,6 +93,14 @@ public class GameUiChangesHandler {
 
         clientThread.invokeLater(() ->
         {
+            // The Hub Flipping Copilot plugin injects its own "Press [X] to set to Y gp" text
+            // into this exact same chatbox widget -- if both plugins are enabled at once (see
+            // HubFlippingCopilot's own doc comment), creating ours too makes the two overlap
+            // into unreadable garbled text rather than either one working. Go fully quiet here,
+            // matching RuneAssistSuggestionSource's own suppression of its suggestion output.
+            if (com.runeassist.flip.HubFlippingCopilot.isEnabled(pluginManager)) {
+                return;
+            }
             flippingWidget = new OfferEditor(offerManager, client.getWidget(ComponentID.CHATBOX_CONTAINER), offerHandler, client, config);
             Suggestion suggestion = suggestionManager.getSuggestion();
             if (suggestion != null) {
@@ -107,7 +117,9 @@ public class GameUiChangesHandler {
 
     public void onWidgetLoaded(WidgetLoaded event) {
         if (event.getGroupId() == InterfaceID.GE_OFFERS) {
-            suggestionManager.setSuggestionNeeded(true);
+            if (!accountStatusManager.isOwnedModifyActive() || !grandExchange.isSlotOpen()) {
+                suggestionManager.setSuggestionNeeded(true);
+            }
             clientThread.invokeLater(slotProfitColorizer::updateAllSlots);
         }
         if (event.getGroupId() == 383
@@ -124,6 +136,7 @@ public class GameUiChangesHandler {
     public void onWidgetClosed(WidgetClosed event) {
         if (event.getGroupId() == InterfaceID.GE_OFFERS) {
             clientThread.invokeLater(highlightController::removeAll);
+            accountStatusManager.clearOwnedModify();
             suggestionManager.setSuggestionNeeded(true);
         }
         if (event.getGroupId() == InterfaceID.BANKMAIN) {
@@ -132,6 +145,20 @@ public class GameUiChangesHandler {
     }
 
     public void onVarbitChanged(VarbitChanged event) {
+        if (event.getVarbitId() == VarbitID.GE_SELECTEDSLOT) {
+            int open = grandExchange.getOpenSlot();
+            Suggestion suggestion = suggestionManager.getSuggestion();
+            if (open >= 0 && suggestion != null && suggestion.isModifySuggestion()
+                    && suggestion.actionedTick == -1
+                    && slotIsForModify(open, suggestion)) {
+                accountStatusManager.beginOwnedModify(suggestion);
+            } else if (accountStatusManager.isOwnedModifyActive()
+                    && (open < 0 || !slotIsForModify(open, suggestion))) {
+                accountStatusManager.clearOwnedModify();
+                suggestionManager.setSuggestionNeeded(true);
+            }
+        }
+
         if (event.getVarpId() == 375
                 || event.getVarpId() == VarPlayerID.TRADINGPOST_SEARCH
                 || event.getVarbitId() == VarbitID.GE_NEWOFFER_QUANTITY
@@ -148,6 +175,7 @@ public class GameUiChangesHandler {
     public void handleMenuOptionClicked(MenuOptionClicked event) {
         if (event.getMenuOption().equals("Confirm") && grandExchange.isSlotOpen()) {
             log.debug("offer confirmed tick {}", client.getTickCount());
+            accountStatusManager.clearOwnedModify();
             heldItemSyncStateRS.delayForTicks(client.getTickCount(), 3);
             offerManager.setOfferJustPlaced(true);
             suggestionManager.setLastOfferSubmittedTick(client.getTickCount());
@@ -168,6 +196,26 @@ public class GameUiChangesHandler {
         if (BANK_TAG_TAB_VIEW_OPTION.equals(event.getMenuOption())) {
             requestBankRebuildHighlightRedraw();
         }
+    }
+
+    /**
+     * True when the open GE slot is this MODIFY: the card's box, or the live offer
+     * in that slot is still the same item. A random empty slot must not re-arm the lock.
+     */
+    private boolean slotIsForModify(int open, Suggestion suggestion) {
+        if (open < 0 || suggestion == null) {
+            return false;
+        }
+        if (open == suggestion.getBoxId()) {
+            return true;
+        }
+        GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
+        if (offers != null && open < offers.length && offers[open] != null
+                && offers[open].getItemId() > 0
+                && offers[open].getItemId() == suggestion.getItemId()) {
+            return true;
+        }
+        return false;
     }
 
     private OfferStatus suggestionOfferStatus(Suggestion suggestion) {

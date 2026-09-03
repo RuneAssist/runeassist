@@ -1,0 +1,47 @@
+# Keep ingest_data named volume (existing telemetry JSONL). Do not switch this
+# to a bind mount — that would hide the existing Docker volume.
+services:
+  runeassist-ingest:
+    build: .
+    container_name: runeassist-ingest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: "8790"
+      DATA_DIR: "/data"
+      DATABASE_URL: postgres://runeassist:${POSTGRES_PASSWORD}@runeassist-postgres:5432/runeassist
+      APP_ORIGIN: https://runeassist.com
+      COOKIE_SECURE: "1"
+    volumes:
+      - ingest_data:/data
+    networks:
+      - proxy
+    depends_on:
+      runeassist-postgres:
+        condition: service_healthy
+
+  runeassist-postgres:
+    image: postgres:16-alpine
+    container_name: runeassist-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: runeassist
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: runeassist
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U runeassist -d runeassist"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  ingest_data:
+  postgres_data:
+
+networks:
+  proxy:
+    external: true
