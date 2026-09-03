@@ -121,8 +121,8 @@ public class RuneAssistSuggestionSource
                 Suggestion expSuggestion = experimentService.buildSuggestion(displayName, flipScorer, hasOpenOfferForItem);
                 if (expSuggestion != null)
                 {
-                    suggestion = expSuggestion;
-                    clientThread.invokeLater(() -> consumer.accept(suggestion));
+                    final Suggestion toDeliver = expSuggestion;
+                    clientThread.invokeLater(() -> consumer.accept(toDeliver));
                     return;
                 }
             }
@@ -862,6 +862,18 @@ public class RuneAssistSuggestionSource
         for (long[] o : offersBySlot)
         {
             if (o != null && o.length > 0 && (int) o[0] == itemId) return true;
+        }
+        return false;
+    }
+
+    /** True when a GE box already holds this item on the given buy/sell side. */
+    private static boolean hasOpenOfferFor(long[][] offersBySlot, int itemId, boolean buy)
+    {
+        if (offersBySlot == null) return false;
+        for (long[] o : offersBySlot)
+        {
+            if (o == null || o.length < 2 || (int) o[0] != itemId) continue;
+            if ((o[1] == 1L) == buy) return true;
         }
         return false;
     }
