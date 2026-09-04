@@ -1,5 +1,6 @@
 package com.runeassist.flip.ui.flipsdialog;
 
+import com.runeassist.flip.controller.CloudSyncService;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.*;
@@ -13,6 +14,7 @@ import net.runelite.client.ui.ColorScheme;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.MouseEvent;
 import java.text.NumberFormat;
 import java.time.Instant;
 import java.util.*;
@@ -43,6 +45,7 @@ public class MissedFlipsPanel extends JPanel {
     private final GeHistoryStateRS geHistoryStateRS;
     private final LocalFlipLedger localFlipLedger;
     private final OfferManager offerManager;
+    private final CloudSyncService cloudSyncService;
 
     private final Spinner spinner;
     private final JPanel spinnerOverlay;
@@ -63,7 +66,8 @@ public class MissedFlipsPanel extends JPanel {
                             ExecutorService executorService,
                             GeHistoryStateRS geHistoryStateRS,
                             LocalFlipLedger localFlipLedger,
-                            OfferManager offerManager) {
+                            OfferManager offerManager,
+                            CloudSyncService cloudSyncService) {
         this.osrsLoginRS = osrsLoginRS;
         this.flipsManager = flipsManager;
         this.itemController = itemController;
@@ -72,6 +76,7 @@ public class MissedFlipsPanel extends JPanel {
         this.geHistoryStateRS = geHistoryStateRS;
         this.localFlipLedger = localFlipLedger;
         this.offerManager = offerManager;
+        this.cloudSyncService = cloudSyncService;
 
         setLayout(new BorderLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -321,6 +326,7 @@ public class MissedFlipsPanel extends JPanel {
 
             tablePanel.moneyColumns(GP_FORMAT, true, 4);
             tablePanel.centerColumns(3, 5, 6);
+            tablePanel.installPopupHandler(this::showRowMenu);
 
             JLabel titleLabel = new JLabel(title);
             titleLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
@@ -340,6 +346,50 @@ public class MissedFlipsPanel extends JPanel {
         private void rerender() {
             FilterSortUtil.sort(currentRows, COMPARATORS, sortColumn, sortDirection);
             tablePanel.setRows(new ArrayList<>(currentRows));
+        }
+
+        private void showRowMenu(MouseEvent e, int row) {
+            LocalMissedFlip missed = tablePanel.row(row);
+            if (missed == null || missed.getKind() != LocalMissedFlip.Kind.INCOMPLETE || missed.getSourceFlip() == null) {
+                return;
+            }
+            JPopupMenu menu = new JPopupMenu();
+            JMenuItem remove = new JMenuItem("Remove from portfolio");
+            remove.addActionListener(evt -> {
+                int confirm = JOptionPane.showConfirmDialog(
+                        MissedFlipsPanel.this,
+                        "Remove this incomplete position from your portfolio? Closed flip history is kept.",
+                        "Remove from portfolio",
+                        JOptionPane.YES_NO_OPTION);
+                if (confirm != JOptionPane.YES_OPTION) {
+                    return;
+                }
+                FlipV2 flip = missed.getSourceFlip();
+                String displayName = resolveDisplayName();
+                if (displayName == null) {
+                    return;
+                }
+                tablePanel.setSpinnerVisible(true);
+                if (cloudSyncService != null) {
+                    cloudSyncService.dismissOpenPosition(displayName, flip, ok -> {
+                        tablePanel.setSpinnerVisible(false);
+                        refresh();
+                        if (!Boolean.TRUE.equals(ok)) {
+                            JOptionPane.showMessageDialog(
+                                    MissedFlipsPanel.this,
+                                    "Could not remove this position from the portfolio.",
+                                    "Remove failed",
+                                    JOptionPane.ERROR_MESSAGE);
+                        }
+                    });
+                } else {
+                    localFlipLedger.dismissOpenFlip(displayName, flip.getId());
+                    tablePanel.setSpinnerVisible(false);
+                    refresh();
+                }
+            });
+            menu.add(remove);
+            menu.show(e.getComponent(), e.getX(), e.getY());
         }
     }
 

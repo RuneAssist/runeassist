@@ -9,6 +9,7 @@ import com.runeassist.flip.model.LocalFlipLedger;
 import com.runeassist.flip.model.OfferStatus;
 import com.runeassist.flip.model.OsrsLoginManager;
 import com.runeassist.flip.model.Transaction;
+import com.runeassist.flip.model.FlipV2;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.config.ConfigManager;
 import okhttp3.MediaType;
@@ -193,6 +194,77 @@ public class CloudSyncService {
         });
     }
 
+    /**
+     * Remove an open portfolio lot locally and tombstone it in cloud sync so the website
+     * (and other devices) drop the same lot after their next sync.
+     */
+    public void dismissOpenPosition(String displayName, FlipV2 flip, java.util.function.Consumer<Boolean> callback) {
+        executor.execute(() -> {
+            boolean ok = false;
+            try {
+                if (displayName == null || flip == null || flip.getId() == null) {
+                    ok = false;
+                } else {
+                    FlipV2 dismissed = localFlipLedger.dismissOpenFlip(displayName, flip.getId());
+                    ok = dismissed != null;
+                    if (ok && isEnabled()) {
+                        try {
+                            ensureRegistered();
+                            String osrsAccountId = ensureOsrsAccount(displayName);
+                            if (osrsAccountId != null) {
+                                postDismissal(osrsAccountId, flip.getItemId(), flip.getOpenedTime());
+                            }
+                        } catch (Exception e) {
+                            log.warn("cloud dismiss position failed: {}", e.getMessage());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("dismiss open position failed: {}", e.getMessage());
+                ok = false;
+            }
+            if (callback != null) {
+                boolean result = ok;
+                SwingUtilities.invokeLater(() -> callback.accept(result));
+            }
+        });
+    }
+
+    private void pullAndApplyDismissals(String displayName, String osrsAccountId) {
+        String path = "/v1/account/position-dismissals?osrsAccountId=" + urlEnc(osrsAccountId);
+        JsonObject body = get(path, true);
+        if (body == null || !body.has("dismissals")) {
+            return;
+        }
+        JsonArray arr = body.getAsJsonArray("dismissals");
+        List<LocalFlipLedger.Dismissal> dismissals = new ArrayList<>();
+        for (JsonElement el : arr) {
+            if (el == null || !el.isJsonObject()) {
+                continue;
+            }
+            JsonObject o = el.getAsJsonObject();
+            if (!o.has("itemId") || !o.has("openedTime")) {
+                continue;
+            }
+            dismissals.add(new LocalFlipLedger.Dismissal(o.get("itemId").getAsInt(), o.get("openedTime").getAsInt()));
+        }
+        if (dismissals.isEmpty()) {
+            return;
+        }
+        int n = localFlipLedger.applyCloudDismissals(displayName, dismissals);
+        if (n > 0) {
+            log.info("cloud sync applied {} portfolio dismissals for {}", n, displayName);
+        }
+    }
+
+    private boolean postDismissal(String osrsAccountId, int itemId, int openedTime) {
+        String path = "/v1/account/positions?osrsAccountId=" + urlEnc(osrsAccountId)
+                + "&itemId=" + itemId
+                + "&openedTime=" + openedTime;
+        JsonObject body = delete(path, true);
+        return body != null;
+    }
+
     /** Blocking. Returns pairing code for another device or website email link. */
     public String startPairing() throws Exception {
         ensureRegistered();
@@ -268,6 +340,7 @@ public class CloudSyncService {
             return;
         }
         pullAndReplay(displayName, osrsAccountId);
+        pullAndApplyDismissals(displayName, osrsAccountId);
         backfill(displayName, osrsAccountId);
         flush();
     }
@@ -482,6 +555,21 @@ public class CloudSyncService {
                 .header("User-Agent", "RuneAssist-flip/1.0")
                 .header("Content-Type", "application/json")
                 .post(RequestBody.create(JSON, gson.toJson(json)));
+        if (authed) {
+            String token = deviceToken();
+            if (token == null) {
+                return null;
+            }
+            b.header("Authorization", "Bearer " + token);
+        }
+        return execute(b.build());
+    }
+
+    private JsonObject delete(String path, boolean authed) {
+        Request.Builder b = new Request.Builder()
+                .url(origin() + path)
+                .header("User-Agent", "RuneAssist-flip/1.0")
+                .delete();
         if (authed) {
             String token = deviceToken();
             if (token == null) {

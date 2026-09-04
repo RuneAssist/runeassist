@@ -2,6 +2,7 @@ package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.config.RuneAssistConfig;
+import com.runeassist.flip.controller.CloudSyncService;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.manager.PriceGraphConfigManager;
 import com.runeassist.flip.model.*;
@@ -42,6 +43,7 @@ public class FlipsDialogController {
     private final TransactionManager transactionManager;
     private final LocalFlipLedger localFlipLedger;
     private final OfferManager offerManager;
+    private final CloudSyncService cloudSyncService;
 
     public PriceGraphPanel priceGraphPanel;
     private JTabbedPane tabbedPane;
@@ -68,7 +70,8 @@ public class FlipsDialogController {
             ClientThread clientThread,
             TransactionManager transactionManager,
             LocalFlipLedger localFlipLedger,
-            OfferManager offerManager) {
+            OfferManager offerManager,
+            CloudSyncService cloudSyncService) {
         this.itemController = itemController;
         this.flipsManager = flipsManager;
         this.executorService = executorService;
@@ -86,6 +89,7 @@ public class FlipsDialogController {
         this.transactionManager = transactionManager;
         this.localFlipLedger = localFlipLedger;
         this.offerManager = offerManager;
+        this.cloudSyncService = cloudSyncService;
     }
 
     public void initDialog(Window windowAncestor) {
@@ -105,11 +109,11 @@ public class FlipsDialogController {
                     localFlipLedger
             );
             flipsPanel = new FlipsPanel(flipsManager, itemController, accountLoginRS,
-                    executorService, config, apiRequestHandler, (f) -> {
+                    executorService, config, apiRequestHandler, cloudSyncService, osrsLoginRS, localFlipLedger, (f) -> {
                 showVisualizeFlip(f);
             });
             missedFlipsPanel = new MissedFlipsPanel(osrsLoginRS, flipsManager, itemController, accountLoginRS,
-                    executorService, geHistoryStateRS, localFlipLedger, offerManager);
+                    executorService, geHistoryStateRS, localFlipLedger, offerManager, cloudSyncService);
             ItemAggregatePanel itemsPanel = new ItemAggregatePanel(flipsManager, itemController,
                     accountLoginRS, executorService, config);
             AccountsAggregatePanel accountsPanel = new AccountsAggregatePanel(accountLoginRS,

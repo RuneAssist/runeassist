@@ -2,9 +2,11 @@ package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ApiRequestHandler;
+import com.runeassist.flip.controller.CloudSyncService;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.AccountLoginRS;
+import com.runeassist.flip.rs.OsrsLoginRS;
 import com.runeassist.flip.ui.Paginator;
 import com.runeassist.flip.ui.components.*;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +39,9 @@ public class FlipsPanel extends JPanel {
     private final FlipManager flipsManager;
     private final AccountLoginRS accountLoginRS;
     private final ApiRequestHandler apiRequestHandler;
+    private final CloudSyncService cloudSyncService;
+    private final OsrsLoginRS osrsLoginRS;
+    private final LocalFlipLedger localFlipLedger;
     private final Consumer<FlipV2> onVisualizeFlip;
 
     // ui components
@@ -55,10 +60,16 @@ public class FlipsPanel extends JPanel {
                       @Named("runeAssistExecutor") ExecutorService executorService,
                       RuneAssistConfig config,
                       ApiRequestHandler apiRequestHandler,
+                      CloudSyncService cloudSyncService,
+                      OsrsLoginRS osrsLoginRS,
+                      LocalFlipLedger localFlipLedger,
                       Consumer<FlipV2> onVisualizeFlip) {
         this.flipsManager = flipsManager;
         this.accountLoginRS = accountLoginRS;
         this.apiRequestHandler = apiRequestHandler;
+        this.cloudSyncService = cloudSyncService;
+        this.osrsLoginRS = osrsLoginRS;
+        this.localFlipLedger = localFlipLedger;
         this.onVisualizeFlip = onVisualizeFlip;
 
         setLayout(new BorderLayout());
@@ -166,25 +177,73 @@ public class FlipsPanel extends JPanel {
         visualizeFlip.addActionListener(evt -> onVisualizeFlip.accept(flip));
         menu.add(visualizeFlip);
 
-        JMenuItem deleteItem = new JMenuItem("Delete flip");
+        boolean openLot = flip != null && !FlipStatus.FINISHED.equals(flip.getStatus()) && !flip.isDeleted();
+        JMenuItem deleteItem = new JMenuItem(openLot ? "Remove from portfolio" : "Delete flip");
         deleteItem.addActionListener(evt -> {
+            String confirmMsg = openLot
+                    ? "Remove this open position from your portfolio? Closed flip history is kept."
+                    : "Are you sure you want to delete this flip?";
             int result = JOptionPane.showConfirmDialog(this,
-                    "Are you sure you want to delete this flip?",
-                    "Confirm Delete",
+                    confirmMsg,
+                    openLot ? "Remove from portfolio" : "Confirm Delete",
                     JOptionPane.YES_NO_OPTION);
-            if (result == JOptionPane.YES_OPTION) {
-                tablePanel.setSpinnerVisible(true);
-                log.info("deleting flip with ID: {}", flip.getId());
-                Consumer<List<FlipV2>> onSuccess = (flips) -> {
-                    flipsManager.mergeFlips(flips, accountLoginRS.get().getUserId());
-                    tablePanel.setSpinnerVisible(false);
-                    sortAndFilter.reloadFlips(true, true);
-                };
-                apiRequestHandler.asyncDeleteFlip(flip, onSuccess, () -> tablePanel.setSpinnerVisible(false));
+            if (result != JOptionPane.YES_OPTION) {
+                return;
             }
+            tablePanel.setSpinnerVisible(true);
+            if (openLot) {
+                String displayName = resolveDisplayName(flip);
+                log.info("removing open position from portfolio: {}", flip.getId());
+                if (cloudSyncService != null) {
+                    cloudSyncService.dismissOpenPosition(displayName, flip, ok -> {
+                        tablePanel.setSpinnerVisible(false);
+                        if (Boolean.TRUE.equals(ok)) {
+                            sortAndFilter.reloadFlips(true, true);
+                        } else {
+                            JOptionPane.showMessageDialog(this,
+                                    "Could not remove this position from the portfolio.",
+                                    "Remove failed",
+                                    JOptionPane.ERROR_MESSAGE);
+                        }
+                    });
+                } else if (localFlipLedger != null && displayName != null) {
+                    FlipV2 dismissed = localFlipLedger.dismissOpenFlip(displayName, flip.getId());
+                    tablePanel.setSpinnerVisible(false);
+                    if (dismissed != null) {
+                        sortAndFilter.reloadFlips(true, true);
+                    }
+                } else {
+                    tablePanel.setSpinnerVisible(false);
+                }
+                return;
+            }
+            log.info("deleting flip with ID: {}", flip.getId());
+            Consumer<List<FlipV2>> onSuccess = (flips) -> {
+                flipsManager.mergeFlips(flips, accountLoginRS.get().getUserId());
+                tablePanel.setSpinnerVisible(false);
+                sortAndFilter.reloadFlips(true, true);
+            };
+            apiRequestHandler.asyncDeleteFlip(flip, onSuccess, () -> tablePanel.setSpinnerVisible(false));
         });
         menu.add(deleteItem);
         menu.show(e.getComponent(), e.getX(), e.getY());
+    }
+
+    private String resolveDisplayName(FlipV2 flip) {
+        if (osrsLoginRS != null && osrsLoginRS.get() != null) {
+            String live = osrsLoginRS.get().displayName;
+            if (live != null && !live.isEmpty()) {
+                return live;
+            }
+        }
+        if (flip == null) {
+            return null;
+        }
+        Map<Integer, String> names = accountLoginRS.get().accountIdToDisplayName;
+        if (names == null) {
+            return null;
+        }
+        return names.get(flip.getAccountId());
     }
 
     private void downloadAsCSV() {

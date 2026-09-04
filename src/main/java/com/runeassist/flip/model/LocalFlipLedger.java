@@ -239,6 +239,86 @@ public class LocalFlipLedger {
         return new ArrayList<>(book.cancelled.values());
     }
 
+    /**
+     * Remove an open/incomplete flip from the local portfolio without deleting GE
+     * transactions or closed-flip history. Marks the flip deleted and drops it from
+     * the open-by-item index so later buys can open a fresh lot.
+     *
+     * @return the dismissed flip copy, or null if nothing matched
+     */
+    public synchronized FlipV2 dismissOpenFlip(String displayName, UUID flipId) {
+        if (displayName == null || displayName.isEmpty() || flipId == null) {
+            return null;
+        }
+        hydrate(displayName);
+        AccountBook book = books.get(displayName);
+        if (book == null) {
+            return null;
+        }
+        FlipV2 flip = book.flips.get(flipId);
+        if (flip == null || flip.isDeleted() || FlipStatus.FINISHED.equals(flip.getStatus())) {
+            return null;
+        }
+        flip.setDeleted(true);
+        flip.setSeqNo(flip.getSeqNo() + 1);
+        flip.setUpdatedTime((int) Instant.now().getEpochSecond());
+        FlipV2 open = book.openByItemId.get(flip.getItemId());
+        if (open != null && flipId.equals(open.getId())) {
+            book.openByItemId.remove(flip.getItemId());
+        }
+        book.flips.put(flipId, copyFlip(flip));
+        persist(book);
+        FlipV2 out = copyFlip(flip);
+        push(out);
+        return out;
+    }
+
+    /**
+     * Apply cloud portfolio dismissals keyed by (itemId, openedTime). Matches local
+     * open flips for the display name and marks them deleted.
+     *
+     * @return number of flips newly dismissed
+     */
+    public synchronized int applyCloudDismissals(String displayName, List<Dismissal> dismissals) {
+        if (displayName == null || displayName.isEmpty() || dismissals == null || dismissals.isEmpty()) {
+            return 0;
+        }
+        hydrate(displayName);
+        AccountBook book = books.get(displayName);
+        if (book == null) {
+            return 0;
+        }
+        int changed = 0;
+        for (Dismissal d : dismissals) {
+            if (d == null) {
+                continue;
+            }
+            for (FlipV2 flip : new ArrayList<>(book.flips.values())) {
+                if (flip == null || flip.isDeleted() || FlipStatus.FINISHED.equals(flip.getStatus())) {
+                    continue;
+                }
+                if (flip.getItemId() != d.itemId || flip.getOpenedTime() != d.openedTime) {
+                    continue;
+                }
+                FlipV2 dismissed = dismissOpenFlip(displayName, flip.getId());
+                if (dismissed != null) {
+                    changed += 1;
+                }
+            }
+        }
+        return changed;
+    }
+
+    public static final class Dismissal {
+        public final int itemId;
+        public final int openedTime;
+
+        public Dismissal(int itemId, int openedTime) {
+            this.itemId = itemId;
+            this.openedTime = openedTime;
+        }
+    }
+
     private boolean addCancelled(String displayName, SavedOffer offer) {
         if (displayName == null || displayName.isEmpty() || offer == null) {
             return false;
