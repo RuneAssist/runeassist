@@ -56,6 +56,7 @@ public class Suggestion {
     private boolean limitKnown;
     /** {@code ares} or {@code local} — which scorer produced this pick. Telemetry only. */
     private String pickSource = "";
+    private List<String> flags = new ArrayList<>();
 
     @Setter
     @Getter
