@@ -52,6 +52,15 @@ public class FlipScorer
     // Sensibility floor applied regardless of what the caller passes, so a forgotten/zero
     // minPredictedProfit never lets trivial-value "odd" flips (e.g. 25 units * 111gp) through.
     private static final long MIN_PROJECTED_PROFIT = 3_000L;
+    // Share of one slot's deployable capital a flip must be projected to return to be worth
+    // occupying that slot -- see slotWorthFloor(). Set well below the per-slot returns actually
+    // observed in play (the healthy position bands returned 0.8-2.9%) so it screens out trivia
+    // without competing with real candidates.
+    private static final double MIN_SLOT_RETURN_PCT = 0.25;
+    // Ceiling on the scaled floor. Without it a very large stack would demand so much per flip
+    // that nothing qualifies and the panel goes empty, which is worse than a modest flip: an
+    // occupied slot earning a little still beats an idle one.
+    private static final long MAX_SLOT_WORTH_FLOOR = 100_000L;
     // Only offer a FRACTION of the estimated tradeable liquidity in the timeframe, not all of
     // it -- suggesting 100% of the visible order-book volume reads as "always max" and leaves
     // no room for other buyers/sellers.
@@ -241,7 +250,8 @@ public class FlipScorer
             if (budget > 0) qtyCap = Math.min(qtyCap, budget / buy);
             if (qtyCap < 1) continue;
             long projected = expectedMargin * qtyCap;
-            long effectiveMinProfit = Math.max(minPredictedProfit, MIN_PROJECTED_PROFIT);
+            long effectiveMinProfit = Math.max(minPredictedProfit,
+                slotWorthFloor(capital, slots, MIN_PROJECTED_PROFIT));
             if (projected < effectiveMinProfit) continue;
             double fillHrs = expectedFillHours(qtyCap, perHour);
 
@@ -828,6 +838,29 @@ public class FlipScorer
             if (side5 > 0) perMinute = side5 / 5.0;
         }
         return Math.max(1, (int) Math.floor(perMinute * timeframeMinutes * LIQUIDITY_FRACTION));
+    }
+
+    /**
+     * Smallest projected profit worth spending one of the eight GE slots on.
+     *
+     * <p>A flat floor misjudges both ends. 3,000gp is nothing to a 400m stack that only has
+     * eight slots to deploy it through, so trivia crowds out real flips; the same figure is
+     * unreachable on a 5m account, which would then see nothing at all. Scaling it to what one
+     * slot could otherwise deploy ({@code capital / slots}) fixes both: it rises with the stack
+     * and quietly falls back to {@code absoluteFloor} for small accounts.
+     *
+     * <p>Deliberately conservative, because an occupied slot earning a little still beats an
+     * empty one — this is meant to screen out trivia, not to starve the panel. It sits well
+     * under the returns actually observed per slot, so it only bites on flips that were never
+     * worth the slot: in a 939-flip sample the sub-1m position band had a <em>median</em>
+     * profit of 288gp, which is what this exists to drop.
+     */
+    static long slotWorthFloor(long capital, int slots, long absoluteFloor)
+    {
+        if (capital <= 0 || slots <= 0) return absoluteFloor;
+        long perSlot = capital / slots;
+        long relative = (long) (perSlot * (MIN_SLOT_RETURN_PCT / 100.0));
+        return Math.max(absoluteFloor, Math.min(relative, MAX_SLOT_WORTH_FLOOR));
     }
 
     /** Hours to buy then sell {@code qty} when we capture LIQUIDITY_FRACTION of the bottleneck side. */
