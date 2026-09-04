@@ -262,6 +262,43 @@ public class FlipManager {
         return pageFlips;
     }
 
+    public static final int AGED_OPEN_SECONDS = 4 * 60 * 60;
+
+    public synchronized int countOpenInInterval() {
+        int count = 0;
+        WeekAggregate openWeek = getOrInitWeek(0);
+        List<FlipV2> open = intervalAccount == null
+                ? openWeek.flipsAfter(-1, false)
+                : openWeek.flipsAfterForAccount(-1, intervalAccount);
+        for (FlipV2 f : open) {
+            if (f != null && !f.isClosed() && isTrackedFlip(f)
+                    && (intervalStartTime <= 0 || f.getOpenedTime() >= intervalStartTime)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public synchronized int countOpenOlderThan(int olderThanSeconds) {
+        if (olderThanSeconds <= 0) {
+            return 0;
+        }
+        int now = (int) Instant.now().getEpochSecond();
+        int cutoff = now - olderThanSeconds;
+        int count = 0;
+        WeekAggregate openWeek = getOrInitWeek(0);
+        List<FlipV2> open = intervalAccount == null
+                ? openWeek.flipsAfter(-1, false)
+                : openWeek.flipsAfterForAccount(-1, intervalAccount);
+        for (FlipV2 f : open) {
+            if (f != null && !f.isClosed() && isTrackedFlip(f)
+                    && f.getOpenedTime() > 0 && f.getOpenedTime() < cutoff) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     public synchronized void reset() {
         intervalAccount = null;
         intervalStartTime = 0;

@@ -111,6 +111,25 @@ public class LocalSuggestionEngineTest {
     }
 
     @Test
+    public void buySuggestionCarriesScorerFlags() {
+        LocalSuggestionEngine.Input in = baseInput();
+        in.offersBySlot = new long[8][];
+        in.coins = 50_000_000L;
+        Map<String, Object> scored = flip(DRAGON_ARROWS, "Dragon arrow(p++)", 1770, 1900, 421_000);
+        scored.put("flags", java.util.Arrays.asList("thin", "falling", "thin-margin"));
+        in.scoredFlips = new ArrayList<>();
+        in.scoredFlips.add(scored);
+
+        Suggestion s = LocalSuggestionEngine.next(in);
+        assertEquals(SuggestionType.BUY, s.getType());
+        assertEquals(DRAGON_ARROWS, s.getItemId());
+        assertTrue(s.getFlags().contains("thin"));
+        assertTrue(s.getFlags().contains("falling"));
+        assertTrue(s.getFlags().contains("thin-margin"));
+        assertFalse(s.getFlags().contains("two-sided"));
+    }
+
+    @Test
     public void ownedModifyUsesLiveSlotWhenOfferStillPresent() {
         LocalSuggestionEngine.Input in = baseInput();
         in.offersBySlot = new long[8][];

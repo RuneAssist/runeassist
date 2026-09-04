@@ -63,6 +63,7 @@ public class StatsPanelV2 extends JPanel {
     private final JLabel totalProfitVal = new JLabel("0 gp");
     private final JLabel roiVal = new JLabel("-0.00%");
     private final JLabel flipsMadeVal = new JLabel("0");
+    private final JLabel openFlipsVal = new JLabel("0");
     private final JLabel unrealizedProfitVal = new JLabel("0 gp");
     private final JLabel sessionTimeVal = new JLabel("00:00:00");
     private final JLabel hourlyProfitVal = new JLabel("0 gp/hr");
@@ -96,8 +97,14 @@ public class StatsPanelV2 extends JPanel {
         setBackground(RuneAssistColors.SHELL);
 
         setupTimeIntervalDropdown();
-        setupProfitAndSubInfoPanel();
         setupSessionResetButton();
+        accountDropdown = new AccountDropdown(
+                () -> accountLoginRS.get().displayNameToAccountId,
+                flipManager::setIntervalAccount,
+                AccountDropdown.ALL_ACCOUNTS_DROPDOWN_OPTION
+        );
+        accountDropdown.setMaximumSize(new Dimension(Integer.MAX_VALUE, accountDropdown.getPreferredSize().height));
+        setupProfitAndSubInfoPanel();
         setupFlipsDialogButton();
 
         flipsPanel.setLayout(new BoxLayout(flipsPanel, BoxLayout.Y_AXIS));
@@ -112,22 +119,6 @@ public class StatsPanelV2 extends JPanel {
 
         JPanel mainPanel = UIUtilities.verticalPanel(RuneAssistColors.SHELL);
 
-        JPanel timeIntervalDropdownWrapper = new JPanel(new BorderLayout(0, 0));
-        timeIntervalDropdownWrapper.setOpaque(false);
-        timeIntervalDropdownWrapper.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, 0));
-        timeIntervalDropdownWrapper.add(intervalDropdown, BorderLayout.CENTER);
-        timeIntervalDropdownWrapper.add(sessionResetButton, BorderLayout.EAST);
-        timeIntervalDropdownWrapper.setMaximumSize(new Dimension(Integer.MAX_VALUE, timeIntervalDropdownWrapper.getPreferredSize().height));
-
-        accountDropdown = new AccountDropdown(
-                () -> accountLoginRS.get().displayNameToAccountId,
-                flipManager::setIntervalAccount,
-                AccountDropdown.ALL_ACCOUNTS_DROPDOWN_OPTION
-        );
-        accountDropdown.setMaximumSize(new Dimension(Integer.MAX_VALUE, accountDropdown.getPreferredSize().height));
-
-        mainPanel.add(timeIntervalDropdownWrapper);
-        mainPanel.add(accountDropdown);
         mainPanel.add(profitAndSubInfoPanel);
 
         JPanel flipsHeader = new JPanel(new BorderLayout());
@@ -254,23 +245,51 @@ public class StatsPanelV2 extends JPanel {
     }
 
     private JPanel buildSubInfoPanel() {
-        JPanel subInfoPanel = new JPanel(new GridLayout(3, 2, 4, 2));
-        subInfoPanel.setBackground(RuneAssistColors.CARD);
-        sessionTimeRow = metricCell("Session", sessionTimeVal, ColorScheme.GRAND_EXCHANGE_ALCH);
+        JPanel columns = new JPanel(new GridLayout(1, 2, 6, 0));
+        columns.setBackground(RuneAssistColors.CARD);
+
+        JPanel realized = UIUtilities.verticalPanel(RuneAssistColors.CARD);
+        realized.add(RuneAssistColors.kicker("REALIZED"));
+        realized.add(metricCell("Flips", flipsMadeVal, ColorScheme.LIGHT_GRAY_COLOR));
+        realized.add(metricCell("ROI", roiVal, UIUtilities.TOMATO));
         hourlyProfitRow = metricCell("Per hour", hourlyProfitVal, Color.WHITE);
-        subInfoPanel.add(metricCell("Unrealized", unrealizedProfitVal, ColorScheme.LIGHT_GRAY_COLOR, flipsDialogController::showPortfolioTab));
-        subInfoPanel.add(metricCell("Flips", flipsMadeVal, ColorScheme.LIGHT_GRAY_COLOR));
-        subInfoPanel.add(metricCell("Portfolio", portfolioValueVal, ColorScheme.LIGHT_GRAY_COLOR, flipsDialogController::showPortfolioTab));
-        subInfoPanel.add(metricCell("ROI", roiVal, UIUtilities.TOMATO));
-        subInfoPanel.add(sessionTimeRow);
-        subInfoPanel.add(hourlyProfitRow);
-        subInfoPanel.setBorder(BorderFactory.createEmptyBorder(4, 0, 0, 0));
-        return subInfoPanel;
+        realized.add(hourlyProfitRow);
+
+        JPanel unrealized = UIUtilities.verticalPanel(RuneAssistColors.CARD);
+        unrealized.add(RuneAssistColors.kicker("UNREALIZED"));
+        unrealized.add(metricCell("Unrealized", unrealizedProfitVal, ColorScheme.LIGHT_GRAY_COLOR, flipsDialogController::showPortfolioTab));
+        unrealized.add(metricCell("Open", openFlipsVal, ColorScheme.LIGHT_GRAY_COLOR));
+        unrealized.add(metricCell("Portfolio", portfolioValueVal, ColorScheme.LIGHT_GRAY_COLOR, flipsDialogController::showPortfolioTab));
+
+        columns.add(realized);
+        columns.add(unrealized);
+        columns.setBorder(BorderFactory.createEmptyBorder(6, 0, 0, 0));
+        return columns;
     }
 
     private void setupProfitAndSubInfoPanel() {
         profitAndSubInfoPanel = UIUtilities.verticalPanel(RuneAssistColors.CARD);
         profitAndSubInfoPanel.setBorder(RuneAssistColors.cardBorder());
+
+        JPanel sessionHeader = new JPanel(new BorderLayout(0, 0));
+        sessionHeader.setOpaque(false);
+        sessionHeader.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, 0));
+        sessionHeader.add(intervalDropdown, BorderLayout.CENTER);
+        sessionHeader.add(sessionResetButton, BorderLayout.EAST);
+        sessionHeader.setMaximumSize(new Dimension(Integer.MAX_VALUE, sessionHeader.getPreferredSize().height));
+
+        sessionTimeRow = new JPanel(new BorderLayout());
+        sessionTimeRow.setOpaque(false);
+        sessionTimeVal.setFont(FontManager.getRunescapeSmallFont());
+        sessionTimeVal.setForeground(ColorScheme.GRAND_EXCHANGE_ALCH);
+        sessionTimeRow.add(RuneAssistColors.caption("Session"), BorderLayout.WEST);
+        sessionTimeRow.add(sessionTimeVal, BorderLayout.EAST);
+        sessionTimeRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 16));
+
+        profitAndSubInfoPanel.add(sessionHeader);
+        profitAndSubInfoPanel.add(accountDropdown);
+        profitAndSubInfoPanel.add(sessionTimeRow);
+        UIUtilities.addVerticalGap(profitAndSubInfoPanel, 6);
 
         JLabel profitKicker = RuneAssistColors.kicker("PROFIT");
         totalProfitVal.setForeground(ColorScheme.GRAND_EXCHANGE_PRICE);
@@ -283,7 +302,7 @@ public class StatsPanelV2 extends JPanel {
 
         subInfoPanel = buildSubInfoPanel();
         profitAndSubInfoPanel.add(subInfoPanel);
-        profitAndSubInfoPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 168));
+        profitAndSubInfoPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 240));
     }
 
 
@@ -308,6 +327,7 @@ public class StatsPanelV2 extends JPanel {
             totalProfitVal.setText("0 gp");
             roiVal.setText("-0.00%");
             flipsMadeVal.setText("0");
+            openFlipsVal.setText("0");
             unrealizedProfitVal.setText("0 gp");
             sessionTimeVal.setText("00:00:00");
             hourlyProfitVal.setText("0 gp/hr");
@@ -334,7 +354,10 @@ public class StatsPanelV2 extends JPanel {
             // labels displayed to the user
             roiVal.setText(String.format("%.3f%%", stats.calculateRoi() * 100));
             roiVal.setForeground(UIUtilities.getProfitColor(stats.profit, config));
-            flipsMadeVal.setText(String.format("%d", stats.flipsMade));
+            int openCount = flipManager.countOpenInInterval();
+            int closedCount = Math.max(0, stats.flipsMade - openCount);
+            flipsMadeVal.setText(String.format("%d", closedCount));
+            openFlipsVal.setText(String.format("%d", openCount));
             totalProfitVal.setText(UIUtilities.formatProfit(stats.profit));
             totalProfitVal.setForeground(UIUtilities.getProfitColor(stats.profit, config));
             totalProfitVal.setToolTipText("Realized profit from closed sells. Open buys stay at 0 until you sell.");
