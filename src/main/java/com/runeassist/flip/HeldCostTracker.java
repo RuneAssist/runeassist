@@ -44,7 +44,11 @@ import java.util.function.IntUnaryOperator;
 public class HeldCostTracker
 {
     private static final String GROUP = "runeassistflip";
-    private static final String KEY_PREFIX = "heldcost:";
+    // Must not contain ':' -- ConfigManager.setConfiguration rejects any key containing one
+    // (bare, message-less IllegalArgumentException), so the previous "heldcost:" prefix meant
+    // every single save threw and the ledger never once persisted. Nothing is lost by renaming
+    // it: no data could ever have been written under the old key.
+    private static final String KEY_PREFIX = "heldcost_";
     private static final long LIMIT_WINDOW_MS = 4L * 60 * 60 * 1000; // GE buy limit resets every 4h
 
     @Inject private ConfigManager configManager;
@@ -434,7 +438,10 @@ public class HeldCostTracker
             if (acc.historyFp != null && !acc.historyFp.isEmpty()) out.put("historyFp", acc.historyFp);
             configManager.setConfiguration(GROUP, configKey(displayName), gson.toJson(out));
         }
-        catch (Exception e) { log.warn("held-cost save failed: {}", e.getMessage()); }
+        // Log the exception itself, not just getMessage() -- the failure this fixed threw a
+        // message-less IllegalArgumentException, so the old one-liner logged only "null" and
+        // gave nothing to act on.
+        catch (Exception e) { log.warn("held-cost save failed", e); }
     }
 
     private static String configKey(String displayName)
