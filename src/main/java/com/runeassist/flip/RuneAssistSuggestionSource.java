@@ -675,10 +675,84 @@ public class RuneAssistSuggestionSource
      * ledger (which never observes a bank decant). Returns null if there's no viable
      * opportunity, or the relevant item is blocked/skipped/already on an active offer.
      */
+    /**
+     * A "go decant what you're already holding" suggestion, for the best held dose-variant
+     * stock worth converting — independent of whether that family is currently a good thing to
+     * buy into, which is the only thing {@link FlipScorer#topDecants} considers. Returns null
+     * when nothing held is worth converting.
+     *
+     * <p>No GE slot is needed to decant (it's a bank action), so unlike the buy/sell legs this
+     * is worth surfacing even with every offer slot busy.</p>
+     */
+    private Suggestion buildHeldDecantCandidate(String displayName, Set<Integer> blocked, Set<Integer> skipped,
+                                                Map<Integer, Long> ownedQty)
+    {
+        if (ownedQty == null || ownedQty.isEmpty()) return null;
+
+        Map<String, Object> best = null;
+        long bestGain = 0;
+        for (Map.Entry<Integer, Long> e : ownedQty.entrySet())
+        {
+            int itemId = e.getKey();
+            Long qty = e.getValue();
+            if (qty == null || qty <= 0 || blocked.contains(itemId) || skipped.contains(itemId)) continue;
+            Map<String, Object> row;
+            try { row = flipScorer.decantForHeld(itemId, qty); }
+            catch (Exception ex) { continue; }
+            if (row == null) continue;
+            int sellItemId = ((Number) row.get("sellItemId")).intValue();
+            if (blocked.contains(sellItemId) || skipped.contains(sellItemId)) continue;
+            long gain = ((Number) row.get("projectedProfit")).longValue();
+            if (gain > bestGain)
+            {
+                bestGain = gain;
+                best = row;
+            }
+        }
+        if (best == null) return null;
+
+        long heldQty = ((Number) best.get("buyQty")).longValue();
+        long sellQty = ((Number) best.get("sellQty")).longValue();
+        long sellDose = ((Number) best.get("sellDose")).longValue();
+        long heldDose = ((Number) best.get("buyDose")).longValue();
+        int heldItemId = ((Number) best.get("buyItemId")).intValue();
+        int sellItemId = ((Number) best.get("sellItemId")).intValue();
+        String family = String.valueOf(best.get("family"));
+        String heldName = String.valueOf(best.get("buyName"));
+        String sellName = String.valueOf(best.get("sellName"));
+
+        // Watch the pair we're actually telling them to convert, not whatever topDecants
+        // happens to rank first -- this is what carries the real FIFO cost basis across the
+        // decant once they do it (a decant never touches the GE, so nothing else observes it).
+        detectAndApplyDecant(displayName, heldItemId, sellItemId, heldDose, sellDose, ownedQty);
+
+        Suggestion s = new Suggestion();
+        s.setType(SuggestionType.DECANT);
+        s.setItemId(heldItemId);
+        s.setId(heldItemId);
+        s.setName(family);
+        s.setQuantity((int) Math.min(Integer.MAX_VALUE, heldQty));
+        s.setExpectedProfit((double) bestGain);
+        s.setMessage("Close the GE, right-click Bob Barter (SW corner) -> Decant -> " + family
+                + " -> " + sellDose + " doses. Converts the " + heldQty + "x " + heldName
+                + " you already hold into " + sellQty + "x " + sellName
+                + " — worth ~" + bestGain + " gp more than selling them as they are");
+        return s;
+    }
+
     private Suggestion buildDecantCandidate(String displayName, long[][] offersBySlot, long coins,
                                             int remainingSlots, Set<Integer> blocked, Set<Integer> skipped,
                                             Map<Integer, Long> ownedQty)
     {
+        // Finishing something already bought beats starting something new, so held stock is
+        // checked first. topDecants() only ranks opportunities worth *starting*, and a family
+        // routinely falls out of that ranking the moment you buy into it -- your own buying
+        // pressure thins the very margin that ranked it. Without this, stock bought on the
+        // plugin's own advice is stranded: never decanted, and eventually dumped unconverted
+        // by the normal sell path for less than it was worth. See FlipScorer.decantForHeld.
+        Suggestion heldDecant = buildHeldDecantCandidate(displayName, blocked, skipped, ownedQty);
+        if (heldDecant != null) return heldDecant;
+
         List<Map<String, Object>> decants;
         try { decants = flipScorer.topDecants(1); }
         catch (Exception e) { return null; }
