@@ -16,6 +16,7 @@ import javax.inject.Singleton;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -39,6 +40,7 @@ public class OfferHandler {
     private final HighlightController highlightController;
     private final AccountLoginRS accountLoginRS;
     private final com.runeassist.flip.FlipScorer flipScorer;
+    private final ExecutorService executorService;
 
     // state
     private String viewedSlotPriceErrorText = null;
@@ -72,7 +74,7 @@ public class OfferHandler {
             // so run it off the client thread and marshal the result back.
             viewedSlotPriceErrorText = "Loading price...";
             final int itemIdForQuote = currentItemId;
-            new Thread(() -> {
+            executorService.execute(() -> {
                 Map<String, Object> q;
                 try { q = flipScorer.quote(itemIdForQuote); } catch (Exception e) { q = null; }
                 final Map<String, Object> fq = q;
@@ -103,7 +105,7 @@ public class OfferHandler {
                         flippingWidget.showPrice(price);
                     }
                 });
-            }, "runeassist-item-quote").start();
+            });
 
         } else {
             // RuneAssist fork: do NOT clear viewedSlotItemId/Price here. TRADINGPOST_SEARCH
