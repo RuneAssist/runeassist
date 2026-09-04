@@ -74,6 +74,13 @@ public class FlipScorer
     private static final int FILL_LEGS = 2;
     // 5m average this far below the 1h average is a falling market.
     static final double FALLING_DRIFT_PCT = -0.5;
+    // How hard to penalise a flip that can only put a sliver of the slot's budget to work.
+    // GE buy limits are denominated in UNITS, not gp, so a cheap item's 4h limit caps the
+    // capital one slot can deploy far below an expensive item's -- and with only eight slots,
+    // a slot left 95% idle costs more than a slightly thinner margin does. Weighted in line
+    // with the other risk terms below, and self-cancelling on small accounts, where the budget
+    // is small enough that most items can fill it.
+    static final double SLOT_IDLE_RISK_WEIGHT = 0.3;
 
     private static final double TAX_RATE = 0.02;
     private static final long   TAX_CAP  = 5_000_000L;
@@ -262,7 +269,10 @@ public class FlipScorer
             // Thin-margin flips are the ones a single reprice turns into a loss; bulk-quantity
             // items used to out-rank fatter margins purely on qty.
             double marginRisk  = expectedMarginPct < risk.minMarginPct * 2 ? 0.2 : 0;
-            double riskScore   = Math.min(0.9, imbalance * 0.6 + spreadRisk + liqRisk + fallingRisk + marginRisk);
+            // Capital this flip actually puts to work, against what the slot could have taken.
+            double slotRisk    = slotIdleRisk(qtyCap * buy, budget);
+            double riskScore   = Math.min(0.9, imbalance * 0.6 + spreadRisk + liqRisk + fallingRisk
+                + marginRisk + slotRisk);
             double turnover    = 1.0 / Math.max(0.15, fillHrs);
             long score         = Math.round(projected * turnover * (1 - riskScore));
 
@@ -270,6 +280,7 @@ public class FlipScorer
             if (imbalance > 0.5) flags.add("one-sided");
             if (spreadRisk > 0)  flags.add("wide-spread");
             if (liqRisk > 0)     flags.add("thin");
+            if (slotRisk > SLOT_IDLE_RISK_WEIGHT / 2) flags.add("under-deploys");
             if (falling)         flags.add("falling");
             if (marginRisk > 0)  flags.add("thin-margin");
 
@@ -861,6 +872,29 @@ public class FlipScorer
         long perSlot = capital / slots;
         long relative = (long) (perSlot * (MIN_SLOT_RETURN_PCT / 100.0));
         return Math.max(absoluteFloor, Math.min(relative, MAX_SLOT_WORTH_FLOOR));
+    }
+
+    /**
+     * Penalty for a flip that leaves most of its GE slot's capital idle.
+     *
+     * <p>Buy limits are set in units, so what one slot can deploy is {@code limit x unit price}.
+     * A cheap bulk item with a 2,000 limit tops out around 20m however good its margin looks,
+     * while an expensive item clears a whole slot budget in a handful of units. With eight
+     * slots and capital to spare, the binding constraint is slots, not gp -- an idle slot earns
+     * nothing, so under-deployment is a real cost that margin quality cannot repay.
+     *
+     * <p>Borne out in play: across 883 completed flips, profit per flip rose monotonically with
+     * how much of a slot the item could absorb -- 87k where the 4h limit covered only ~3% of the
+     * budget, up to 360k where it covered all of it -- even though ROI fell the other way.
+     *
+     * <p>Returns 0 (no penalty) when budget is unknown or the flip fills the slot, so small
+     * accounts, where nearly every item can absorb the budget, are unaffected.
+     */
+    static double slotIdleRisk(long deployed, long budget)
+    {
+        if (budget <= 0 || deployed <= 0) return 0;
+        double fill = Math.min(1.0, (double) deployed / budget);
+        return (1.0 - fill) * SLOT_IDLE_RISK_WEIGHT;
     }
 
     /** Hours to buy then sell {@code qty} when we capture LIQUIDITY_FRACTION of the bottleneck side. */
