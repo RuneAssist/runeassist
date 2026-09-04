@@ -65,7 +65,13 @@ public class LocalFlipLedger {
         if (!book.flips.isEmpty()) {
             List<FlipV2> copies = new ArrayList<>(book.flips.size());
             for (FlipV2 flip : book.flips.values()) {
-                copies.add(copyFlip(flip));
+                FlipV2 copy = copyFlip(flip);
+                if (copy != null
+                        && !FlipStatus.FINISHED.equals(copy.getStatus())
+                        && book.dismissals.contains(dismissalKey(copy.getItemId(), copy.getOpenedTime()))) {
+                    copy.setDeleted(true);
+                }
+                copies.add(copy);
             }
             flipManager.mergeFlips(copies, LOCAL_USER_ID);
         }
@@ -241,10 +247,10 @@ public class LocalFlipLedger {
 
     /**
      * Remove an open/incomplete flip from the local portfolio without deleting GE
-     * transactions or closed-flip history. Marks the flip deleted and drops it from
-     * the open-by-item index so later buys can open a fresh lot.
+     * transactions or closed-flip history. Records a dismissal key so UI/open lists
+     * hide the lot; the flip stays in the ledger so later sells still close it.
      *
-     * @return the dismissed flip copy, or null if nothing matched
+     * @return the open flip copy that was dismissed, or null if nothing matched
      */
     public synchronized FlipV2 dismissOpenFlip(String displayName, UUID flipId) {
         if (displayName == null || displayName.isEmpty() || flipId == null) {
@@ -259,23 +265,20 @@ public class LocalFlipLedger {
         if (flip == null || flip.isDeleted() || FlipStatus.FINISHED.equals(flip.getStatus())) {
             return null;
         }
-        flip.setDeleted(true);
-        flip.setSeqNo(flip.getSeqNo() + 1);
-        flip.setUpdatedTime((int) Instant.now().getEpochSecond());
-        FlipV2 open = book.openByItemId.get(flip.getItemId());
-        if (open != null && flipId.equals(open.getId())) {
-            book.openByItemId.remove(flip.getItemId());
-        }
-        book.flips.put(flipId, copyFlip(flip));
+        book.dismissals.add(dismissalKey(flip.getItemId(), flip.getOpenedTime()));
         persist(book);
-        FlipV2 out = copyFlip(flip);
-        push(out);
-        return out;
+        // Push a deleted copy into FlipManager so open/incomplete UI drops it immediately,
+        // while the ledger book keeps the live flip for future sell matching.
+        FlipV2 hidden = copyFlip(flip);
+        hidden.setDeleted(true);
+        hidden.setSeqNo(hidden.getSeqNo() + 1);
+        hidden.setUpdatedTime((int) Instant.now().getEpochSecond());
+        push(hidden);
+        return copyFlip(flip);
     }
 
     /**
-     * Apply cloud portfolio dismissals keyed by (itemId, openedTime). Matches local
-     * open flips for the display name and marks them deleted.
+     * Apply cloud portfolio dismissals keyed by (itemId, openedTime).
      *
      * @return number of flips newly dismissed
      */
@@ -293,20 +296,41 @@ public class LocalFlipLedger {
             if (d == null) {
                 continue;
             }
-            for (FlipV2 flip : new ArrayList<>(book.flips.values())) {
-                if (flip == null || flip.isDeleted() || FlipStatus.FINISHED.equals(flip.getStatus())) {
+            String key = dismissalKey(d.itemId, d.openedTime);
+            if (!book.dismissals.add(key)) {
+                continue;
+            }
+            changed += 1;
+            for (FlipV2 flip : book.flips.values()) {
+                if (flip == null || FlipStatus.FINISHED.equals(flip.getStatus())) {
                     continue;
                 }
                 if (flip.getItemId() != d.itemId || flip.getOpenedTime() != d.openedTime) {
                     continue;
                 }
-                FlipV2 dismissed = dismissOpenFlip(displayName, flip.getId());
-                if (dismissed != null) {
-                    changed += 1;
-                }
+                FlipV2 hidden = copyFlip(flip);
+                hidden.setDeleted(true);
+                hidden.setSeqNo(hidden.getSeqNo() + 1);
+                push(hidden);
             }
         }
+        if (changed > 0) {
+            persist(book);
+        }
         return changed;
+    }
+
+    public synchronized boolean isDismissed(String displayName, int itemId, int openedTime) {
+        if (displayName == null || displayName.isEmpty()) {
+            return false;
+        }
+        hydrate(displayName);
+        AccountBook book = books.get(displayName);
+        return book != null && book.dismissals.contains(dismissalKey(itemId, openedTime));
+    }
+
+    private static String dismissalKey(int itemId, int openedTime) {
+        return itemId + ":" + openedTime;
     }
 
     public static final class Dismissal {
@@ -431,7 +455,7 @@ public class LocalFlipLedger {
 
         FlipLedgerEngine.ApplyResult result = FlipLedgerEngine.apply(engineBook, transaction);
         if (result.touched != null) {
-            push(result.touched);
+            pushForUi(book, result.touched);
         }
 
         int now = transaction.getTimestamp() != null
@@ -450,6 +474,17 @@ public class LocalFlipLedger {
         book.appliedTxIds.add(txId);
         book.sourceTransactions.add(copyTransaction(transaction));
         return result.profitThisTx;
+    }
+
+    private void pushForUi(AccountBook book, FlipV2 flip) {
+        FlipV2 copy = copyFlip(flip);
+        if (FlipStatus.FINISHED.equals(flip.getStatus())) {
+            book.dismissals.remove(dismissalKey(flip.getItemId(), flip.getOpenedTime()));
+        } else if (book.dismissals.contains(dismissalKey(flip.getItemId(), flip.getOpenedTime()))) {
+            // Keep ledger open for sell matching, but hide from open/incomplete UI.
+            copy.setDeleted(true);
+        }
+        push(copy);
     }
 
     private void push(FlipV2 flip) {
@@ -520,8 +555,11 @@ public class LocalFlipLedger {
                     }
                 }
             }
-            log.info("loaded {} local flips / {} transactions / {} cancelled leftovers for {}",
-                    book.flips.size(), book.transactions.size(), book.cancelled.size(), displayName);
+            if (saved.dismissals != null) {
+                book.dismissals.addAll(saved.dismissals);
+            }
+            log.info("loaded {} local flips / {} transactions / {} cancelled leftovers / {} dismissals for {}",
+                    book.flips.size(), book.transactions.size(), book.cancelled.size(), book.dismissals.size(), displayName);
         } catch (Exception e) {
             log.warn("failed loading local flip ledger for {}", displayName, e);
         }
@@ -545,6 +583,7 @@ public class LocalFlipLedger {
                 state.appliedTransactionIds.add(id.toString());
             }
             state.cancelled = new ArrayList<>(book.cancelled.values());
+            state.dismissals = new ArrayList<>(book.dismissals);
             state.sourceTransactions = new ArrayList<>(book.sourceTransactions.size());
             for (Transaction t : book.sourceTransactions) {
                 state.sourceTransactions.add(copyTransaction(t));
@@ -619,6 +658,8 @@ public class LocalFlipLedger {
         final Set<UUID> appliedTxIds = new HashSet<>();
         final Map<String, CancelledLeftover> cancelled = new LinkedHashMap<>();
         final List<Transaction> sourceTransactions = new ArrayList<>();
+        /** itemId:openedTime keys for open lots removed from the portfolio UI. */
+        final Set<String> dismissals = new HashSet<>();
     }
 
     static final class PersistedState {
@@ -629,6 +670,7 @@ public class LocalFlipLedger {
         List<String> appliedTransactionIds;
         List<CancelledLeftover> cancelled;
         List<Transaction> sourceTransactions;
+        List<String> dismissals;
     }
 
     public static final class CancelledLeftover {
