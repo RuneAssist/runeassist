@@ -429,6 +429,125 @@ public class FlipScorer
         return rows.size() > maxResults ? new ArrayList<>(rows.subList(0, maxResults)) : rows;
     }
 
+    /**
+     * Gain from decanting stock you already hold and selling the result, versus simply selling
+     * it as it is. Positive means decanting first is worth more.
+     *
+     * <p>This is deliberately NOT the same question {@link #topDecants} answers. That one ranks
+     * opportunities worth <em>starting</em>, so it nets out the cost of buying in and applies
+     * profit/volume floors. Once the bottles are already bought those are sunk and irrelevant:
+     * the only live choice is convert-then-sell versus sell-as-is. A family can easily be a bad
+     * buy today (thin margin, filtered out of the ranking entirely) while converting stock you
+     * are already sitting on is still clearly worth doing.</p>
+     *
+     * <p>Doses are conserved by decanting, so {@code heldQty} bottles of {@code heldDose} give
+     * {@code heldQty * heldDose / targetDose} bottles of {@code targetDose}, floored — any
+     * remainder is left behind as an odd-dose bottle and contributes nothing either way.</p>
+     */
+    static long decantGainOverRawSell(long heldQty, int heldDose, int targetDose,
+                                      long heldSellAt, long heldTax,
+                                      long targetSellAt, long targetTax)
+    {
+        if (heldQty <= 0 || heldDose <= 0 || targetDose <= 0) return 0;
+        long asIs = heldQty * Math.max(0, heldSellAt - heldTax);
+        long converted = (heldQty * heldDose) / targetDose;
+        long decanted = converted * Math.max(0, targetSellAt - targetTax);
+        return decanted - asIs;
+    }
+
+    /**
+     * Best decant for stock already held, or null if converting it isn't worth more than
+     * selling it as-is (or this item isn't a dose-variant potion at all). Row shape matches
+     * {@link #topDecants}, with {@code buyItemId}/{@code buyQty} describing what you hold
+     * rather than something to go and buy, and {@code projectedProfit} being the gain over
+     * selling as-is rather than a full buy-to-sell profit.
+     *
+     * <p>Unlike {@link #topDecants} this applies no profit floor, no volume floor and no
+     * liquidity cap: the stock is already bought, so the only question is whether to convert
+     * it, and you can list however much of it you hold.</p>
+     */
+    public Map<String, Object> decantForHeld(int heldItemId, long heldQty)
+    {
+        if (heldQty <= 0) return null;
+        try { ensureLoaded(); }
+        catch (Exception e) { return null; }
+
+        Meta heldMeta = meta.get(heldItemId);
+        if (heldMeta == null || isOddName(heldMeta.name)) return null;
+        java.util.regex.Matcher mm = DOSE_SUFFIX.matcher(heldMeta.name);
+        if (!mm.matches()) return null;
+        int heldDose;
+        try { heldDose = Integer.parseInt(mm.group(2)); }
+        catch (NumberFormatException nfe) { return null; }
+        if (heldDose < 1 || heldDose > 9) return null;
+        String family = mm.group(1).trim();
+
+        long nowSec = System.currentTimeMillis() / 1000L;
+        long[] heldPrices = dosePrices(heldItemId, nowSec);
+        if (heldPrices == null) return null;
+        long heldSellAt = heldPrices[1];
+        long heldTax = taxAmount(heldItemId, heldSellAt);
+
+        int bestDose = 0, bestItemId = 0;
+        long bestGain = 0, bestSellAt = 0, bestSellQty = 0;
+        for (Map.Entry<Integer, Meta> me : meta.entrySet())
+        {
+            int id = me.getKey();
+            if (id == heldItemId) continue;
+            Meta m = me.getValue();
+            if (isOddName(m.name)) continue;
+            java.util.regex.Matcher sm = DOSE_SUFFIX.matcher(m.name);
+            if (!sm.matches() || !family.equals(sm.group(1).trim())) continue;
+            int dose;
+            try { dose = Integer.parseInt(sm.group(2)); }
+            catch (NumberFormatException nfe) { continue; }
+            if (dose < 1 || dose > 9) continue;
+
+            long[] prices = dosePrices(id, nowSec);
+            if (prices == null) continue;
+            long sellAt = prices[1];
+            long gain = decantGainOverRawSell(heldQty, heldDose, dose,
+                heldSellAt, heldTax, sellAt, taxAmount(id, sellAt));
+            if (gain > bestGain)
+            {
+                bestGain = gain;
+                bestDose = dose;
+                bestItemId = id;
+                bestSellAt = sellAt;
+                bestSellQty = (heldQty * heldDose) / dose;
+            }
+        }
+        if (bestItemId == 0 || bestSellQty < 1) return null;
+
+        Meta sellMeta = meta.get(bestItemId);
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("family", family);
+        row.put("buyItemId", heldItemId);
+        row.put("buyName", heldMeta.name);
+        row.put("buyDose", heldDose);
+        row.put("buyAt", heldPrices[0]);
+        row.put("buyQty", heldQty);
+        row.put("sellItemId", bestItemId);
+        row.put("sellName", sellMeta != null ? sellMeta.name : ("item " + bestItemId));
+        row.put("sellDose", bestDose);
+        row.put("sellAt", bestSellAt);
+        row.put("sellQty", bestSellQty);
+        row.put("projectedProfit", bestGain);
+        row.put("flags", new ArrayList<>(Arrays.asList("held")));
+        return row;
+    }
+
+    /** Timeframe-smoothed {buy, sell} for one dose variant, or null if it isn't priced. */
+    private long[] dosePrices(int itemId, long nowSec)
+    {
+        Meta m = meta.get(itemId);
+        if (m == null || m.limit <= 0) return null;
+        int[] v1 = volume1h.get(itemId);
+        if (v1 == null) return null;
+        long[] prices = pickPrices(latest.get(itemId), v1, volume5m.get(itemId), 60, nowSec);
+        return prices == null || prices[0] <= 0 || prices[1] <= 0 ? null : prices;
+    }
+
     /** Current sell quote for a held item: {name, sell_at, ge_limit, tax_at_sell}, or null. */
     public Map<String, Object> sellQuote(int itemId)
     {
