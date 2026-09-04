@@ -38,8 +38,8 @@ import java.util.concurrent.*;
 // (Ares /v1/flips + local engine + held-cost). No Flipping Copilot account or servers.
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
-		description = "Local GE flip assistant: Ares /v1/flips suggestions, held-cost tracking, and an on-device flip engine. Optional contribution is under Configuration → Privacy.",
-		tags = {"runeassist", "flipping", "ge", "grand exchange", "money", "privacy", "held-cost"}
+		description = "Grand Exchange flipping assistant with an on-device suggestion engine, held-cost tracking, and server-ranked flip candidates. Contribution and cloud sync are opt-in (Configuration -> Privacy).",
+		tags = {"runeassist", "flipping", "ge", "grand exchange", "merch", "money making", "profit"}
 )
 // RuneAssist fork: dropped @PluginDependency(BankTagsPlugin.class) -- a sideloaded plugin
 // depending on a core plugin makes RuneLite silently refuse to load it.
@@ -126,8 +126,6 @@ public class RuneAssistPlugin extends Plugin {
 	@Inject
 	private com.runeassist.flip.ShopLiveTracker shopLiveTracker;
 
-	@Inject
-	private com.runeassist.flip.ExperimentService experimentService;
 	@Inject
 	private GeHistoryStateRS geHistoryStateRS;
 	@Inject
@@ -260,9 +258,6 @@ public class RuneAssistPlugin extends Plugin {
 				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
 			telemetry.logGeOffer(rsn, event.getSlot(), o.getState().name(), o.getItemId(),
 				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
-			String state = o.getState().name();
-			boolean buySide = state.contains("BUY") || "BOUGHT".equals(state);
-			experimentService.onOfferResolved(rsn, o.getItemId(), buySide, state);
 		}
 		clientThread.invokeLater(() -> highlightController.redraw());
 	}

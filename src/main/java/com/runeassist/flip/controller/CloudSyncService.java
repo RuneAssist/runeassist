@@ -203,11 +203,16 @@ public class CloudSyncService {
         return body.get("code").getAsString();
     }
 
-    /** Blocking. Redeem a website-issued (or other device) pairing code onto this install. */
     /**
      * Submit a bug report, optionally with a screenshot (raw PNG bytes -- base64-encoded here,
      * matching what the server's {@code /v1/account/feedback} expects). Runs off the calling
      * thread; {@code callback} fires with success/failure.
+     *
+     * <p>Consent for this network call (and for registering a device token, via
+     * {@link #ensureRegistered}, if this install doesn't have one yet) is the caller's
+     * confirmation dialog -- this method must only be invoked after the user has confirmed
+     * they want to send the report, independent of the {@code cloudSync}/{@code
+     * shareTelemetry} toggles. It does not require cloud sync to be enabled.
      */
     public void reportBug(String displayName, String message, byte[] screenshotPng, java.util.function.Consumer<Boolean> callback) {
         executor.execute(() -> {
@@ -235,6 +240,7 @@ public class CloudSyncService {
         });
     }
 
+    /** Blocking. Redeem a website-issued (or other device) pairing code onto this install. */
     public void redeemPairing(String code) throws Exception {
         if (code == null || code.trim().isEmpty()) {
             throw new IllegalArgumentException("empty code");

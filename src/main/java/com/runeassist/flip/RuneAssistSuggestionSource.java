@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 /**
@@ -52,7 +53,7 @@ public class RuneAssistSuggestionSource
     @Inject private PluginManager pluginManager;
     @Inject private com.runeassist.flip.model.SuggestionManager suggestionManager;
     @Inject private com.runeassist.flip.controller.GrandExchange grandExchange;
-    @Inject private ExperimentService experimentService;
+    @Inject private ExecutorService executor;
 
     // Decant-detection state (singleton, so this persists across suggestion cycles): the
     // opportunity we last watched, and owned qty of each leg at that time. A dose-conserving
@@ -105,28 +106,11 @@ public class RuneAssistSuggestionSource
             return;
         }
 
-        new Thread(() ->
+        executor.execute(() ->
         {
             Suggestion suggestion = null;
             try
             {
-            // Price-offset ladder experiments: hard-gated to specific RSNs (see ExperimentService's
-            // doc comment), checked before any normal scoring so an active experiment always wins
-            // the suggestion slot -- same priority pattern as the decant check below. quote() blocks
-            // on HTTP, which is why this lives here and not in the client-thread prefix above.
-            if (ExperimentService.isAllowed(displayName) && experimentService.hasActive(displayName))
-            {
-                ExperimentService.Experiment exp = experimentService.get(displayName);
-                boolean hasOpenOfferForItem = hasActiveOffer(offersBySlot, exp.itemId);
-                Suggestion expSuggestion = experimentService.buildSuggestion(displayName, flipScorer, hasOpenOfferForItem);
-                if (expSuggestion != null)
-                {
-                    final Suggestion toDeliver = expSuggestion;
-                    clientThread.invokeLater(() -> consumer.accept(toDeliver));
-                    return;
-                }
-            }
-
             Map<Integer, Integer> usedLimit = usedBuyLimit(displayName, offersBySlot);
             Map<Integer, Integer> remainingHint = new HashMap<>();
             for (Map.Entry<Integer, Integer> e : usedLimit.entrySet())
@@ -283,7 +267,7 @@ public class RuneAssistSuggestionSource
             }
             final Suggestion delivered = result;
             clientThread.invokeLater(() -> consumer.accept(delivered));
-        }, "runeassist-suggestion").start();
+        });
     }
 
     /**

@@ -18,6 +18,7 @@ import net.runelite.api.widgets.Widget;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 @Slf4j
@@ -47,6 +48,7 @@ public class MenuHandler {
     private final ChatboxPanelManager chatboxPanelManager;
     private final com.runeassist.flip.HeldCostTracker heldCostTracker;
     private final com.runeassist.flip.FlipScorer flipScorer;
+    private final ExecutorService executorService;
 
     private static final String MENU_ADD = "Add-All to portfolio";
     private static final String MENU_ADD_X = "Add-X to portfolio";
@@ -179,7 +181,7 @@ public class MenuHandler {
         int itemId = menuItem.unnotedItemId;
         Player localPlayer = client.getLocalPlayer();
         String displayName = localPlayer != null ? localPlayer.getName() : null;
-        new Thread(() -> {
+        executorService.execute(() -> {
             long unitCost = 0;
             try {
                 Map<String, Object> quote = flipScorer.quote(itemId);
@@ -192,7 +194,7 @@ public class MenuHandler {
             heldCostTracker.addManualLot(displayName, itemId, qty, unitCost);
             suggestionManager.setSuggestionNeeded(true);
             log.info("added {} x item {} to local portfolio at estimated cost {} gp", qty, itemId, unitCost);
-        }, "runeassist-add-portfolio").start();
+        });
     }
 
     private void addPortfolioMenuEntry(String option, InventoryMenuItem menuItem, Consumer<MenuEntry> onClick) {

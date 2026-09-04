@@ -6,6 +6,7 @@ import com.runeassist.flip.rs.AccountSuggestionPreferencesRS;
 import com.runeassist.flip.model.SuggestionManager;
 import com.runeassist.flip.ui.components.ItemSearchMultiSelect;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.LinkBrowser;
@@ -72,10 +73,9 @@ public class PreferencesPanel extends JPanel {
     private final AccountSuggestionPreferencesRS accountPreferences;
     private final CloudSyncService cloudSyncService;
     private final net.runelite.api.Client client;
+    private final ClientThread clientThread;
     private final DrawManager drawManager;
-    private final com.runeassist.flip.ExperimentService experimentService;
     private final ItemController itemController;
-    private final JLabel experimentLink;
     private final ScheduledExecutorService executorService;
     private final PreferencesToggleButton sellOnlyModeToggleButton;
     private final PreferencesToggleButton buyAndHoldToggleButton;
@@ -113,16 +113,16 @@ public class PreferencesPanel extends JPanel {
             DumpsStreamController dumpsStreamController,
             CloudSyncService cloudSyncService,
             net.runelite.api.Client client,
+            ClientThread clientThread,
             DrawManager drawManager,
-            com.runeassist.flip.ExperimentService experimentService,
             @Named("runeAssistExecutor") ScheduledExecutorService executorService) {
         super();
         this.preferencesManager = preferencesManager;
         this.accountPreferences = accountPreferences;
         this.cloudSyncService = cloudSyncService;
         this.client = client;
+        this.clientThread = clientThread;
         this.drawManager = drawManager;
-        this.experimentService = experimentService;
         this.itemController = itemController;
         this.executorService = executorService;
 
@@ -442,23 +442,6 @@ public class PreferencesPanel extends JPanel {
         });
         preferencesContent.add(reportBugLink);
 
-        // Price-offset ladder experiments -- see ExperimentService's doc comment. Hidden for
-        // everyone except the hardcoded RSN allowlist there; this label doesn't even get shown,
-        // let alone clickable, for any other account (checked fresh in refresh(), not just once
-        // at construction, since the logged-in account can change without restarting).
-        experimentLink = RuneAssistColors.caption("Price experiment (advanced)");
-        experimentLink.setForeground(RuneAssistColors.ACCENT);
-        experimentLink.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        experimentLink.setAlignmentX(Component.LEFT_ALIGNMENT);
-        experimentLink.setVisible(false);
-        experimentLink.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                promptExperiment();
-            }
-        });
-        preferencesContent.add(experimentLink);
-
         for (Component c : preferencesContent.getComponents()) {
             if (c instanceof JComponent && !(c instanceof Box.Filler)) {
                 stretchWidth((JComponent) c);
@@ -622,69 +605,14 @@ public class PreferencesPanel extends JPanel {
         }
     }
 
-    private void promptExperiment() {
-        net.runelite.api.Player localPlayer = client.getLocalPlayer();
-        String rsn = localPlayer != null ? localPlayer.getName() : null;
-        if (!com.runeassist.flip.ExperimentService.isAllowed(rsn)) {
-            return;
-        }
-        if (experimentService.hasActive(rsn)) {
-            int stop = JOptionPane.showConfirmDialog(
-                    SwingUtilities.getWindowAncestor(this),
-                    "Stop the running price experiment?",
-                    "Price experiment",
-                    JOptionPane.YES_NO_OPTION);
-            if (stop == JOptionPane.YES_OPTION) {
-                experimentService.stop(rsn);
-                refresh();
-            }
-            return;
-        }
+    private static final String BUG_REPORT_HOST = "runeassist.ares-server.co.uk";
 
-        JTextField itemField = new JTextField(20);
-        JComboBox<String> sideBox = new JComboBox<>(new String[]{"Buy ladder (0%, -1%, -3%, -5%)", "Sell ladder (0%, +1%, +3%, +5%)"});
-        JTextField qtyField = new JTextField("10", 6);
-        JPanel content = new JPanel();
-        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
-        content.add(new JLabel("Item name:"));
-        content.add(itemField);
-        content.add(Box.createVerticalStrut(6));
-        content.add(sideBox);
-        content.add(Box.createVerticalStrut(6));
-        content.add(new JLabel("Quantity per rung:"));
-        content.add(qtyField);
-
-        int result = JOptionPane.showConfirmDialog(
-                SwingUtilities.getWindowAncestor(this),
-                content,
-                "Start a price-offset ladder experiment",
-                JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.PLAIN_MESSAGE);
-        if (result != JOptionPane.OK_OPTION) {
-            return;
-        }
-        String itemName = itemField.getText() == null ? "" : itemField.getText().trim();
-        int qty;
-        try {
-            qty = Integer.parseInt(qtyField.getText().trim());
-        } catch (NumberFormatException ex) {
-            qty = 0;
-        }
-        if (itemName.isEmpty() || qty <= 0) {
-            return;
-        }
-        List<com.runeassist.flip.model.ItemIdName> matches = itemController.search(itemName, java.util.Collections.emptySet());
-        if (matches.isEmpty()) {
-            JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(this),
-                    "No item found matching \"" + itemName + "\".", "Price experiment", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        com.runeassist.flip.model.ItemIdName match = matches.get(0);
-        boolean buy = sideBox.getSelectedIndex() == 0;
-        experimentService.start(rsn, match.itemId, match.name, buy, qty);
-        refresh();
-    }
-
+    /**
+     * Consent for the bug-report network call lives entirely in this dialog's OK button — see
+     * {@link CloudSyncService#reportBug}, which only registers a device token (if this
+     * install doesn't have one yet) and sends the request after the user confirms here, not
+     * before. The screenshot defaults OFF and is only ever attached if the user ticks the box.
+     */
     private void promptAndSubmitBugReport(byte[] screenshotPng) {
         JTextArea textArea = new JTextArea(6, 30);
         textArea.setLineWrap(true);
@@ -694,7 +622,14 @@ public class PreferencesPanel extends JPanel {
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.add(new JScrollPane(textArea));
 
-        JCheckBox includeScreenshot = new JCheckBox("Include screenshot", screenshotPng != null);
+        JLabel disclosure = new JLabel("<html><body style='width:260px'>Sends this text, your RSN and the "
+                + "screenshot to " + BUG_REPORT_HOST + " (RuneAssist's server).</body></html>");
+        disclosure.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        disclosure.setAlignmentX(Component.LEFT_ALIGNMENT);
+        content.add(Box.createVerticalStrut(6));
+        content.add(disclosure);
+
+        JCheckBox includeScreenshot = new JCheckBox("Include screenshot", false);
         if (screenshotPng != null) {
             try {
                 BufferedImage preview = ImageIO.read(new ByteArrayInputStream(screenshotPng));
@@ -722,12 +657,18 @@ public class PreferencesPanel extends JPanel {
             return;
         }
         byte[] attach = (screenshotPng != null && includeScreenshot.isSelected()) ? screenshotPng : null;
-        net.runelite.api.Player localPlayer = client.getLocalPlayer();
-        String displayName = localPlayer != null ? localPlayer.getName() : null;
+        clientThread.invoke(() -> {
+            net.runelite.api.Player localPlayer = client.getLocalPlayer();
+            String displayName = localPlayer != null ? localPlayer.getName() : null;
+            submitBugReport(displayName, message, attach);
+        });
+    }
+
+    private void submitBugReport(String displayName, String message, byte[] attach) {
         cloudSyncService.reportBug(displayName, message, attach, ok -> {
             JOptionPane.showMessageDialog(
                     SwingUtilities.getWindowAncestor(this),
-                    ok ? "Thanks — logged." : "Couldn't submit right now (check cloud sync is on and reachable).",
+                    ok ? "Thanks — logged." : "Couldn't submit right now (check your connection and try again).",
                     "Report a bug",
                     ok ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
         });
@@ -821,16 +762,6 @@ public class PreferencesPanel extends JPanel {
         model.addAll(correctOptions);
         model.setSelectedItem(preferencesManager.getCurrentProfile());
         refreshCloudStatus();
-        net.runelite.api.Player localPlayer = client.getLocalPlayer();
-        String currentRsn = localPlayer != null ? localPlayer.getName() : null;
-        experimentLink.setVisible(com.runeassist.flip.ExperimentService.isAllowed(currentRsn));
-        if (experimentService.hasActive(currentRsn)) {
-            com.runeassist.flip.ExperimentService.Experiment exp = experimentService.get(currentRsn);
-            experimentLink.setText(String.format("Price experiment: %s rung %d/%d running (click to stop)",
-                    exp.itemName, exp.rung + 1, exp.offsets().length));
-        } else {
-            experimentLink.setText("Price experiment (advanced)");
-        }
     }
 
     private void syncMinPredictedProfit(Long value) {
