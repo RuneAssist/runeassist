@@ -483,6 +483,46 @@ public class FlipHistorySyncService {
 
     /** Orphan a GE transaction so it is excluded from ledger replay. */
     public boolean orphanTransaction(String displayName, UUID transactionId) {
+        return mutateTransaction(displayName, transactionId, "/v1/account/orphan-transaction", "orphan-transaction");
+    }
+
+    /** Soft-delete a GE transaction (FC delete-transaction). */
+    public boolean deleteTransaction(String displayName, UUID transactionId) {
+        return mutateTransaction(displayName, transactionId, "/v1/account/delete-transaction", "delete-transaction");
+    }
+
+    /** List GE transactions for the linked OSRS account (server chronological order). */
+    public List<Transaction> listTransactions(String displayName) {
+        if (displayName == null || !isLinked()) {
+            return java.util.Collections.emptyList();
+        }
+        try {
+            String osrsAccountId = ensureOsrsAccount(displayName);
+            if (osrsAccountId == null) {
+                return java.util.Collections.emptyList();
+            }
+            JsonObject body = get("/v1/account/transactions?osrsAccountId=" + urlEnc(osrsAccountId), true);
+            if (body == null || !body.has("transactions") || !body.get("transactions").isJsonArray()) {
+                return java.util.Collections.emptyList();
+            }
+            List<Transaction> out = new ArrayList<>();
+            for (JsonElement el : body.getAsJsonArray("transactions")) {
+                if (el == null || !el.isJsonObject()) {
+                    continue;
+                }
+                Transaction t = txFromJson(el.getAsJsonObject());
+                if (t != null) {
+                    out.add(t);
+                }
+            }
+            return out;
+        } catch (Exception e) {
+            log.warn("list transactions failed: {}", e.getMessage());
+            return java.util.Collections.emptyList();
+        }
+    }
+
+    private boolean mutateTransaction(String displayName, UUID transactionId, String path, String logLabel) {
         if (displayName == null || transactionId == null || !isLinked()) {
             return false;
         }
@@ -495,12 +535,12 @@ public class FlipHistorySyncService {
                 JsonObject req = new JsonObject();
                 req.addProperty("osrsAccountId", osrsAccountId);
                 req.addProperty("transactionId", transactionId.toString());
-                JsonObject body = post("/v1/account/orphan-transaction", req, true);
+                JsonObject body = post(path, req, true);
                 mergeFlipsFromMutation(displayName, body);
                 configManager.unsetConfiguration(CONFIG_GROUP, flipsCursorKey(displayName));
                 pullFlipsDelta(displayName, osrsAccountId);
             } catch (Exception e) {
-                log.warn("orphan-transaction failed: {}", e.getMessage());
+                log.warn("{} failed: {}", logLabel, e.getMessage());
             }
         });
         return true;
@@ -833,7 +873,31 @@ public class FlipHistorySyncService {
         return o;
     }
 
-    static FlipV2 flipFromJson(JsonObject o, int accountId) {
+    static Transaction txFromJson(JsonObject o) {
+        if (o == null || !o.has("id")) {
+            return null;
+        }
+        try {
+            Transaction t = new Transaction();
+            t.setId(UUID.fromString(o.get("id").getAsString()));
+            String type = o.has("type") ? o.get("type").getAsString() : "BUY";
+            t.setType("SELL".equalsIgnoreCase(type) ? OfferStatus.SELL : OfferStatus.BUY);
+            t.setItemId(o.has("itemId") ? o.get("itemId").getAsInt() : 0);
+            t.setPrice(o.has("price") ? o.get("price").getAsLong() : 0L);
+            t.setQuantity(o.has("quantity") ? o.get("quantity").getAsInt() : 0);
+            t.setBoxId(o.has("boxId") ? o.get("boxId").getAsInt() : 0);
+            t.setAmountSpent(o.has("amountSpent") ? o.get("amountSpent").getAsLong() : 0L);
+            if (o.has("timestamp") && !o.get("timestamp").isJsonNull()) {
+                t.setTimestamp(Instant.parse(o.get("timestamp").getAsString()));
+            }
+            t.setConsistent(true);
+            return t;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+        static FlipV2 flipFromJson(JsonObject o, int accountId) {
         if (o == null || !o.has("id")) {
             return null;
         }
