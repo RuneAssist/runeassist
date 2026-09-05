@@ -477,13 +477,7 @@ public class PreferencesPanel extends JPanel {
         if (code == null || code.isEmpty()) {
             return;
         }
-        String encoded;
-        try {
-            encoded = URLEncoder.encode(code, StandardCharsets.UTF_8.name());
-        } catch (UnsupportedEncodingException ex) {
-            encoded = code;
-        }
-        LinkBrowser.browse(flipHistorySyncService.websiteUrl() + "#/login?code=" + encoded);
+        LinkBrowser.browse(flipHistorySyncService.websiteLoginWithCodeUrl(code));
     }
 
     private void copyPairingCode() {
