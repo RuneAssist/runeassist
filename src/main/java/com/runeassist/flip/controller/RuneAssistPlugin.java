@@ -36,14 +36,12 @@ import java.util.concurrent.*;
 @Slf4j
 // Self-wiring flipping plugin. Suggestions come from RuneAssistSuggestionSource
 // (Ares /v1/suggestion compose + held-cost / held-decant).
-// No Flipping Copilot account or servers.
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
 		description = "Grand Exchange flipping assistant with server compose suggestions, held-cost tracking, and Ares market data. Anonymous contribution is opt-in (Configuration -> Privacy).",
 		tags = {"runeassist", "flipping", "ge", "grand exchange", "merch", "money making", "profit"}
 )
-// RuneAssist fork: dropped @PluginDependency(BankTagsPlugin.class) -- a sideloaded plugin
-// depending on a core plugin makes RuneLite silently refuse to load it.
+@PluginDependency(BankTagsPlugin.class)
 public class RuneAssistPlugin extends Plugin {
 
 	@Inject
@@ -114,12 +112,16 @@ public class RuneAssistPlugin extends Plugin {
 	@Inject
 	private InventoryPortfolioBadgeOverlay inventoryPortfolioBadgeOverlay;
 	@Inject
+	private PortfolioBankTabBadgeOverlay portfolioBankTabBadgeOverlay;
+	@Inject
 	private BankStateRS bankStateRS;
 
 	@Inject
 	private GeHistoryStateRS geHistoryStateRS;
 	@Inject
 	private PatchNotesController patchNotesController;
+	@Inject
+	private PortfolioBankTagController portfolioBankTagController;
 	@Inject
 	private PlayerLocationController playerLocationController;
 	@Inject
@@ -157,6 +159,8 @@ public class RuneAssistPlugin extends Plugin {
 		keybindHandler.register();
 		overlayManager.add(inventorySlotTooltipOverlay);
 		overlayManager.add(inventoryPortfolioBadgeOverlay);
+		overlayManager.add(portfolioBankTabBadgeOverlay);
+		portfolioBankTagController.startUp();
 		highlightController.activate();
 		Persistance.setUp(gson);
 		// seems we need to delay instantiating the UI till here as otherwise the panels look different
@@ -209,6 +213,8 @@ public class RuneAssistPlugin extends Plugin {
 	protected void shutDown() throws Exception {
 		overlayManager.remove(inventorySlotTooltipOverlay);
 		overlayManager.remove(inventoryPortfolioBadgeOverlay);
+		overlayManager.remove(portfolioBankTabBadgeOverlay);
+		portfolioBankTagController.shutDown();
 		offerManager.saveAll();
 		highlightController.deactivateAndRemoveAll();
 		clientThread.invokeLater(() -> slotProfitColorizer.resetAllSlots());
@@ -457,10 +463,9 @@ public class RuneAssistPlugin extends Plugin {
 					|| "telemetryToken".equals(event.getKey())) {
 				telemetry.onUploadSettingsChanged();
 			}
-			// RuneAssist fork: BankTags portfolio-tag feature disabled.
-			// if (event.getKey().equals("portfolioBankTag")) {
-			// 	portfolioBankTagController.onConfigChanged();
-			// }
+			if (event.getKey().equals("portfolioBankTag")) {
+				portfolioBankTagController.onConfigChanged();
+			}
 		}
 	}
 
