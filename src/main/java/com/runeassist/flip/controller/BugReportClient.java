@@ -2,7 +2,6 @@ package com.runeassist.flip.controller;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.runeassist.flip.config.RuneAssistConfig;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.config.ConfigManager;
 import okhttp3.MediaType;
@@ -19,8 +18,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 
 /**
- * Thin server client for opt-in bug reports (and the dashboard URL). Not a flip-history path — device token is only used so {@code /v1/account/feedback} can attribute
- * reports after the user confirms the dialog.
+ * Opt-in bug reports. Device token attributes {@code /v1/account/feedback} after dialog confirm.
  */
 @Slf4j
 @Singleton
@@ -35,7 +33,6 @@ public class BugReportClient {
     private final OkHttpClient http;
     private final Gson gson;
     private final ConfigManager configManager;
-    private final RuneAssistConfig config;
     private final ScheduledExecutorService executor;
 
     @Inject
@@ -43,12 +40,10 @@ public class BugReportClient {
             OkHttpClient http,
             Gson gson,
             ConfigManager configManager,
-            RuneAssistConfig config,
             @Named("runeAssistExecutor") ScheduledExecutorService executor) {
         this.http = http;
         this.gson = gson;
         this.configManager = configManager;
-        this.config = config;
         this.executor = executor;
     }
 
@@ -98,17 +93,7 @@ public class BugReportClient {
     }
 
     private String origin() {
-        String endpoint = config.telemetryEndpoint();
-        if (endpoint == null || endpoint.trim().isEmpty()) {
-            return DEFAULT_ORIGIN;
-        }
-        try {
-            java.net.URL u = new java.net.URL(endpoint.trim());
-            String port = u.getPort() > 0 ? (":" + u.getPort()) : "";
-            return u.getProtocol() + "://" + u.getHost() + port;
-        } catch (Exception e) {
-            return DEFAULT_ORIGIN;
-        }
+        return DEFAULT_ORIGIN;
     }
 
     private String deviceToken() {

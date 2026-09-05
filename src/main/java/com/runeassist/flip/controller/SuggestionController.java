@@ -51,8 +51,6 @@ public class SuggestionController {
     private final GePreviousSearch gePreviousSearch;
     // Suggestions come from RuneAssistSuggestionSource (Ares compose).
     private final com.runeassist.flip.RuneAssistSuggestionSource runeAssistSource;
-    private final com.runeassist.flip.TelemetryService telemetry;
-
 
     private MainPanel mainPanel;
     private RuneAssistPanel runeAssistPanel;
@@ -96,8 +94,6 @@ public class SuggestionController {
             return;
         }
         // There is a race condition when the collect button is hit at the same time as offers fill.
-        // In such a case we can end up with the uncollectedManager falsely thinking there is items to collect.
-        // We identify if this has happened here by checking if the collect button is actually visible.
         if(isUncollectedOutOfSync()) {
             log.warn("uncollected is out of sync, it thinks there are items to collect but the GE is open and the Collect button not visible");
             uncollectedManager.clearAllUncollected(osrsLoginManager.getAccountHash());
@@ -118,8 +114,6 @@ public class SuggestionController {
         }
         Suggestion p = suggestionManager.getSuggestion();
         // Dump alerts highlight Back while a sell setup is open. Leaving that
-        // screen used to look like "account state changed" and fetch a SELL of
-        // inventory, overwriting the dump. Hold until Confirm or Skip.
         if (p != null && p.isRecentUnActionedDumpAlert()) {
             return false;
         }
@@ -132,11 +126,6 @@ public class SuggestionController {
             }
             if (liveOfferItemId(grandExchange.getOpenSlot()) != -1) {
                 // The "very out of date" path exists to un-freeze a ghost editor (left open
-                // with nothing behind it) so the card doesn't lock up forever -- see
-                // isModifyInProgress's comment. But a live offer behind the open slot (e.g.
-                // the player manually re-listing leftover stock after a partial fill/cancel,
-                // unrelated to any suggestion) means they're actively using this screen; do
-                // not yank the card to an unrelated item's suggestion out from under them.
                 return false;
             }
         }
@@ -144,13 +133,7 @@ public class SuggestionController {
         return suggestionManager.isSuggestionNeeded() || suggestionManager.suggestionOutOfDate();
     }
 
-    /**
-     * Click-to-modify / offer editor open for the current MODIFY card. Do not fetch
-     * a replacement (the 60s "very out of date" path used to bypass isSlotOpen and
-     * then treat the cancelled slot as empty, emitting BUY). A leftover lock with
-     * the editor closed (logout, hop, GE home) must not freeze the card — empty
-     * slots should get BUY.
-     */
+    /** Click-to-modify / offer editor open for the current MODIFY card. Do not fetch */
     private boolean isModifyInProgress(Suggestion p) {
         if (p != null && p.actionedTick != -1 && p.actionedTick <= client.getTickCount()) {
             return false;
@@ -369,7 +352,6 @@ public class SuggestionController {
         );
         suggestionManager.setSuggestionRequestInProgress(false);
         log.debug("Received suggestion: {}", newSuggestion.toString());
-        logSuggestionDecision(oldSuggestion, newSuggestion);
         accountStatusManager.resetSkipSuggestion();
         offerManager.setOfferJustPlaced(false);
         suggestionPanel.refresh();
@@ -498,24 +480,4 @@ public class SuggestionController {
         client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", chatMessage, "");
     }
 
-    private void logSuggestionDecision(Suggestion oldSuggestion, Suggestion newSuggestion) {
-        try {
-            String rsn = osrsLoginManager.getLastDisplayName();
-            if (oldSuggestion != null && newSuggestion != null
-                    && !newSuggestion.equals(oldSuggestion)
-                    && !oldSuggestion.isWaitSuggestion()
-                    && oldSuggestion.actionedTick == -1) {
-                telemetry.logSuggestionDecision(rsn, oldSuggestion, "ignored",
-                    oldSuggestion.getPickSource());
-            }
-            if (newSuggestion != null
-                    && (oldSuggestion == null || !newSuggestion.equals(oldSuggestion))) {
-                String outcome = newSuggestion.isAbortSuggestion() ? "abort" : "shown";
-                telemetry.logSuggestionDecision(rsn, newSuggestion, outcome,
-                    newSuggestion.getPickSource());
-            }
-        } catch (RuntimeException e) {
-            log.debug("suggestion_decision log failed", e);
-        }
-    }
 }

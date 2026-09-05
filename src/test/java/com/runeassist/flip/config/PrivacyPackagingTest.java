@@ -1,7 +1,6 @@
 package com.runeassist.flip.config;
 
 import com.runeassist.flip.controller.RuneAssistPlugin;
-import net.runelite.client.config.ConfigItem;
 import net.runelite.client.plugins.PluginDescriptor;
 import org.junit.jupiter.api.Test;
 
@@ -41,26 +40,6 @@ public class PrivacyPackagingTest {
 
     private static final Set<String> ALLOWED_PROPERTIES_KEYS = new HashSet<>(Arrays.asList(
             "displayName", "author", "description", "tags", "plugins", "version", "build", "support"));
-
-    @Test
-    public void shareTelemetryDefaultOff() {
-        RuneAssistConfig cfg = new RuneAssistConfig() {
-            @Override
-            public String webhook() {
-                return null;
-            }
-        };
-        assertFalse(cfg.shareTelemetry());
-    }
-
-    @Test
-    public void privacyTogglesHaveHubWarnings() throws Exception {
-        ConfigItem telemetry = RuneAssistConfig.class.getMethod("shareTelemetry").getAnnotation(ConfigItem.class);
-        assertNotNull(telemetry);
-        assertTrue(telemetry.warning().toLowerCase().contains("ip address"));
-        assertTrue(telemetry.warning().toLowerCase().contains("3rd-party")
-                || telemetry.warning().toLowerCase().contains("3rd party"));
-    }
 
     @Test
     public void pluginDescriptorAndPropertiesUseStandardBuild() throws Exception {

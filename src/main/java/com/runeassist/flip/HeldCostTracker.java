@@ -7,8 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.GrandExchangeOfferState;
 import net.runelite.client.config.ConfigManager;
 
-import com.runeassist.flip.model.GeHistoryRow;
-
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.ArrayDeque;
@@ -19,35 +17,17 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.IntUnaryOperator;
 
 /**
- * Lightweight, self-contained FIFO cost-basis tracker for the RuneAssist flipping fork.
- * Watches GE offer changes, records the average buy price of stock you're accumulating, and
- * consumes those lots (FIFO) as you sell — so the fork can suggest selling held stock at a
- * real profit/loss. Persisted in RuneLite config (group {@code runeassistflip}) with per-slot
- * cumulative counters so a relog re-emitting existing offers doesn't double-count.
- *
- * <p>Scoped per OSRS account (display name), same as {@link com.runeassist.flip.model.LocalFlipLedger}'s
- * per-account ledger files — a RuneLite settings profile is not the same thing as a game
- * account. Before this scoping existed, everything here was one shared bucket keyed only to
- * the active RuneLite profile: switching between two OSRS accounts under one profile mixed
- * their cost-basis data together (a purchase on one account could surface as a phantom sell
- * suggestion on the other, with no way to tell them apart).
- *
- * <p>Also records units bought in a rolling 4-hour window so suggestions can respect the
- * remaining GE buy limit. Fed from the fork plugin's {@code onGrandExchangeOfferChanged}.
- * Read via {@link #held(String)} and {@link #limitRemaining(String, int, int)}.
+ * FIFO cost-basis tracker for held GE stock. Persisted per OSRS display name
+ * in RuneLite config; also tracks a rolling 4h buy-limit window.
  */
 @Slf4j
 @Singleton
 public class HeldCostTracker
 {
     private static final String GROUP = "runeassistflip";
-    // Must not contain ':' -- ConfigManager.setConfiguration rejects any key containing one
-    // (bare, message-less IllegalArgumentException), so the previous "heldcost:" prefix meant
-    // every single save threw and the ledger never once persisted. Nothing is lost by renaming
-    // it: no data could ever have been written under the old key.
+    // ConfigManager rejects keys containing ':'.
     private static final String KEY_PREFIX = "heldcost_";
     private static final long LIMIT_WINDOW_MS = 4L * 60 * 60 * 1000; // GE buy limit resets every 4h
 
@@ -67,7 +47,6 @@ public class HeldCostTracker
         final Map<Integer, Deque<Lot>> positions = new LinkedHashMap<>();
         final Map<Integer, Slot> slots = new HashMap<>();
         final Map<Integer, List<long[]>> limitBuys = new LinkedHashMap<>(); // itemId -> [qty, time]
-        String historyFp = "";
         boolean loaded = false;
     }
 
@@ -277,44 +256,6 @@ public class HeldCostTracker
         return qty;
     }
 
-    /**
-     * When GE history opens, add FIFO lots for completed buys that are not already in
-     * this tracker. Does not record 4h limit usage (history usually has no timestamps)
-     * and does not autotype. Returns the number of lots added.
-     */
-    public synchronized int applyHistoryBackfill(String displayName, List<GeHistoryRow> newestFirst,
-                                                 Map<Integer, Long> liveFillingBuyQty,
-                                                 IntUnaryOperator unnote)
-    {
-        if (displayName == null || displayName.isEmpty() || newestFirst == null || newestFirst.isEmpty()) {
-            return 0;
-        }
-        Account acc = account(displayName);
-        ensureLoaded(displayName, acc);
-        Map<Integer, Long> heldQty = new HashMap<>();
-        for (Map.Entry<Integer, Deque<Lot>> e : acc.positions.entrySet())
-        {
-            long qty = 0;
-            for (Lot l : e.getValue()) qty += l.qty;
-            if (qty > 0) heldQty.put(e.getKey(), qty);
-        }
-        Map<Integer, Long> filling = liveFillingBuyQty == null ? Collections.emptyMap() : liveFillingBuyQty;
-        HeldCostHistoryBackfill.Result result = HeldCostHistoryBackfill.lotsToAdd(
-            newestFirst, heldQty, filling, acc.historyFp, unnote);
-        if (!result.changed) return 0;
-        int added = 0;
-        for (HeldCostHistoryBackfill.Lot lot : result.lots)
-        {
-            if (lot == null || lot.itemId <= 0 || lot.qty <= 0 || lot.unit < 0) continue;
-            acc.positions.computeIfAbsent(lot.itemId, k -> new ArrayDeque<>())
-                .add(new Lot(lot.qty, lot.unit));
-            added++;
-        }
-        acc.historyFp = result.fingerprint == null ? "" : result.fingerprint;
-        save(displayName, acc);
-        return added;
-    }
-
     /** Like {@link #consumeSell}, but returns {qtyActuallyConsumed, totalCostOfThat}. */
     private long[] consumeUpTo(Account acc, int itemId, int qty)
     {
@@ -483,8 +424,6 @@ public class HeldCostTracker
                 if (!list.isEmpty()) acc.limitBuys.put(Integer.parseInt(e.getKey()), list);
             }
             pruneLimitBuys(acc);
-            Object fp = saved.get("historyFp");
-            if (fp instanceof String) acc.historyFp = (String) fp;
         }
         catch (Exception e) { log.warn("held-cost load failed: {}", e.getMessage()); }
     }
@@ -517,12 +456,8 @@ public class HeldCostTracker
                 if (!e.getValue().isEmpty()) lim.put(String.valueOf(e.getKey()), e.getValue());
             }
             out.put("limitBuys", lim);
-            if (acc.historyFp != null && !acc.historyFp.isEmpty()) out.put("historyFp", acc.historyFp);
             configManager.setConfiguration(GROUP, configKey(displayName), gson.toJson(out));
         }
-        // Log the exception itself, not just getMessage() -- the failure this fixed threw a
-        // message-less IllegalArgumentException, so the old one-liner logged only "null" and
-        // gave nothing to act on.
         catch (Exception e) { log.warn("held-cost save failed", e); }
     }
 
