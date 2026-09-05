@@ -6,7 +6,6 @@ import com.runeassist.flip.rs.AccountLoginRS;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.GrandExchangeOfferState;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -355,34 +354,7 @@ public class LocalFlipLedger {
         return UUID.nameUUIDFromBytes(raw.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
-    public synchronized byte[] encodeAckedTransactionsRaw() {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        for (AccountBook book : books.values()) {
-            for (AckedTransaction tx : book.transactions) {
-                byte[] raw = tx.toRaw();
-                out.write(raw, 0, raw.length);
-            }
-        }
-        return out.toByteArray();
-    }
-
-    public synchronized byte[] encodeAckedTransactionsRaw(String displayName) {
-        if (displayName == null) {
-            return encodeAckedTransactionsRaw();
-        }
-        AccountBook book = books.get(displayName);
-        if (book == null) {
-            return new byte[0];
-        }
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        for (AckedTransaction tx : book.transactions) {
-            byte[] raw = tx.toRaw();
-            out.write(raw, 0, raw.length);
-        }
-        return out.toByteArray();
-    }
-
-    /**
+            /**
      * Raw GE fills for cloud upload. Oldest first. Reconstructs from signed acked rows
      * when a ledger file predates {@code sourceTransactions}.
      */
@@ -437,7 +409,7 @@ public class LocalFlipLedger {
     }
 
     private void registerAccount(AccountBook book) {
-        accountLoginRS.addAccountIfMissing(book.accountId, book.displayName, LOCAL_USER_ID);
+        accountLoginRS.addAccountIfMissing(book.accountId, book.displayName);
     }
 
     private AccountBook loadBook(String displayName) {
