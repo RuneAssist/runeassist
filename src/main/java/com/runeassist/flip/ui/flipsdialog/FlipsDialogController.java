@@ -44,6 +44,7 @@ public class FlipsDialogController {
     private final LocalFlipLedger localFlipLedger;
     private final OfferManager offerManager;
     private final CloudSyncService cloudSyncService;
+    private final com.runeassist.flip.HeldCostTracker heldCostTracker;
 
     public PriceGraphPanel priceGraphPanel;
     private JTabbedPane tabbedPane;
@@ -71,7 +72,8 @@ public class FlipsDialogController {
             TransactionManager transactionManager,
             LocalFlipLedger localFlipLedger,
             OfferManager offerManager,
-            CloudSyncService cloudSyncService) {
+            CloudSyncService cloudSyncService,
+            com.runeassist.flip.HeldCostTracker heldCostTracker) {
         this.itemController = itemController;
         this.flipsManager = flipsManager;
         this.executorService = executorService;
@@ -90,6 +92,7 @@ public class FlipsDialogController {
         this.localFlipLedger = localFlipLedger;
         this.offerManager = offerManager;
         this.cloudSyncService = cloudSyncService;
+        this.heldCostTracker = heldCostTracker;
     }
 
     public void initDialog(Window windowAncestor) {
@@ -122,13 +125,12 @@ public class FlipsDialogController {
             PortfolioPanel portfolioPanel = new PortfolioPanel(
                     itemController,
                     config,
-                    apiRequestHandler,
+                    heldCostTracker,
+                    executorService,
                     suggestionManager,
-                    accountLoginRS,
                     osrsLoginRS,
                     portfolioStateRS,
                     bankStateRS,
-                    clientThread,
                     itemId -> showPriceGraphTab(itemId, false, null)
             );
             TransactionsPanel transactionsPanel = new TransactionsPanel(accountLoginRS, itemController,

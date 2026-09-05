@@ -72,6 +72,40 @@ final class DecantTracker
     }
 
     /** Unnoted GE/wiki id for a container item, or {@code itemId} if it is not a note. */
+    /**
+     * Whether a quantity shift looks like a decant: bottles consumed carry exactly as many
+     * doses as the bottles produced. Exact match on purpose -- a partial conversion is left
+     * alone rather than risk pairing an unrelated quantity change with it.
+     */
+    static boolean isDoseConservingShift(long buyDelta, long buyDose, long sellDelta, long sellDose)
+    {
+        if (buyDelta <= 0 || sellDelta <= 0 || buyDose <= 0 || sellDose <= 0) return false;
+        // Same dose on both sides is not a conversion, whatever the arithmetic says: it is
+        // some unrelated pair of quantity changes that happens to balance.
+        if (buyDose == sellDose) return false;
+        return buyDelta * buyDose == sellDelta * sellDose;
+    }
+
+    /**
+     * Base name of a dose potion -- "Super strength(3)" gives "Super strength" -- or null if this
+     * is not one. Used to tell which potions in the inventory a decant would sweep up: Bob Barter
+     * converts every potion carried, not only the one being decanted.
+     */
+    static String doseFamily(String itemName)
+    {
+        if (itemName == null) return null;
+        String name = itemName.trim();
+        // Dose variants are named "X potion(N)". Parsed by hand rather than with a regex: the
+        // shape is fixed and trivial, and it keeps the escaping out of it.
+        if (name.length() < 4 || name.charAt(name.length() - 1) != ')') return null;
+        int open = name.lastIndexOf('(');
+        if (open <= 0 || open != name.length() - 3) return null;
+        char digit = name.charAt(name.length() - 2);
+        if (digit < '1' || digit > '9') return null;
+        String family = name.substring(0, open).trim();
+        return family.isEmpty() ? null : family;
+    }
+
     static int unnotedId(ItemComposition composition, int itemId)
     {
         if (composition != null && composition.getNote() != -1 && composition.getLinkedNoteId() > 0)

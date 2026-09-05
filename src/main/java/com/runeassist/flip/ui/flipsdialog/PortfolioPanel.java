@@ -1,15 +1,16 @@
 package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.config.RuneAssistConfig;
-import com.runeassist.flip.controller.ApiRequestHandler;
+import com.runeassist.flip.HeldCostTracker;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.*;
 import com.runeassist.flip.ui.RuneAssistColors;
 import com.runeassist.flip.ui.UIUtilities;
-import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
+
+import lombok.extern.slf4j.Slf4j;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -19,9 +20,11 @@ import java.awt.event.MouseEvent;
 import java.text.NumberFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import java.util.List;
 
+@Slf4j
 public class PortfolioPanel extends JPanel {
     private static final NumberFormat GP_FORMAT = NumberFormat.getNumberInstance(Locale.US);
     private static final String CONTENT_CARD = "content";
@@ -49,13 +52,12 @@ public class PortfolioPanel extends JPanel {
 
     private final ItemController itemController;
     private final RuneAssistConfig config;
-    private final ApiRequestHandler apiRequestHandler;
+    private final HeldCostTracker heldCostTracker;
+    private final ExecutorService executorService;
     private final SuggestionManager suggestionManager;
-    private final AccountLoginRS accountLoginRS;
     private final OsrsLoginRS osrsLoginRS;
     private final PortfolioStateRS portfolioStateRS;
     private final BankStateRS bankStateRS;
-    private final ClientThread clientThread;
     private final Consumer<Integer> openPriceGraph;
     private final CardLayout cardLayout;
     private final JPanel cardPanel;
@@ -71,23 +73,21 @@ public class PortfolioPanel extends JPanel {
 
     public PortfolioPanel(ItemController itemController,
                           RuneAssistConfig config,
-                          ApiRequestHandler apiRequestHandler,
+                          HeldCostTracker heldCostTracker,
+                          ExecutorService executorService,
                           SuggestionManager suggestionManager,
-                          AccountLoginRS accountLoginRS,
                           OsrsLoginRS osrsLoginRs,
                           PortfolioStateRS portfolioStateRS,
                           BankStateRS bankStateRS,
-                          ClientThread clientThread,
                           Consumer<Integer> openPriceGraph) {
         this.itemController = itemController;
         this.config = config;
-        this.apiRequestHandler = apiRequestHandler;
+        this.heldCostTracker = heldCostTracker;
+        this.executorService = executorService;
         this.suggestionManager = suggestionManager;
-        this.accountLoginRS = accountLoginRS;
         this.osrsLoginRS = osrsLoginRs;
         this.portfolioStateRS = portfolioStateRS;
         this.bankStateRS = bankStateRS;
-        this.clientThread = clientThread;
         this.openPriceGraph = openPriceGraph;
 
         setLayout(new BorderLayout(0, 12));
@@ -247,15 +247,15 @@ public class PortfolioPanel extends JPanel {
             return;
         }
         cardLayout.show(cardPanel, CONTENT_CARD);
-        Integer accountId = accountLoginRS.get().getAccountId(osrsLoginRS.get().displayName);
-        clearPortfolioButton.setEnabled(accountId != null && accountId != -1);
+        // Gated on being logged in, not on an FC cloud account id: removal is local now.
+        clearPortfolioButton.setEnabled(true);
         refreshAutoSyncLabel();
         renderFromState(portfolioStateRS.get());
     }
 
     private void onClearPortfolioClicked() {
-        Integer accountId = accountLoginRS.get().getAccountId(osrsLoginRS.get().displayName);
-        if (accountId == null || accountId == -1) {
+        String displayName = osrsLoginRS.get().displayName;
+        if (displayName == null) {
             return;
         }
         int choice = JOptionPane.showConfirmDialog(
@@ -267,22 +267,12 @@ public class PortfolioPanel extends JPanel {
             return;
         }
         clearPortfolioButton.setEnabled(false);
-        apiRequestHandler.asyncClearAccountPortfolio(
-                accountId,
-                (userId, result) -> SwingUtilities.invokeLater(() -> {
-                    portfolioStateRS.updatePortfolioState(suggestionManager.getSuggestion(), result);
-                    suggestionManager.setSuggestionNeeded(true);
-                    clearPortfolioButton.setEnabled(true);
-                }),
-                error -> SwingUtilities.invokeLater(() -> {
-                    clearPortfolioButton.setEnabled(true);
-                    JOptionPane.showMessageDialog(
-                            this,
-                            "Failed to clear portfolio. Please try again.",
-                            "Error",
-                            JOptionPane.ERROR_MESSAGE);
-                })
-        );
+        executorService.execute(() -> {
+            int removed = heldCostTracker.clearLots(displayName);
+            suggestionManager.setSuggestionNeeded(true);
+            SwingUtilities.invokeLater(() -> clearPortfolioButton.setEnabled(true));
+            log.info("cleared {} tracked units from local portfolio", removed);
+        });
     }
 
     private void refreshAutoSyncLabel() {
@@ -377,7 +367,7 @@ public class PortfolioPanel extends JPanel {
 
         if (portfolioQty > 0) {
             JMenuItem removeAll = new JMenuItem("Remove from portfolio");
-            removeAll.addActionListener(e -> togglePortfolio(item.getItemId(), ToggleItemPortfolioRequest.REMOVE, 0));
+            removeAll.addActionListener(e -> removeFromPortfolio(item.getItemId(), 0));
             menu.add(removeAll);
         }
 
@@ -389,7 +379,7 @@ public class PortfolioPanel extends JPanel {
                     try {
                         int qty = Integer.parseInt(input.trim());
                         if (qty > 0) {
-                            togglePortfolio(item.getItemId(), ToggleItemPortfolioRequest.REMOVE, qty);
+                            removeFromPortfolio(item.getItemId(), qty);
                         }
                     } catch (NumberFormatException ignored) {
                     }
@@ -399,30 +389,23 @@ public class PortfolioPanel extends JPanel {
         }
     }
 
-    private void togglePortfolio(int itemId, int portfolioId, int quantity) {
-        Integer accountId = accountLoginRS.get().getAccountId(osrsLoginRS.get().displayName);
-        if (accountId == null || accountId == -1) {
+    /**
+     * Forget the tracked cost basis for held stock. FC removed items through their cloud
+     * {@code toggle-item-portfolio} endpoint; this fork has no such account, so that call
+     * silently did nothing and the menu items appeared dead. Removal is local, against the
+     * same {@link HeldCostTracker} lots the local "Add to portfolio" menu writes.
+     *
+     * @param quantity units to remove, oldest lot first; {@code <= 0} removes all of the item
+     */
+    private void removeFromPortfolio(int itemId, int quantity) {
+        String displayName = osrsLoginRS.get().displayName;
+        if (displayName == null) {
             return;
         }
-
-        clientThread.invokeLater(() -> {
-            Map<Integer, Integer> runeliteInventory = itemController.getRunliteInventory();
-            int bagQuantity = runeliteInventory == null ? 0 : Math.max(0, runeliteInventory.getOrDefault(itemId, 0));
-            int bankQuantity = bankStateRS.get().isLoaded()
-                    ? Math.max(0, bankStateRS.get().getItems().getOrDefault(itemId, 0))
-                    : -1;
-
-            ToggleItemPortfolioRequest request = new ToggleItemPortfolioRequest(accountId, itemId, portfolioId, bagQuantity, bankQuantity, quantity);
-            apiRequestHandler.toggleItemPortfolioAsync(
-                    request,
-                    (userId, result) -> {
-                        portfolioStateRS.updatePortfolioState(suggestionManager.getSuggestion(), result);
-                        suggestionManager.setSuggestionNeeded(true);
-                    },
-                    error -> {
-                    }
-            );
-            return true;
+        executorService.execute(() -> {
+            int removed = heldCostTracker.removeLots(displayName, itemId, quantity);
+            suggestionManager.setSuggestionNeeded(true);
+            log.info("removed {} x item {} from local portfolio", removed, itemId);
         });
     }
 

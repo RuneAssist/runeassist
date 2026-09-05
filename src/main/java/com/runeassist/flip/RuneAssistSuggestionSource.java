@@ -55,13 +55,16 @@ public class RuneAssistSuggestionSource
     @Inject private com.runeassist.flip.controller.GrandExchange grandExchange;
     @Inject private ExecutorService executor;
 
-    // Decant-detection state (singleton, so this persists across suggestion cycles): the
-    // opportunity we last watched, and owned qty of each leg at that time. A dose-conserving
-    // qty shift between cycles for the SAME pair means a bank decant just happened, so
-    // HeldCostTracker can carry the real cost basis over instead of estimating it fresh each
-    // time a sell suggestion is built. See buildDecantCandidate/detectAndApplyDecant.
-    private int trackedBuyItemId = -1, trackedSellItemId = -1;
-    private long lastBuyQty = -1, lastSellQty = -1;
+    // The decant we last told the player to make, watched until it happens (singleton, so it
+    // survives across suggestion cycles). A decant never touches the GE, so this diff is the only
+    // thing that observes one; without it HeldCostTracker never learns the new bottles exist and
+    // they are missing from the portfolio. Watching the SUGGESTED pair rather than whatever the
+    // current cycle happens to rank first matters: once the stock is converted the old family
+    // stops being a candidate, so a cycle-scoped tracker resets and misses the very shift it was
+    // waiting for. See applyPendingDecant/watchDecant.
+    private int watchBuyItemId = -1, watchSellItemId = -1;
+    private long watchBuyDose = 0, watchSellDose = 0;
+    private long watchBuyQty = -1, watchSellQty = -1;
 
     /** Compute the next suggestion and hand it to {@code consumer} on the client thread. */
     public void getSuggestionAsync(Consumer<Suggestion> consumer)
@@ -77,6 +80,9 @@ public class RuneAssistSuggestionSource
         // client.getItemContainer(...) asserts client-thread-only -- must snapshot here, not
         // from the background scoring thread (see DecantTracker).
         final Map<Integer, Long> ownedQty = snapshotOwnedQty();
+        // Potion families being carried, for the decant instruction: Bob Barter converts every
+        // potion in the inventory, so anything else carried is swept up with it.
+        final Set<String> carriedPotions = snapshotInventoryPotionFamilies();
         // grandExchange.isSlotOpen()/getOpenSlot() hit client.getVarbitValue(...), which is
         // also client-thread-only -- must snapshot here for the same reason as ownedQty above.
         final OwnedModifySnapshot ownedModifySnap = computeOwnedModify();
@@ -111,6 +117,10 @@ public class RuneAssistSuggestionSource
             Suggestion suggestion = null;
             try
             {
+            // Before anything else: did the decant we last suggested actually happen? This has
+            // to run regardless of what is suggested now -- see applyPendingDecant.
+            applyPendingDecant(displayName, ownedQty);
+
             Map<Integer, Integer> usedLimit = usedBuyLimit(displayName, offersBySlot);
             Map<Integer, Integer> remainingHint = new HashMap<>();
             for (Map.Entry<Integer, Integer> e : usedLimit.entrySet())
@@ -176,7 +186,7 @@ public class RuneAssistSuggestionSource
             }
             try
             {
-                Suggestion decant = buildDecantCandidate(displayName, offersBySlot, coins, remainingSlots, blocked, skipped, ownedQty);
+                Suggestion decant = buildDecantCandidate(displayName, offersBySlot, coins, remainingSlots, blocked, skipped, ownedQty, carriedPotions);
                 if (decant != null && preferDecant(suggestion, decant))
                 {
                     suggestion = decant;
@@ -685,6 +695,42 @@ public class RuneAssistSuggestionSource
      * opportunity, or the relevant item is blocked/skipped/already on an active offer.
      */
     /**
+     * How to actually perform the decant, given what is being carried.
+     *
+     * <p>Bob Barter offers no per-item choice: he decants every potion in the inventory to the
+     * dose picked. Carrying anything else converts that too, and silently as far as cost basis
+     * goes, since only the suggested pair is watched for the shift. So when other families are
+     * carried this leads with banking them, naming them, instead of describing a per-item
+     * selection that does not exist.
+     */
+    static String decantInstruction(String family, Set<String> carriedPotions, long targetDose)
+    {
+        String tail = "Carry only the " + family + ", then right-click Bob Barter at the GE and"
+                + " choose Decant -> " + targetDose + " dose.";
+        if (carriedPotions == null || carriedPotions.isEmpty())
+        {
+            return tail;
+        }
+        List<String> others = new ArrayList<>();
+        for (String carried : carriedPotions)
+        {
+            if (carried != null && !carried.equalsIgnoreCase(family))
+            {
+                others.add(carried);
+            }
+        }
+        if (others.isEmpty())
+        {
+            return tail;
+        }
+        String named = others.size() <= 3
+                ? String.join(", ", others)
+                : String.join(", ", others.subList(0, 3)) + " and " + (others.size() - 3) + " more";
+        return "Bank your " + named + " first — Bob Barter decants every potion you are carrying,"
+                + " so those would be converted too. " + tail;
+    }
+
+    /**
      * A "go decant what you're already holding" suggestion, for the best held dose-variant
      * stock worth converting — independent of whether that family is currently a good thing to
      * buy into, which is the only thing {@link FlipScorer#topDecants} considers. Returns null
@@ -694,7 +740,7 @@ public class RuneAssistSuggestionSource
      * is worth surfacing even with every offer slot busy.</p>
      */
     private Suggestion buildHeldDecantCandidate(String displayName, Set<Integer> blocked, Set<Integer> skipped,
-                                                Map<Integer, Long> ownedQty)
+                                                Map<Integer, Long> ownedQty, Set<String> carriedPotions)
     {
         if (ownedQty == null || ownedQty.isEmpty()) return null;
 
@@ -733,7 +779,7 @@ public class RuneAssistSuggestionSource
         // Watch the pair we're actually telling them to convert, not whatever topDecants
         // happens to rank first -- this is what carries the real FIFO cost basis across the
         // decant once they do it (a decant never touches the GE, so nothing else observes it).
-        detectAndApplyDecant(displayName, heldItemId, sellItemId, heldDose, sellDose, ownedQty);
+        watchDecant(heldItemId, sellItemId, heldDose, sellDose, ownedQty);
 
         Suggestion s = new Suggestion();
         s.setType(SuggestionType.DECANT);
@@ -742,16 +788,16 @@ public class RuneAssistSuggestionSource
         s.setName(family);
         s.setQuantity((int) Math.min(Integer.MAX_VALUE, heldQty));
         s.setExpectedProfit((double) bestGain);
-        s.setMessage("Close the GE, right-click Bob Barter (SW corner) -> Decant -> " + family
-                + " -> " + sellDose + " doses. Converts the " + heldQty + "x " + heldName
-                + " you already hold into " + sellQty + "x " + sellName
-                + " — worth ~" + bestGain + " gp more than selling them as they are");
+        s.setMessage(decantInstruction(family, carriedPotions, sellDose)
+                + " Converts the " + heldQty + "x " + heldName + " you already hold into "
+                + sellQty + "x " + sellName + " — worth ~" + bestGain
+                + " gp more than selling them as they are.");
         return s;
     }
 
     private Suggestion buildDecantCandidate(String displayName, long[][] offersBySlot, long coins,
                                             int remainingSlots, Set<Integer> blocked, Set<Integer> skipped,
-                                            Map<Integer, Long> ownedQty)
+                                            Map<Integer, Long> ownedQty, Set<String> carriedPotions)
     {
         // Finishing something already bought beats starting something new, so held stock is
         // checked first. topDecants() only ranks opportunities worth *starting*, and a family
@@ -759,7 +805,7 @@ public class RuneAssistSuggestionSource
         // pressure thins the very margin that ranked it. Without this, stock bought on the
         // plugin's own advice is stranded: never decanted, and eventually dumped unconverted
         // by the normal sell path for less than it was worth. See FlipScorer.decantForHeld.
-        Suggestion heldDecant = buildHeldDecantCandidate(displayName, blocked, skipped, ownedQty);
+        Suggestion heldDecant = buildHeldDecantCandidate(displayName, blocked, skipped, ownedQty, carriedPotions);
         if (heldDecant != null) return heldDecant;
 
         List<Map<String, Object>> decants;
@@ -786,7 +832,7 @@ public class RuneAssistSuggestionSource
         String sellName = String.valueOf(d.get("sellName"));
         String family = String.valueOf(d.get("family"));
 
-        detectAndApplyDecant(displayName, buyItemId, sellItemId, buyDose, sellDose, ownedQty);
+        watchDecant(buyItemId, sellItemId, buyDose, sellDose, ownedQty);
 
         DecantTracker.Phase phase = DecantTracker.phaseFor(ownedQty, buyItemId, buyQtyTarget, sellItemId);
 
@@ -833,9 +879,10 @@ public class RuneAssistSuggestionSource
             s.setName(family);
             s.setQuantity((int) Math.min(Integer.MAX_VALUE, buyQtyTarget));
             s.setExpectedProfit((double) projectedProfit);
-            s.setMessage("Close the GE, right-click Bob Barter (SW corner) -> Decant -> " + family
-                    + " -> " + sellDose + " doses. Converts " + buyQtyTarget + "x " + buyName + " into "
-                    + sellQtyAfterDecant + "x " + sellName + ", then sell for ~+" + projectedProfit + " gp");
+            s.setMessage(decantInstruction(family, carriedPotions, sellDose)
+                    + " Converts " + buyQtyTarget + "x " + buyName + " into "
+                    + sellQtyAfterDecant + "x " + sellName + ", then sell for ~+"
+                    + projectedProfit + " gp.");
             return s;
         }
 
@@ -861,47 +908,59 @@ public class RuneAssistSuggestionSource
     }
 
     /**
-     * Notice when a bank decant has actually happened, between this suggestion cycle and the
-     * last, for whichever opportunity we were watching — and if so, carry the real FIFO cost
-     * basis over in {@link HeldCostTracker}. A decant never touches the Grand Exchange, so
-     * there's no offer-fill event for it; this is the only place that observes it, by diffing
-     * live owned qty of the same two items across cycles.
+     * Apply the decant we asked for, once the player has actually made it.
      *
-     * <p>Detection is scoped to one specific (buyItemId, sellItemId) pair at a time — whichever
-     * opportunity {@link FlipScorer#topDecants} currently ranks first — rather than scanning
-     * every potion family every cycle. If the top opportunity changes, tracking just resets to
-     * the new pair with no false trigger (a qty delta across two unrelated items pairs is
-     * meaningless). The dose-conservation check (consumed buy-doses exactly match produced
-     * sell-doses) is what distinguishes an actual decant from, say, an unrelated GE purchase of
-     * the sell-dose item landing in the same tick.</p>
+     * <p>Run every cycle, whatever is being suggested now. A decant never touches the Grand
+     * Exchange, so diffing owned quantities is the only way to observe one, and the window in
+     * which it can be seen is exactly the cycle it happens on. Watching the pair we suggested,
+     * rather than whatever this cycle ranks first, is the point: converting the stock removes
+     * that family from the candidates, so a tracker scoped to the current suggestion resets
+     * itself and misses the shift -- which left the new bottles with no cost basis and absent
+     * from the portfolio.
+     *
+     * <p>Dose conservation is required exactly: consumed bottles x their dose must equal
+     * produced bottles x theirs. A partial conversion is left alone rather than risk pairing an
+     * unrelated quantity change with it.
      */
-    private void detectAndApplyDecant(String displayName, int buyItemId, int sellItemId,
-                                      long buyDose, long sellDose, Map<Integer, Long> ownedQty)
+    private void applyPendingDecant(String displayName, Map<Integer, Long> ownedQty)
     {
-        long buyQty = DecantTracker.ownedQty(ownedQty, buyItemId);
-        long sellQty = DecantTracker.ownedQty(ownedQty, sellItemId);
-
-        boolean samePair = trackedBuyItemId == buyItemId && trackedSellItemId == sellItemId;
-        if (samePair && lastBuyQty >= 0 && lastSellQty >= 0 && buyDose > 0 && sellDose > 0)
+        if (watchBuyItemId <= 0 || watchSellItemId <= 0) return;
+        long buyQty = DecantTracker.ownedQty(ownedQty, watchBuyItemId);
+        long sellQty = DecantTracker.ownedQty(ownedQty, watchSellItemId);
+        if (watchBuyQty >= 0 && watchSellQty >= 0 && watchBuyDose > 0 && watchSellDose > 0)
         {
-            long buyDelta = lastBuyQty - buyQty;   // bottles of buyItemId consumed
-            long sellDelta = sellQty - lastSellQty; // bottles of sellItemId produced
-            // Dose conservation: total doses consumed must exactly equal total doses
-            // produced (buyDelta bottles x buyDose doses each == sellDelta bottles x
-            // sellDose doses each). Exact-match only, deliberately -- a decant that leaves
-            // an uneven remainder (not a whole number of target bottles) won't be detected
-            // here rather than risk a false positive from an unrelated qty change.
-            if (buyDelta > 0 && sellDelta > 0 && buyDelta * buyDose == sellDelta * sellDose)
+            long buyDelta = watchBuyQty - buyQty;    // bottles consumed
+            long sellDelta = sellQty - watchSellQty; // bottles produced
+            if (DecantTracker.isDoseConservingShift(buyDelta, watchBuyDose, sellDelta, watchSellDose))
             {
-                try { heldCostTracker.applyDecant(displayName, buyItemId, (int) buyDelta, sellItemId, (int) sellDelta); }
+                try
+                {
+                    heldCostTracker.applyDecant(displayName, watchBuyItemId, (int) buyDelta,
+                        watchSellItemId, (int) sellDelta);
+                    log.debug("decant applied: {}x {} -> {}x {}", buyDelta, watchBuyItemId,
+                        sellDelta, watchSellItemId);
+                }
                 catch (Exception e) { log.warn("applyDecant failed", e); }
+                watchBuyItemId = -1;
+                watchSellItemId = -1;
+                return;
             }
         }
+        // Not yet: re-baseline so the next cycle measures from here.
+        watchBuyQty = buyQty;
+        watchSellQty = sellQty;
+    }
 
-        trackedBuyItemId = buyItemId;
-        trackedSellItemId = sellItemId;
-        lastBuyQty = buyQty;
-        lastSellQty = sellQty;
+    /** Remember the decant just suggested, so the conversion is recognised when it happens. */
+    private void watchDecant(int buyItemId, int sellItemId, long buyDose, long sellDose,
+                             Map<Integer, Long> ownedQty)
+    {
+        watchBuyItemId = buyItemId;
+        watchSellItemId = sellItemId;
+        watchBuyDose = buyDose;
+        watchSellDose = sellDose;
+        watchBuyQty = DecantTracker.ownedQty(ownedQty, buyItemId);
+        watchSellQty = DecantTracker.ownedQty(ownedQty, sellItemId);
     }
 
     /**
@@ -982,6 +1041,30 @@ public class RuneAssistSuggestionSource
         addContainerQty(raw, client.getItemContainer(InventoryID.INVENTORY));
         addContainerQty(raw, client.getItemContainer(InventoryID.BANK));
         return DecantTracker.collapseToUnnoted(raw, this::toUnnotedItemId);
+    }
+
+    /**
+     * Potion families carried in the inventory right now.
+     *
+     * <p>Bob Barter decants every potion in the inventory to the chosen dose, not just the one
+     * being suggested, so anything else carried is converted too -- and silently, as far as
+     * cost basis is concerned, since only the suggested pair is watched. This is what the
+     * suggestion warns about. Client thread only, like the other container reads.
+     */
+    private Set<String> snapshotInventoryPotionFamilies()
+    {
+        Set<String> families = new java.util.LinkedHashSet<>();
+        ItemContainer inv = client.getItemContainer(InventoryID.INVENTORY);
+        if (inv == null) return families;
+        for (Item item : inv.getItems())
+        {
+            if (item == null || item.getId() <= 0) continue;
+            ItemComposition composition = client.getItemDefinition(item.getId());
+            if (composition == null) continue;
+            String family = DecantTracker.doseFamily(composition.getName());
+            if (family != null) families.add(family);
+        }
+        return families;
     }
 
     private int toUnnotedItemId(int itemId)
