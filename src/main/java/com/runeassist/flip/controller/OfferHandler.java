@@ -38,7 +38,7 @@ public class OfferHandler {
     private final OfferManager offerManager;
     private final HighlightController highlightController;
     private final AccountLoginRS accountLoginRS;
-    private final com.runeassist.flip.FlipScorer flipScorer;
+    private final com.runeassist.flip.AresMarketClient market;
     private final ExecutorService executorService;
 
     // state
@@ -68,14 +68,13 @@ public class OfferHandler {
                 return;
             }
 
-            // RuneAssist fork: price an item the suggestion engine didn't propose from our
-            // own wiki-based FlipScorer instead of FC's (removed) backend. Blocks on HTTP,
-            // so run it off the client thread and marshal the result back.
+            // Price an item the suggestion engine didn't propose via Ares /v1/market/quote.
+            // Blocks on HTTP, so run off the client thread and marshal the result back.
             viewedSlotPriceErrorText = "Loading price...";
             final int itemIdForQuote = currentItemId;
             executorService.execute(() -> {
                 Map<String, Object> q;
-                try { q = flipScorer.quote(itemIdForQuote); } catch (Exception e) { q = null; }
+                try { q = market.quote(itemIdForQuote); } catch (Exception e) { q = null; }
                 final Map<String, Object> fq = q;
                 clientThread.invoke(() -> {
                     if (fq == null) {

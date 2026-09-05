@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.function.IntUnaryOperator;
 
 /**
- * Live phase detection for a decant opportunity from {@link FlipScorer#topDecants()}, read
+ * Live phase detection for a decant opportunity from {@link AresMarketClient#topDecants()}, read
  * from an inventory+bank item-count snapshot — not {@link HeldCostTracker}'s FIFO ledger,
  * which never observes a bank decant (it only sees GE-offer fills), so it has no lot to
  * consume/produce across the dose-variant item ids involved.
