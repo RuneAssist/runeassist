@@ -49,7 +49,7 @@ public class SuggestionController {
     private final PortfolioStateRS portfolioStateRS;
     private final FlipsDialogController flipDialogController;
     private final GePreviousSearch gePreviousSearch;
-    // RuneAssist fork: our local suggestion source replaces FC's backend.
+    // Suggestions come from RuneAssistSuggestionSource (Ares compose).
     private final com.runeassist.flip.RuneAssistSuggestionSource runeAssistSource;
     private final com.runeassist.flip.TelemetryService telemetry;
 
@@ -259,7 +259,7 @@ public class SuggestionController {
             return;
         }
         suggestionManager.setSuggestionNeeded(false);
-        // RuneAssist fork: no FC account required — only the OSRS login must be valid.
+        // Only the OSRS login must be valid.
         if (!osrsLoginManager.isValidLoginState()) {
             suggestionManager.setSuggestionRefreshPending(false);
             if (suggestionPanel != null) {

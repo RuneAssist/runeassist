@@ -5,7 +5,7 @@ import com.runeassist.flip.model.SuggestionType;
 
 /**
  * Soft-fail WAIT cards when Ares compose is unreachable or the panel must yield
- * (e.g. Hub Flipping Copilot conflict). Not a local composition engine.
+ * (e.g. Hub plugin conflict). Not a local composition engine.
  */
 final class WaitSuggestions
 {

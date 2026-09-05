@@ -251,7 +251,7 @@ public class PortfolioPanel extends JPanel {
             return;
         }
         cardLayout.show(cardPanel, CONTENT_CARD);
-        // Gated on being logged in, not on an FC cloud account id: removal is local now.
+        // Gated on OSRS login; removal is local.
         clearPortfolioButton.setEnabled(true);
         refreshAutoSyncLabel();
         renderFromState(portfolioStateRS.get());
@@ -400,8 +400,8 @@ public class PortfolioPanel extends JPanel {
 
     /**
      * Forget the tracked cost basis for held stock. When linked, posts to the
-     * server toggle-item-portfolio endpoint (FC-shaped) and refreshes from delta;
-     * otherwise falls back to local HeldCostTracker only.
+     * server toggle-item-portfolio endpoint and refreshes from delta; otherwise
+     * falls back to local {@link HeldCostTracker} only.
      *
      * @param quantity units to remove, oldest lot first; {@code <= 0} removes all of the item
      */

@@ -13,7 +13,6 @@ import net.runelite.client.callback.ClientThread;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
@@ -61,9 +60,6 @@ public class OfferHandler {
             if (suggestion != null && suggestion.getItemId() == currentItemId &&
                     Objects.equals(suggestion.offerType(), getOfferType())) {
                 offerManager.setViewedSlotItemPrice(suggestion.getPrice());
-                offerManager.setLastViewedSlotItemId(suggestion.getItemId());
-                offerManager.setLastViewedSlotItemPrice(suggestion.getPrice());
-                offerManager.setLastViewedSlotPriceTime((int) Instant.now().getEpochSecond());
                 return;
             }
 
@@ -85,9 +81,6 @@ public class OfferHandler {
                         ? ((Number) fq.get("sell_at")).longValue()
                         : ((Number) fq.get("buy_at")).longValue();
                     offerManager.setViewedSlotItemPrice(price);
-                    offerManager.setLastViewedSlotItemId(offerManager.getViewedSlotItemId());
-                    offerManager.setLastViewedSlotItemPrice(price);
-                    offerManager.setLastViewedSlotPriceTime((int) Instant.now().getEpochSecond());
 
                     highlightController.redraw();
                     log.debug("fetched item {} price: {}", offerManager.getViewedSlotItemId(), price);
@@ -105,14 +98,10 @@ public class OfferHandler {
             });
 
         } else {
-            // RuneAssist fork: do NOT clear viewedSlotItemId/Price here. TRADINGPOST_SEARCH
-            // (isViewingSlot's source) goes back to -1 as soon as an item is picked from
-            // search -- i.e. BEFORE the user reaches the quantity/price screen -- so clearing
-            // here wiped out the just-fetched custom-item quote before the quick-set keybind
-            // could ever use it (the on-screen hint text is a separate game widget that FC
-            // set once and stays displayed, so it kept showing the stale price while the
-            // keybind silently set nothing). The cached quote is naturally replaced the next
-            // time isViewingSlot is true for a different item, so nothing goes stale here.
+            // Do not clear viewedSlotItemId/Price here. TRADINGPOST_SEARCH goes back to -1 as soon
+            // as an item is picked from search — before the quantity/price screen — so clearing
+            // would wipe the custom-item quote before the quick-set keybind can use it. The cached
+            // quote is replaced the next time isViewingSlot is true for a different item.
             viewedSlotPriceErrorText = null;
         }
         highlightController.redraw();

@@ -283,7 +283,7 @@ public class RuneAssistPlugin extends Plugin {
 		return bank != null && !bank.isHidden();
 	}
 
-	/** Wire session clock + local flip stats to the logged-in OSRS account (not FC email). */
+	/** Wire session clock + local flip stats to the logged-in OSRS account. */
 	private void bindOsrsSession(String name) {
 		if (name == null || name.isEmpty()) {
 			flipManager.setIntervalAccount(null);
@@ -342,9 +342,7 @@ public class RuneAssistPlugin extends Plugin {
 
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event) {
-		// RuneAssist fork: "Add to portfolio" now tracks locally (HeldCostTracker) instead of
-		// calling FC's real /profit-tracking/toggle-item-portfolio endpoint, which needed an
-		// FC account JWT we never have and silently did nothing.
+		// "Add to portfolio" tracks locally via HeldCostTracker.
 		menuHandler.injectInventoryPortfolioMenuEntry(event);
 		menuHandler.injectPriceGraphMenuEntry(event);
 		menuHandler.injectConfirmMenuEntry(event);
