@@ -122,6 +122,28 @@ public class ComposeSuggestionMapperTest
     }
 
     @Test
+    public void requestSerializesDeviceIdAndTimeBasedAbortPrefs()
+    {
+        ComposeSuggestionRequest req = new ComposeSuggestionRequest();
+        req.setClientDeviceId("dev-token-abc");
+        req.setTimeBasedAbortEnabled(true);
+        req.setTimeBasedAbortMinutes(30);
+        String json = gson.toJson(req);
+        assertTrue(json.contains("\"clientDeviceId\":\"dev-token-abc\""));
+        assertTrue(json.contains("\"timeBasedAbortEnabled\":true"));
+        assertTrue(json.contains("\"timeBasedAbortMinutes\":30"));
+        ComposeSuggestionRequest roundTrip = gson.fromJson(json, ComposeSuggestionRequest.class);
+        assertEquals("dev-token-abc", roundTrip.getClientDeviceId());
+        assertTrue(roundTrip.isTimeBasedAbortEnabled());
+        assertEquals(30, roundTrip.getTimeBasedAbortMinutes());
+        // Defaults stay conservative.
+        ComposeSuggestionRequest defaults = new ComposeSuggestionRequest();
+        assertFalse(defaults.isTimeBasedAbortEnabled());
+        assertEquals(15, defaults.getTimeBasedAbortMinutes());
+        assertEquals("", defaults.getClientDeviceId());
+    }
+
+    @Test
     public void requestSerializesOffersAndHeld()
     {
         ComposeSuggestionRequest req = new ComposeSuggestionRequest();
