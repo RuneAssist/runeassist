@@ -1,7 +1,6 @@
 package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.config.RuneAssistConfig;
-import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.AccountLoginRS;
@@ -44,7 +43,6 @@ public class TransactionsPanel extends JPanel {
     private final AccountLoginRS accountLoginRS;
     private final ItemController itemController;
     private final ExecutorService executorService;
-    private final ApiRequestHandler apiRequestHandler;
     private final OsrsLoginManager osrsLoginManager;
     private final FlipManager flipManager;
     private final TransactionManager transactionManager;
@@ -69,7 +67,6 @@ public class TransactionsPanel extends JPanel {
     public TransactionsPanel(AccountLoginRS accountLoginRS,
                              ItemController itemController,
                              @Named("runeAssistExecutor") ExecutorService executorService,
-                             ApiRequestHandler apiRequestHandler,
                              OsrsLoginManager osrsLoginManager,
                              RuneAssistConfig config,
                              FlipManager flipManager,
@@ -78,7 +75,6 @@ public class TransactionsPanel extends JPanel {
         this.accountLoginRS = accountLoginRS;
         this.itemController = itemController;
         this.executorService = executorService;
-        this.apiRequestHandler = apiRequestHandler;
         this.osrsLoginManager = osrsLoginManager;
         this.flipManager = flipManager;
         this.transactionManager = transactionManager;
@@ -300,71 +296,10 @@ public class TransactionsPanel extends JPanel {
     }
 
     private void showTransactionMenu(MouseEvent e, int row) {
-        AckedTransaction transaction = tablePanel.row(row);
-        JPopupMenu menu = new JPopupMenu();
-
-        if (isPartOfFlip(transaction)) {
-            menu.add(transactionMenuItem(
-                    transaction,
-                    "Remove from flip",
-                    "Are you sure you want to remove the transaction from its flip? The flip and any profit will also be updated. This operation cannot be undone.",
-                    "Failed to update transaction. Please try again.",
-                    "orphaning",
-                    apiRequestHandler::asyncOrphanTransaction,
-                    transactionDataWrapper::update));
-        }
-
-        menu.add(transactionMenuItem(
-                transaction,
-                "Delete transaction",
-                "Are you sure you want to delete this transaction? Any flip it is part of will also be updated.",
-                "Failed to delete transaction. Please try again.",
-                "deleting",
-                apiRequestHandler::asyncDeleteTransaction,
-                tx -> transactionDataWrapper.deleteOne(i -> tx.getId().equals(i.getId()))));
-        menu.show(e.getComponent(), e.getX(), e.getY());
+        // Legacy FC orphan/delete removed with cloud JWT stubs.
     }
 
-    private JMenuItem transactionMenuItem(AckedTransaction transaction, String label, String confirmMessage,
-                                          String errorMessage, String logAction,
-                                          TransactionRequest request, Consumer<AckedTransaction> localUpdate) {
-        JMenuItem item = new JMenuItem(label);
-        item.addActionListener(evt -> {
-            int result = JOptionPane.showConfirmDialog(this,
-                    confirmMessage,
-                    "Confirm Action",
-                    JOptionPane.YES_NO_OPTION);
-            if (result == JOptionPane.YES_OPTION) {
-                loadingText.setText("");
-                setSpinnerVisible(true);
-                log.info("{} transaction with ID: {}", logAction, transaction.getId());
 
-                BiConsumer<Integer, List<FlipV2>> onSuccess = (userId, flips) -> {
-                    flipManager.mergeFlips(flips, userId);
-                    setSpinnerVisible(false);
-                    transaction.setClientFlipId(ZERO_UUID);
-                    localUpdate.accept(transaction);
-                    applyFilters(false);
-                };
-
-                Runnable onFailure = () -> {
-                    setSpinnerVisible(false);
-                    JOptionPane.showMessageDialog(this,
-                            errorMessage,
-                            "Error",
-                            JOptionPane.ERROR_MESSAGE);
-                };
-
-                request.send(transaction, onSuccess, onFailure);
-            }
-        });
-        return item;
-    }
-
-    @FunctionalInterface
-    private interface TransactionRequest {
-        void send(AckedTransaction transaction, BiConsumer<Integer, List<FlipV2>> onSuccess, Runnable onFailure);
-    }
 
     private void downloadTransactionsCSV() {
         if (transactionDataWrapper == null) {

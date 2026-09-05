@@ -1,7 +1,6 @@
 package com.runeassist.flip.controller;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
 
@@ -9,7 +8,6 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
 
 @Slf4j
 public class Persistance {
@@ -60,9 +58,6 @@ public class Persistance {
             }
         }
     }
-
-
-
 
     public static String hashDisplayName(String displayName) {
         if(displayName == null) {
