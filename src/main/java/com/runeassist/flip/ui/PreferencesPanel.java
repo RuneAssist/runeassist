@@ -110,7 +110,6 @@ public class PreferencesPanel extends JPanel {
             SuggestionPreferencesManager preferencesManager,
             ItemController itemController,
             AccountSuggestionPreferencesRS accountPreferences,
-            DumpsStreamController dumpsStreamController,
             CloudSyncService cloudSyncService,
             net.runelite.api.Client client,
             ClientThread clientThread,
