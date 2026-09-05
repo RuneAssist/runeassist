@@ -1,15 +1,10 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.model.IntervalTimeUnit;
 import com.runeassist.flip.ui.Spinner;
-import com.runeassist.flip.ui.components.AccountDropdown;
-import com.runeassist.flip.ui.components.IntervalDropdown;
 import net.runelite.client.ui.ColorScheme;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.Map;
-import java.util.function.*;
 
 final class DialogUi {
     private DialogUi() {
@@ -50,20 +45,6 @@ final class DialogUi {
         gbc.gridy = 1;
         loadingPanel.add(loadingLabel, gbc);
         return loadingPanel;
-    }
-
-    static IntervalDropdown intervalDropdown(BiConsumer<IntervalTimeUnit, Integer> onIntervalChanged) {
-        IntervalDropdown dropdown = new IntervalDropdown(onIntervalChanged, IntervalDropdown.ALL_TIME, false);
-        dropdown.setPreferredSize(new Dimension(150, dropdown.getPreferredSize().height));
-        dropdown.setToolTipText("Select time interval");
-        return dropdown;
-    }
-
-    static AccountDropdown accountDropdown(Supplier<Map<String, Integer>> accountsGetter, Consumer<Integer> onAccountChanged) {
-        AccountDropdown dropdown = new AccountDropdown(accountsGetter, onAccountChanged, AccountDropdown.ALL_ACCOUNTS_DROPDOWN_OPTION);
-        dropdown.setPreferredSize(new Dimension(120, dropdown.getPreferredSize().height));
-        dropdown.setToolTipText("Select account");
-        return dropdown;
     }
 
     static JPanel errorCard(JLabel errorLabel, Runnable onRetry) {
