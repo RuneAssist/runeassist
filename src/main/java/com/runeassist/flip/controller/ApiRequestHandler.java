@@ -36,25 +36,6 @@ public class ApiRequestHandler {
 
     private final OkHttpClient client;
     private final Gson gson;
-            @Override
-            public void onResponse(Call call, Response response) {
-                try (Response r = response) {
-                    if (!r.isSuccessful() || r.body() == null) {
-                        onError.accept(new RuntimeException("graph HTTP " + r.code()));
-                        return;
-                    }
-                    Data d = gson.fromJson(r.body().charStream(), Data.class);
-                    if (d == null) {
-                        onError.accept(new RuntimeException("empty graph"));
-                        return;
-                    }
-                    onData.accept(d);
-                } catch (Exception ex) {
-                    onError.accept(ex);
-                }
-            }
-        });
-    }
 
     /**
      * Open a long-lived dump-alert stream ({@code POST /v1/dump-alerts}). The response is
