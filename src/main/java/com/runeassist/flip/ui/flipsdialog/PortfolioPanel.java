@@ -2,6 +2,7 @@ package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.HeldCostTracker;
+import com.runeassist.flip.controller.FlipHistorySyncService;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.*;
@@ -53,6 +54,7 @@ public class PortfolioPanel extends JPanel {
     private final ItemController itemController;
     private final RuneAssistConfig config;
     private final HeldCostTracker heldCostTracker;
+    private final FlipHistorySyncService flipHistorySyncService;
     private final ExecutorService executorService;
     private final SuggestionManager suggestionManager;
     private final OsrsLoginRS osrsLoginRS;
@@ -74,6 +76,7 @@ public class PortfolioPanel extends JPanel {
     public PortfolioPanel(ItemController itemController,
                           RuneAssistConfig config,
                           HeldCostTracker heldCostTracker,
+                          FlipHistorySyncService flipHistorySyncService,
                           ExecutorService executorService,
                           SuggestionManager suggestionManager,
                           OsrsLoginRS osrsLoginRs,
@@ -83,6 +86,7 @@ public class PortfolioPanel extends JPanel {
         this.itemController = itemController;
         this.config = config;
         this.heldCostTracker = heldCostTracker;
+        this.flipHistorySyncService = flipHistorySyncService;
         this.executorService = executorService;
         this.suggestionManager = suggestionManager;
         this.osrsLoginRS = osrsLoginRs;
@@ -268,10 +272,15 @@ public class PortfolioPanel extends JPanel {
         }
         clearPortfolioButton.setEnabled(false);
         executorService.execute(() -> {
-            int removed = heldCostTracker.clearLots(displayName);
-            suggestionManager.setSuggestionNeeded(true);
+            if (flipHistorySyncService != null && flipHistorySyncService.isLinked()
+                    && flipHistorySyncService.clearPortfolio(displayName)) {
+                log.info("cleared portfolio via server for {}", displayName);
+            } else {
+                int removed = heldCostTracker.clearLots(displayName);
+                suggestionManager.setSuggestionNeeded(true);
+                log.info("cleared {} tracked units from local portfolio", removed);
+            }
             SwingUtilities.invokeLater(() -> clearPortfolioButton.setEnabled(true));
-            log.info("cleared {} tracked units from local portfolio", removed);
         });
     }
 
@@ -390,10 +399,9 @@ public class PortfolioPanel extends JPanel {
     }
 
     /**
-     * Forget the tracked cost basis for held stock. FC removed items through their cloud
-     * {@code toggle-item-portfolio} endpoint; this fork has no such account, so that call
-     * silently did nothing and the menu items appeared dead. Removal is local, against the
-     * same {@link HeldCostTracker} lots the local "Add to portfolio" menu writes.
+     * Forget the tracked cost basis for held stock. When linked, posts to the
+     * server toggle-item-portfolio endpoint (FC-shaped) and refreshes from delta;
+     * otherwise falls back to local HeldCostTracker only.
      *
      * @param quantity units to remove, oldest lot first; {@code <= 0} removes all of the item
      */
@@ -403,9 +411,14 @@ public class PortfolioPanel extends JPanel {
             return;
         }
         executorService.execute(() -> {
-            int removed = heldCostTracker.removeLots(displayName, itemId, quantity);
-            suggestionManager.setSuggestionNeeded(true);
-            log.info("removed {} x item {} from local portfolio", removed, itemId);
+            if (flipHistorySyncService != null && flipHistorySyncService.isLinked()
+                    && flipHistorySyncService.toggleItemPortfolio(displayName, itemId, quantity, 0L, true)) {
+                log.info("removed item {} qty {} from server portfolio", itemId, quantity);
+            } else {
+                int removed = heldCostTracker.removeLots(displayName, itemId, quantity);
+                suggestionManager.setSuggestionNeeded(true);
+                log.info("removed {} x item {} from local portfolio", removed, itemId);
+            }
         });
     }
 

@@ -2,6 +2,7 @@ package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.config.RuneAssistConfig;
+import com.runeassist.flip.controller.FlipHistorySyncService;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.manager.PriceGraphConfigManager;
 import com.runeassist.flip.model.*;
@@ -36,6 +37,7 @@ public class FlipsDialogController {
     private final BankStateRS bankStateRS;
     private final LocalFlipLedger localFlipLedger;
     private final com.runeassist.flip.HeldCostTracker heldCostTracker;
+    private final FlipHistorySyncService flipHistorySyncService;
 
     public PriceGraphPanel priceGraphPanel;
     private JTabbedPane tabbedPane;
@@ -60,7 +62,8 @@ public class FlipsDialogController {
             PortfolioStateRS portfolioStateRS,
             BankStateRS bankStateRS,
             LocalFlipLedger localFlipLedger,
-            com.runeassist.flip.HeldCostTracker heldCostTracker) {
+            com.runeassist.flip.HeldCostTracker heldCostTracker,
+            FlipHistorySyncService flipHistorySyncService) {
         this.itemController = itemController;
         this.executorService = executorService;
         this.config = config;
@@ -73,6 +76,7 @@ public class FlipsDialogController {
         this.bankStateRS = bankStateRS;
         this.localFlipLedger = localFlipLedger;
         this.heldCostTracker = heldCostTracker;
+        this.flipHistorySyncService = flipHistorySyncService;
     }
 
     public void initDialog(Window windowAncestor) {
@@ -95,6 +99,7 @@ public class FlipsDialogController {
                     itemController,
                     config,
                     heldCostTracker,
+                    flipHistorySyncService,
                     executorService,
                     suggestionManager,
                     osrsLoginRS,
