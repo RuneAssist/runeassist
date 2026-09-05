@@ -8,6 +8,7 @@ import com.runeassist.flip.rs.PortfolioStateRS;
 import com.runeassist.flip.ui.components.AccountDropdown;
 import com.runeassist.flip.ui.components.IntervalDropdown;
 import com.runeassist.flip.ui.flipsdialog.FlipsDialogController;
+import com.runeassist.flip.ui.flipsdialog.WebAnalyticsLinks;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
@@ -37,6 +38,9 @@ public class StatsPanelV2 extends JPanel {
     public final BufferedImage FLIPS_DIALOG_ICON = ImageUtil.recolorImage(ImageUtil.resizeImage(ImageUtil.loadImageResource(getClass(),"/popout-flips.png"), 20, 20),ColorScheme.LIGHT_GRAY_COLOR);
     public final Icon FLIPS_DIALOG = new ImageIcon(FLIPS_DIALOG_ICON);
     public final Icon HIGHLIGHTED_FLIPS_DIALOG = new ImageIcon(ImageUtil.luminanceScale(FLIPS_DIALOG_ICON, BUTTON_HOVER_LUMINANCE));
+    public final BufferedImage WEB_ANALYTICS_ICON = ImageUtil.recolorImage(ImageUtil.resizeImage(ImageUtil.loadImageResource(getClass(),"/internet.png"), 20, 20),ColorScheme.LIGHT_GRAY_COLOR);
+    public final Icon WEB_ANALYTICS = new ImageIcon(WEB_ANALYTICS_ICON);
+    public final Icon HIGHLIGHTED_WEB_ANALYTICS = new ImageIcon(ImageUtil.luminanceScale(WEB_ANALYTICS_ICON, BUTTON_HOVER_LUMINANCE));
 
     private JPanel sessionTimeRow;
     private JPanel hourlyProfitRow;
@@ -70,6 +74,7 @@ public class StatsPanelV2 extends JPanel {
     private final JLabel portfolioValueVal = new JLabel("0 gp");
     private final Paginator paginator;
     private final JButton flipsDialogButton = new JButton();
+    private final JButton webAnalyticsButton = new JButton();
 
     private volatile boolean lastValidState = false;
 
@@ -108,6 +113,7 @@ public class StatsPanelV2 extends JPanel {
         accountDropdown.setMaximumSize(new Dimension(Integer.MAX_VALUE, accountDropdown.getPreferredSize().height));
         setupProfitAndSubInfoPanel();
         setupFlipsDialogButton();
+        setupWebAnalyticsButton();
 
         flipsPanel.setLayout(new BoxLayout(flipsPanel, BoxLayout.Y_AXIS));
         flipsPanel.setBackground(RuneAssistColors.CARD);
@@ -135,10 +141,15 @@ public class StatsPanelV2 extends JPanel {
 
         paginator = new Paginator((i) -> refresh(true, lastValidState));
 
+        JPanel bottomButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        bottomButtons.setOpaque(false);
+        bottomButtons.add(webAnalyticsButton);
+        bottomButtons.add(flipsDialogButton);
+
         JPanel bottomPanel = new JPanel(new BorderLayout());
         bottomPanel.setBackground(RuneAssistColors.SHELL);
         bottomPanel.add(paginator, BorderLayout.CENTER);
-        bottomPanel.add(flipsDialogButton, BorderLayout.EAST);
+        bottomPanel.add(bottomButtons, BorderLayout.EAST);
 
         add(bottomPanel, BorderLayout.SOUTH);
 
@@ -162,6 +173,27 @@ public class StatsPanelV2 extends JPanel {
             }
         });
         UIUtilities.addHoverIcons(flipsDialogButton, () -> FLIPS_DIALOG, () -> HIGHLIGHTED_FLIPS_DIALOG);
+    }
+
+    private void setupWebAnalyticsButton() {
+        webAnalyticsButton.setIcon(WEB_ANALYTICS);
+        webAnalyticsButton.setOpaque(true);
+        webAnalyticsButton.setEnabled(true);
+        webAnalyticsButton.setFocusable(true);
+        webAnalyticsButton.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 2));
+        webAnalyticsButton.setBackground(RuneAssistColors.SHELL);
+        webAnalyticsButton.setToolTipText("Open web analytics (profit / flips / items)");
+        webAnalyticsButton.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.isShiftDown()) {
+                    flipsDialogController.showWebAnalyticsTab();
+                } else {
+                    flipsDialogController.openWebAnalytics(null);
+                }
+            }
+        });
+        UIUtilities.addHoverIcons(webAnalyticsButton, () -> WEB_ANALYTICS, () -> HIGHLIGHTED_WEB_ANALYTICS);
     }
 
     private void setupSessionResetButton() {
@@ -252,15 +284,19 @@ public class StatsPanelV2 extends JPanel {
 
         JPanel realized = UIUtilities.verticalPanel(RuneAssistColors.CARD);
         realized.add(RuneAssistColors.kicker("REALIZED"));
-        realized.add(metricCell("Flips", flipsMadeVal, ColorScheme.LIGHT_GRAY_COLOR));
-        realized.add(metricCell("ROI", roiVal, UIUtilities.TOMATO));
-        hourlyProfitRow = metricCell("Per hour", hourlyProfitVal, Color.WHITE);
+        realized.add(metricCell("Flips", flipsMadeVal, ColorScheme.LIGHT_GRAY_COLOR,
+                () -> flipsDialogController.openWebAnalytics(WebAnalyticsLinks.SECTION_FLIPS)));
+        realized.add(metricCell("ROI", roiVal, UIUtilities.TOMATO,
+                () -> flipsDialogController.openWebAnalytics(WebAnalyticsLinks.SECTION_PROFIT)));
+        hourlyProfitRow = metricCell("Per hour", hourlyProfitVal, Color.WHITE,
+                () -> flipsDialogController.openWebAnalytics(WebAnalyticsLinks.SECTION_PROFIT));
         realized.add(hourlyProfitRow);
 
         JPanel unrealized = UIUtilities.verticalPanel(RuneAssistColors.CARD);
         unrealized.add(RuneAssistColors.kicker("UNREALIZED"));
         unrealized.add(metricCell("Unrealized", unrealizedProfitVal, ColorScheme.LIGHT_GRAY_COLOR, flipsDialogController::showPortfolioTab));
-        unrealized.add(metricCell("Open", openFlipsVal, ColorScheme.LIGHT_GRAY_COLOR));
+        unrealized.add(metricCell("Open", openFlipsVal, ColorScheme.LIGHT_GRAY_COLOR,
+                () -> flipsDialogController.openWebAnalytics(WebAnalyticsLinks.SECTION_ATTENTION)));
         unrealized.add(metricCell("Portfolio", portfolioValueVal, ColorScheme.LIGHT_GRAY_COLOR, flipsDialogController::showPortfolioTab));
 
         columns.add(realized);
@@ -297,6 +333,14 @@ public class StatsPanelV2 extends JPanel {
         totalProfitVal.setForeground(ColorScheme.GRAND_EXCHANGE_PRICE);
         totalProfitVal.setFont(FontManager.getRunescapeBoldFont().deriveFont(22f));
         totalProfitVal.setHorizontalAlignment(SwingConstants.LEFT);
+        totalProfitVal.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        totalProfitVal.setToolTipText("Open profit graph on the dashboard");
+        totalProfitVal.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                flipsDialogController.openWebAnalytics(WebAnalyticsLinks.SECTION_PROFIT);
+            }
+        });
 
         profitAndSubInfoPanel.add(profitKicker);
         UIUtilities.addVerticalGap(profitAndSubInfoPanel, 2);
@@ -394,7 +438,7 @@ public class StatsPanelV2 extends JPanel {
             openFlipsVal.setText(String.format("%d", openCount));
             totalProfitVal.setText(UIUtilities.formatProfit(stats.profit));
             totalProfitVal.setForeground(UIUtilities.getProfitColor(stats.profit, config));
-            totalProfitVal.setToolTipText("Realized profit from closed sells. Open buys stay at 0 until you sell.");
+            totalProfitVal.setToolTipText("Open profit graph on the dashboard. Realized profit from closed sells.");
             log.debug("populating flips took {}ms", (System.nanoTime() - s) / 1000_000);
         }
 

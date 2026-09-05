@@ -5,6 +5,7 @@ import com.runeassist.flip.model.SuggestionPreferencesManager;
 import com.runeassist.flip.rs.AccountSuggestionPreferencesRS;
 import com.runeassist.flip.model.SuggestionManager;
 import com.runeassist.flip.ui.components.ItemSearchMultiSelect;
+import com.runeassist.flip.ui.flipsdialog.WebAnalyticsLinks;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.util.LinkBrowser;
@@ -372,7 +373,7 @@ public class PreferencesPanel extends JPanel {
         JButton openWebsiteBtn = pairingActionButton("Open website",
                 "Graphs, history, pairing, and support on the dashboard");
         RuneAssistColors.stylePrimaryButton(openWebsiteBtn);
-        openWebsiteBtn.addActionListener(e -> LinkBrowser.browse(flipHistorySyncService.websiteUrl()));
+        openWebsiteBtn.addActionListener(e -> LinkBrowser.browse(WebAnalyticsLinks.url(flipHistorySyncService.websiteUrl(), null)));
         preferencesContent.add(openWebsiteBtn);
         addVerticalGap(preferencesContent, 4);
 
