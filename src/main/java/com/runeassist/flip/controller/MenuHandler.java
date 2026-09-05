@@ -114,8 +114,8 @@ public class MenuHandler {
     }
 
     /**
-     * RuneAssist: add untracked bank/inventory stock to the portfolio. When the
-     * client is linked, the server owns held cost (toggle-item-portfolio); local
+     * Add untracked bank/inventory stock to the portfolio. When the client is
+     * linked, the server owns held cost (toggle-item-portfolio); local
      * HeldCostTracker is updated optimistically then overwritten from the server
      * snapshot after sync.
      */

@@ -92,7 +92,7 @@ public class GameUiChangesHandler {
 
         clientThread.invokeLater(() ->
         {
-            // The Hub Flipping Copilot plugin injects its own "Press [X] to set to Y gp" text
+            // A competing Hub flipping plugin may inject its own "Press [X] to set to Y gp" text
             // into this exact same chatbox widget -- if both plugins are enabled at once (see
             // HubPluginConflict's own doc comment), creating ours too makes the two overlap
             // into unreadable garbled text rather than either one working. Go fully quiet here,
@@ -191,14 +191,9 @@ public class GameUiChangesHandler {
             Suggestion suggestion = suggestionManager.getSuggestion();
             if(suggestion != null) {
                 suggestion.actionedTick = client.getTickCount();
-                suggestionManager.setSuggestionItemIdOnOfferSubmitted(suggestion.getItemId());
-                suggestionManager.setSuggestionOfferStatusOnOfferSubmitted(suggestionOfferStatus(suggestion));
                 Player p = client.getLocalPlayer();
                 String rsn = p != null ? p.getName() : null;
                 telemetry.logSuggestionDecision(rsn, suggestion, "acted", suggestion.getPickSource());
-            } else {
-                suggestionManager.setSuggestionItemIdOnOfferSubmitted(-1);
-                suggestionManager.setSuggestionOfferStatusOnOfferSubmitted(null);
             }
         }
         if (BANK_TAG_TAB_VIEW_OPTION.equals(event.getMenuOption())) {
@@ -243,15 +238,6 @@ public class GameUiChangesHandler {
         return offers[slot].getItemId();
     }
 
-    private OfferStatus suggestionOfferStatus(Suggestion suggestion) {
-        if (suggestion.isSellSuggestion()) {
-            return OfferStatus.SELL;
-        } else if (suggestion.isBuySuggestion()) {
-            return OfferStatus.BUY;
-        } else {
-            return null;
-        }
-    }
 
     public void onScriptPostFired(ScriptPostFired event) {
         if (event.getScriptId() == SCRIPT_GE_COLLECT || event.getScriptId() == SCRIPT_GE_SLOT_REDRAW) {

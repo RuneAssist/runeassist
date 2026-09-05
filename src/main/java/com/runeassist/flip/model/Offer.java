@@ -35,12 +35,8 @@ public class Offer {
 
     private boolean active;
 
-    @Setter
-    @SerializedName("copilot_price_used")
-    private boolean copilotPriceUsed;
-
     public static Offer getEmptyOffer(int slotId) {
-        return new Offer(OfferStatus.EMPTY, 0, 0, 0, 0, 0, slotId, false, false);
+        return new Offer(OfferStatus.EMPTY, 0, 0, 0, 0, 0, slotId, false);
     }
 
 
@@ -68,9 +64,8 @@ public class Offer {
                 runeliteOffer.getSpent(),
                 runeliteOffer.getQuantitySold(),
                 slotId,
-                active,
-                false);
+                active);
     }
 
 
-    }
+}

@@ -13,7 +13,7 @@ import java.awt.Insets;
 
 /**
  * Sidecar / flips-dialog identity. "Ledger" direction: brass on RuneLite dark, paired with
- * the gate-chevron coin mark — not Flipping Copilot orange, not the earlier teal.
+ * the gate-chevron coin mark — not orange, not the earlier teal.
  */
 public final class RuneAssistColors {
     /** Primary accent. #D1A537 */

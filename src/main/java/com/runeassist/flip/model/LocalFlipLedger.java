@@ -89,7 +89,7 @@ public class LocalFlipLedger {
 
     /**
      * When the local ledger is empty, book current GE fills so session profit/unrealized
-     * are not stuck at 0 after the FC-server cutover (saved offers already match, so login
+     * are not stuck at 0 after a re-login (saved offers already match, so login
      * does not re-infer those transactions).
      */
     public synchronized void seedFromSavedOffers(String displayName, List<SavedOffer> offers) {
@@ -473,8 +473,6 @@ public class LocalFlipLedger {
         t.setBoxId(src.getBoxId());
         t.setAmountSpent(src.getAmountSpent());
         t.setTimestamp(src.getTimestamp());
-        t.setCopilotPriceUsed(src.isCopilotPriceUsed());
-        t.setWasCopilotSuggestion(src.isWasCopilotSuggestion());
         t.setLogin(src.isLogin());
         t.setConsistent(src.isConsistent());
         return t;

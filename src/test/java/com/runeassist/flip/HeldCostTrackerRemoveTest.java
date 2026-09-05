@@ -9,10 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Removal from the portfolio panel. FC did this over their cloud endpoint, which this fork
- * never reaches, so it silently did nothing; these cover the local replacement. Persistence
- * is a no-op here (the injected ConfigManager is absent, and both load and save swallow it),
- * so what is asserted is the in-memory lot state.
+ * Portfolio-panel removal via HeldCostTracker. Persistence is a no-op here (no ConfigManager),
+ * so assertions cover in-memory lot state only.
  */
 public class HeldCostTrackerRemoveTest {
 

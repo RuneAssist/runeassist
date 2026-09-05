@@ -515,8 +515,6 @@ public class SuggestionPanel extends JPanel {
         innerSuggestionMessage = message;
         setButtonsVisible(false);
 
-        // FC's server was the only source of the "<manage>" premium-instance link; local
-        // suggestions never emit one, so the message is shown as-is.
         String displayMessage = message;
         suggestionText.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
         suggestionText.setText("<html><center>" + displayMessage + "<br>" + serverMessage + "</center></html>");

@@ -136,7 +136,7 @@ public class PrivacyPackagingTest {
     }
 
     @Test
-    public void leftoverCopilotHostIsAbsentFromSources() throws Exception {
+    public void leftoverUpstreamHostIsAbsentFromSources() throws Exception {
         Path root = Paths.get("src");
         try (Stream<Path> files = Files.walk(root)) {
             files.filter(p -> p.toString().endsWith(".java") || p.toString().endsWith(".properties"))

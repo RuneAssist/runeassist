@@ -662,6 +662,7 @@ public class HighlightController {
         return null;
     }
 
+
     private Widget getVisibleItemWidget(Widget itemContainer, int unnotedItemId) {
         Widget[] children = itemContainer.getDynamicChildren();
         if (children == null) {

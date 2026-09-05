@@ -264,7 +264,7 @@ public class RuneAssistSuggestionSource
         return pending;
     }
 
-    /** Held stock as FC portfolio items so unrealized profit / portfolio value update. */
+    /** Held stock as portfolio items so unrealized profit / portfolio value update. */
     private List<Suggestion.PortfolioItem> portfolioItems(Map<Integer, long[]> held, long[][] offers)
     {
         Map<Integer, long[]> merged = mergeHeldWithOfferFills(held, offers);
