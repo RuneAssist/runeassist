@@ -78,6 +78,31 @@ public class FlipScorerTest {
     }
 
     @Test
+    public void slotIdleRiskPenalisesFlipsThatCannotFillTheSlot() {
+        long budget = 53_750_000L; // 430m across 8 slots
+        // A cheap bulk item: 2,000 limit x 10k = 20m, only ~37% of the slot -> penalised.
+        double bulk = FlipScorer.slotIdleRisk(20_000_000L, budget);
+        // An expensive item clears the whole budget in a few units -> no penalty.
+        double rich = FlipScorer.slotIdleRisk(budget, budget);
+        assertEquals(0.0, rich, 1e-9);
+        assertTrue(bulk > rich);
+        assertEquals((1.0 - 20_000_000.0 / budget) * FlipScorer.SLOT_IDLE_RISK_WEIGHT, bulk, 1e-9);
+        // Worst observed shape: an item able to absorb only ~3% of the slot.
+        assertTrue(FlipScorer.slotIdleRisk(1_800_000L, budget) > bulk);
+    }
+
+    @Test
+    public void slotIdleRiskIsNeutralWhenBudgetIsUnknownOrOversubscribed() {
+        // Unknown/zero capital must not penalise anything.
+        assertEquals(0.0, FlipScorer.slotIdleRisk(5_000_000L, 0), 1e-9);
+        assertEquals(0.0, FlipScorer.slotIdleRisk(0, 53_750_000L), 1e-9);
+        // Deploying more than the budget is clamped, never negative.
+        assertEquals(0.0, FlipScorer.slotIdleRisk(999_000_000L, 53_750_000L), 1e-9);
+        // Small account: a 5m stack over 8 slots is a 625k budget, which most items clear.
+        assertEquals(0.0, FlipScorer.slotIdleRisk(700_000L, 625_000L), 1e-9);
+    }
+
+    @Test
     public void driftComparesFiveMinuteHighToHourHigh() {
         int[] v1 = {1000, 1000, 7300, 7000};
         int[] v5 = {100, 100, 6933, 6700};
