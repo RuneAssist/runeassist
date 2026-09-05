@@ -16,7 +16,6 @@ public class SuggestionManager {
     private volatile boolean graphDataReadingInProgress;
     private volatile boolean suggestionRefreshPending;
     private Instant lastFailureAt;
-    private HttpResponseException suggestionError;
     private Suggestion suggestion;
     private Instant suggestionReceivedAt;
     private int lastOfferSubmittedTick = -1;
@@ -37,11 +36,6 @@ public class SuggestionManager {
 
     }
 
-    public void setSuggestionError(HttpResponseException error) {
-        this.suggestionError = error;
-        lastFailureAt= Instant.now();
-    }
-
     public void reset() {
         suggestionNeeded = false;
         suggestionRefreshPending = false;
@@ -49,7 +43,6 @@ public class SuggestionManager {
         suggestionReceivedAt = null;
         lastFailureAt = null;
         lastOfferSubmittedTick = -1;
-        suggestionError = null;
         suggestionItemIdOnOfferSubmitted = -1;
         suggestionOfferStatusOnOfferSubmitted = null;
     }

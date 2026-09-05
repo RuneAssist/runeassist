@@ -1,16 +1,12 @@
 package com.runeassist.flip.model;
 
 import com.runeassist.flip.ui.graph.model.Data;
-import com.runeassist.flip.util.ProtoUtils;
-import com.google.protobuf.CodedInputStream;
-import com.google.protobuf.WireFormat;
 import com.google.gson.annotations.SerializedName;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 
 import java.text.NumberFormat;
 import java.time.Instant;
-import java.io.IOException;
 import java.util.*;
 
 @Setter
@@ -121,62 +117,7 @@ public class Suggestion {
             return 0L;
         }
 
-        public static PortfolioItem decodeProto(CodedInputStream input) throws IOException {
-            PortfolioItem item = new PortfolioItem();
-            while (!input.isAtEnd()) {
-                int tag = input.readTag();
-                if (tag == 0) {
-                    break;
-                }
-                int field = WireFormat.getTagFieldNumber(tag);
-                switch (field) {
-                    case 1:
-                        item.itemId = input.readInt32();
-                        break;
-                    case 7:
-                        item.portfolioAmount = input.readInt32();
-                        break;
-                    case 8:
-                        item.portfolioSellValue = input.readInt64();
-                        break;
-                    case 9:
-                        item.portfolioBuySpend = input.readInt64();
-                        break;
-                    case 10:
-                        item.portfolioHeldMinutes = input.readInt32();
-                        break;
-                    case 11:
-                        item.personalAmount = input.readInt32();
-                        break;
-                    case 12:
-                        item.personalSellValue = input.readInt64();
-                        break;
-                    case 13:
-                        item.personalBuySpend = input.readInt64();
-                        break;
-                    case 14:
-                        item.personalHeldMinutes = input.readInt32();
-                        break;
-                    case 15:
-                        item.ghostAmount = input.readInt32();
-                        break;
-                    case 16:
-                        item.ghostSellValue = input.readInt64();
-                        break;
-                    case 17:
-                        item.ghostBuySpend = input.readInt64();
-                        break;
-                    case 18:
-                        item.ghostHeldMinutes = input.readInt32();
-                        break;
-                    default:
-                        // Skips deprecated legacy aggregates (2-6).
-                        input.skipField(tag);
-                }
             }
-            return item;
-        }
-    }
 
     public volatile Instant dumpAlertReceived = Instant.now();
     public volatile boolean isDumpAlert;
@@ -277,126 +218,7 @@ public class Suggestion {
         return string;
     }
 
-    public static Suggestion decodeProto(byte[] bytes) {
-        if (bytes == null || bytes.length == 0) {
-            return null;
-        }
-
-        Suggestion suggestion = new Suggestion();
-        try {
-            CodedInputStream input = CodedInputStream.newInstance(bytes);
-            while (!input.isAtEnd()) {
-                int tag = input.readTag();
-                if (tag == 0) {
-                    break;
-                }
-
-                int fieldNumber = WireFormat.getTagFieldNumber(tag);
-                switch (fieldNumber) {
-                    case 1:
-                        suggestion.timeIssued = ProtoUtils.decodeTimestamp(input);
-                        break;
-                    case 2:
-                        suggestion.boxId = input.readInt32();
-                        break;
-                    case 3:
-                        suggestion.type = SuggestionType.fromProtoInt(input.readInt32());
-                        break;
-                    case 4:
-                        suggestion.itemId = input.readInt32();
-                        break;
-                    case 5:
-                        suggestion.quantity = clampToInt(input.readInt64());
-                        break;
-                    case 6:
-                        suggestion.price = input.readInt64();
-                        break;
-                    case 7:
-                        suggestion.id = input.readInt32();
-                        break;
-                    case 11:
-                        suggestion.message = input.readString();
-                        break;
-                    case 12:
-                        suggestion.expectedProfit = input.readDouble();
-                        break;
-                    case 14:
-                        suggestion.isDumpAlert = input.readBool();
-                        break;
-                    case 15:
-                        suggestion.name = input.readString();
-                        break;
-                    case 16:
-                        suggestion.expectedDuration = input.readDouble();
-                        break;
-                    case 17:
-                        if (suggestion.bankItems == null) {
-                            suggestion.bankItems = new HashMap<>();
-                        }
-                        int mapLength = input.readRawVarint32();
-                        int mapLimit = input.pushLimit(mapLength);
-                        int key = 0;
-                        int value = 0;
-                        while (!input.isAtEnd()) {
-                            int mapTag = input.readTag();
-                            if (mapTag == 0) {
-                                break;
-                            }
-                            int mapFieldNumber = WireFormat.getTagFieldNumber(mapTag);
-                            switch (mapFieldNumber) {
-                                case 1:
-                                    key = input.readInt32();
-                                    break;
-                                case 2:
-                                    value = input.readInt32();
-                                    break;
-                                default:
-                                    input.skipField(mapTag);
-                            }
-                        }
-                        suggestion.bankItems.put(key, value);
-                        input.popLimit(mapLimit);
-                        break;
-                    case 18:
-                        if (suggestion.portfolioItems == null) {
-                            suggestion.portfolioItems = new ArrayList<>();
-                        }
-                        int itemLength = input.readRawVarint32();
-                        int itemLimit = input.pushLimit(itemLength);
-                        suggestion.portfolioItems.add(PortfolioItem.decodeProto(input));
-                        input.popLimit(itemLimit);
-                        break;
-                    case 19:
-                        suggestion.isHold = input.readBool();
-                        break;
-                    case 20:
-                        suggestion.geLimit = input.readInt32();
-                        break;
-                    case 21:
-                        suggestion.remainingLimit = input.readInt32();
-                        break;
-                    case 22:
-                        suggestion.limitKnown = input.readBool();
-                        break;
-                    default:
-                        input.skipField(tag);
-                }
-            }
-        } catch (IOException e) {
-            log.warn("failed decoding suggestion proto", e);
-            return null;
-        }
-
-        if (!suggestion.isDumpAlert && suggestion.message != null && suggestion.message.contains("Dump alert")) {
-            suggestion.isDumpAlert = true;
-        }
-        if (suggestion.type == SuggestionType.ABORT) {
-            suggestion.isDumpAlert = false;
-        }
-        return suggestion;
-    }
-
-    private static int clampToInt(long value) {
+        private static int clampToInt(long value) {
         if (value > Integer.MAX_VALUE) {
             return Integer.MAX_VALUE;
         }

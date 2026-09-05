@@ -1,7 +1,5 @@
 package com.runeassist.flip.model;
 import com.runeassist.flip.util.Constants;
-import com.runeassist.flip.util.ProtoUtils;
-import com.google.protobuf.CodedOutputStream;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
@@ -181,80 +179,4 @@ public class AccountStatus {
         return reservedSlots == null ? 0 : reservedSlots;
     }
 
-    public synchronized byte[] encodeProto( boolean geOpen, boolean sendGraphData) {
-        return ProtoUtils.encodeMessage(out -> {
-            out.writeInt32(8, version);
-            if (displayName != null && !displayName.isEmpty()) {
-                out.writeString(1, displayName);
-            }
-            out.writeBool(2, sellOnlyMode);
-            out.writeBool(3, isWorldMember);
-            out.writeBool(4, isAccountMember);
-            out.writeInt32(5, skipSuggestion);
-
-            if (offers != null) {
-                for (Offer offer : offers) {
-                    if (offer == null) {
-                        continue;
-                    }
-                    byte[] offerBytes = offer.encodeProto();
-                    if (offerBytes.length == 0) {
-                        continue;
-                    }
-                    ProtoUtils.writeDelimitedMessageField(out, 6, offerBytes);
-                }
-            }
-
-            Map<Integer, Long> protoInventory = computeInventory();
-            ProtoUtils.writeMap(out, 7, protoInventory, CodedOutputStream::writeInt32, CodedOutputStream::writeInt64);
-
-            out.writeBool(11, f2pOnlyMode);
-            ProtoUtils.writePacked(out, 12, blockedItems, CodedOutputStream::writeInt32NoTag);
-
-            Set<SuggestionType> requestedSuggestionTypes = resolveRequestedSuggestionTypes(geOpen);
-            List<Integer> requestedSuggestionTypeInts = new java.util.ArrayList<>(requestedSuggestionTypes.size());
-            for (SuggestionType suggestionType : requestedSuggestionTypes) {
-                requestedSuggestionTypeInts.add(suggestionType.protoInt());
-            }
-            ProtoUtils.writePacked(out, 13, requestedSuggestionTypeInts, CodedOutputStream::writeInt32NoTag);
-
-            out.writeBool(14, sendGraphData);
-
-            out.writeDouble(15, timeframe);
-            RiskLevel effectiveRiskLevel = riskLevel == null ? RiskLevel.MEDIUM : riskLevel;
-            out.writeInt32(16, effectiveRiskLevel.protoInt());
-            if (reservedSlots != null) {
-                out.writeInt32(17, reservedSlots);
-            }
-            if (minPredictedProfit != null) {
-                out.writeInt64(34, minPredictedProfit);
-            }
-            if (dumpMinPredictedProfit != null) {
-                out.writeInt64(35, dumpMinPredictedProfit);
-            }
-
-            ProtoUtils.writeMap(
-                    out,
-                    20,
-                    bankInventory,
-                    CodedOutputStream::writeInt32,
-                    CodedOutputStream::writeInt32
-            );
-            out.writeBool(21, bankAvailable);
-
-            if (suggestionsPaused != null) {
-                out.writeBool(28, suggestionsPaused);
-            }
-            out.writeBool(30, buyAndHold);
-            ProtoUtils.writePacked(out, 31, syncExcluded, CodedOutputStream::writeInt32NoTag);
-            out.writeBool(32, allowedSync);
-            ProtoUtils.writeMap(
-                    out,
-                    33,
-                    bagInventory,
-                    CodedOutputStream::writeInt32,
-                    CodedOutputStream::writeInt32
-            );
-        });
     }
-}

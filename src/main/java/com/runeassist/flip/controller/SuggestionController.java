@@ -55,7 +55,6 @@ public class SuggestionController {
 
 
     private MainPanel mainPanel;
-    private LoginPanel loginPanel;
     private RuneAssistPanel runeAssistPanel;
     private SuggestionPanel suggestionPanel;
 
@@ -298,19 +297,6 @@ public class SuggestionController {
             });
             suggestionManager.setGraphDataReadingInProgress(false);
         };
-        Consumer<HttpResponseException> onFailure = (e) -> {
-            suggestionManager.setSuggestion(null);
-            suggestionManager.setSuggestionError(e);
-            suggestionManager.setSuggestionRequestInProgress(false);
-            suggestionManager.setGraphDataReadingInProgress(false);
-            if (e.getResponseCode() == 401) {
-                accountLoginRS.clear();
-                mainPanel.refresh();
-                loginPanel.showLoginErrorMessage("Login timed out. Please log in again");
-            } else {
-                suggestionPanel.refresh();
-            }
-        };
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
         // Typed suggestion from Ares POST /v1/suggestion (compose-only).
@@ -381,7 +367,6 @@ public class SuggestionController {
                 accountStatus.getUncollected(),
                 newSuggestion.getTimeIssued()
         );
-        suggestionManager.setSuggestionError(null);
         suggestionManager.setSuggestionRequestInProgress(false);
         log.debug("Received suggestion: {}", newSuggestion.toString());
         logSuggestionDecision(oldSuggestion, newSuggestion);

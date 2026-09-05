@@ -22,16 +22,6 @@ public class TransactionManager {
     private final ConcurrentMap<String, List<Transaction>> cachedUnAckedTransactions = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, AtomicBoolean> transactionSyncScheduled = new ConcurrentHashMap<>();
 
-    public void syncUnAckedTransactions(String displayName) {
-        synchronized (this) {
-            AtomicBoolean scheduled = transactionSyncScheduled.get(displayName);
-            if (scheduled != null) {
-                scheduled.set(false);
-            }
-        }
-        // Legacy copilot / cloud-history upload removed; session ledger is local-only.
-    }
-
     /**
      * Load the session flip book for this account and replay any leftover unacked
      * GE fills still held in memory.
@@ -117,13 +107,4 @@ public class TransactionManager {
         return cachedUnAckedTransactions.computeIfAbsent(displayName, (k) -> new ArrayList<>());
     }
 
-    public synchronized void scheduleSyncIn(int seconds, String displayName) {
-        AtomicBoolean scheduled = transactionSyncScheduled.computeIfAbsent(displayName, k -> new AtomicBoolean(false));
-        if (scheduled.compareAndSet(false, true)) {
-            log.info("scheduling {} session ledger settle in {}s", displayName, seconds);
-            executorService.schedule(() -> this.syncUnAckedTransactions(displayName), seconds, TimeUnit.SECONDS);
-        } else {
-            log.debug("skipping scheduling sync as already scheduled");
-        }
-    }
 }

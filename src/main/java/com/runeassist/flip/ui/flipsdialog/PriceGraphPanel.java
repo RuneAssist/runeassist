@@ -16,9 +16,7 @@ import net.runelite.client.ui.ColorScheme;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.function.Consumer;
 
-import static org.apache.commons.lang3.ObjectUtils.firstNonNull;
 
 @Slf4j
 public class PriceGraphPanel extends JPanel {
