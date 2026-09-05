@@ -132,6 +132,8 @@ public class RuneAssistPlugin extends Plugin {
 	private com.runeassist.flip.GeHistoryDump geHistoryDump;
 	@Inject
 	private com.runeassist.flip.GeHistoryHeldBackfill geHistoryHeldBackfill;
+	@Inject
+	private FlipHistorySyncService flipHistorySyncService;
 
 	// We use our own ThreadPool since the default ScheduledExecutorService only has a single thread and we don't want to block it
 	@Provides
@@ -190,6 +192,7 @@ public class RuneAssistPlugin extends Plugin {
 		}
 		flipsDialogController.initDialog(SwingUtilities.getWindowAncestor(mainPanel));
 		telemetry.onUploadSettingsChanged();
+		flipHistorySyncService.start();
 		executorService.scheduleAtFixedRate(() ->
 			clientThread.invoke(() -> {
 				boolean loginValid = osrsLoginManager.isValidLoginState();
@@ -284,6 +287,7 @@ public class RuneAssistPlugin extends Plugin {
 		sessionManager.startOrResume();
 		transactionManager.hydrateLocal(name);
 		transactionManager.seedLiveOffers(name, client.getGrandExchangeOffers());
+		flipHistorySyncService.onLogin(name);
 		int accountId = LocalFlipLedger.accountIdFor(name);
 		accountLoginRS.addAccountIfMissing(accountId, name, LocalFlipLedger.LOCAL_USER_ID);
 		flipManager.setPluginUserId(LocalFlipLedger.LOCAL_USER_ID);
@@ -372,6 +376,7 @@ public class RuneAssistPlugin extends Plugin {
 		switch (event.getGameState())
 		{
 			case LOGIN_SCREEN:
+				flipHistorySyncService.flushNow();
 				sessionManager.reset();
 				suggestionManager.reset();
 				osrsLoginManager.reset();
@@ -418,6 +423,7 @@ public class RuneAssistPlugin extends Plugin {
 	@Subscribe
 	public void onClientShutdown(ClientShutdown clientShutdownEvent) {
 		log.debug("client shutdown event received");
+		flipHistorySyncService.flushNow();
 		offerManager.saveAll();
 		if(accountLoginRS.get().isLoggedIn()) {
 			String displayName = osrsLoginManager.getLastDisplayName();
@@ -462,6 +468,9 @@ public class RuneAssistPlugin extends Plugin {
 					|| "telemetryEndpoint".equals(event.getKey())
 					|| "telemetryToken".equals(event.getKey())) {
 				telemetry.onUploadSettingsChanged();
+			}
+			if ("cloudSync".equals(event.getKey())) {
+				flipHistorySyncService.onEnabledChanged();
 			}
 			// RuneAssist fork: BankTags portfolio-tag feature disabled.
 			// if (event.getKey().equals("portfolioBankTag")) {
