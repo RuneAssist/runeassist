@@ -105,6 +105,11 @@ public interface RuneAssistConfig extends Config
         {
             switch (this)
             {
+                case RUNEASSIST:
+                    if (itemId > 0) {
+                        return "https://runeassist.com/app/#/item/" + itemId;
+                    }
+                    return "https://runeassist.com/app/";
                 case OSRS_WIKI:
                     return "https://prices.runescape.wiki/osrs/item/" + itemId;
                 case GE_TRACKER:
@@ -130,7 +135,7 @@ public interface RuneAssistConfig extends Config
                 case FLIPPING_GG:
                     return "https://www.flipping.gg/items/" + itemId;
                 default:
-                    return "";
+                    return "https://runeassist.com/app/";
             }
         }
     }
@@ -153,19 +158,7 @@ public interface RuneAssistConfig extends Config
     {
         return true;
     }
-
-    @ConfigItem(
-            keyName = "lowDataMode",
-            name = "Low data mode",
-            description = "When enabled, price graph data is only sent when opening the graph.",
-            section = offerSetupSection,
-            position = 7
-    )
-    default boolean lowDataMode()
-    {
-        return false;
-    }
-    @ConfigItem(
+@ConfigItem(
             keyName = "slotActionSwap",
             name = "Swap slot left-click action",
             description = "Automatically set the left-click option on GE slots to match the suggested action (e.g. Abort offer)",
@@ -234,7 +227,7 @@ public interface RuneAssistConfig extends Config
     @ConfigItem(
             keyName = "priceGraphMenuOptionEnabled",
             name = "Enable price graph menu option",
-            description = "Adds a menu option to open the RuneAssist price graph on applicable right clicks.",
+            description = "Adds a menu option to open the price graph website on applicable right clicks.",
             section = appearanceSection,
             position = 1
     )
@@ -245,8 +238,8 @@ public interface RuneAssistConfig extends Config
 
     @ConfigItem(
             keyName = "priceGraphButton",
-            name = "Graph button",
-            description = "The page to open when the graph button is clicked.",
+            name = "Graph website",
+            description = "Website opened for price graphs (in-plugin charts were removed).",
             section = appearanceSection,
             position = 2
     )

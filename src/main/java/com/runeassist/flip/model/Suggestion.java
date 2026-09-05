@@ -1,6 +1,5 @@
 package com.runeassist.flip.model;
 
-import com.runeassist.flip.ui.graph.model.Data;
 import com.google.gson.annotations.SerializedName;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +35,6 @@ public class Suggestion {
     private boolean isHold;
     private Map<Integer, Integer> bankItems;
     private List<PortfolioItem> portfolioItems;
-    private Data graphData;
     private Instant timeIssued;
     /** Wiki GE buy-limit; 0 if unknown. */
     private int geLimit;

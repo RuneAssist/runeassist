@@ -1,18 +1,14 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.FlipHistorySyncService;
 import com.runeassist.flip.controller.ItemController;
-import com.runeassist.flip.manager.PriceGraphConfigManager;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.*;
-import com.runeassist.flip.ui.graph.model.PriceLine;
 import com.runeassist.flip.ui.RuneAssistColors;
 import com.runeassist.flip.ui.RuneAssistTabbedPaneUI;
 import com.google.inject.name.Named;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.client.util.LinkBrowser;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -28,14 +24,10 @@ public class FlipsDialogController {
     private final ItemController itemController;
     private final ExecutorService executorService;
     private final RuneAssistConfig config;
-    private final ApiRequestHandler apiRequestHandler;
-    private final PriceGraphConfigManager priceGraphConfigManager;
-    private final OsrsLoginManager osrsLoginManager;
-    private final SuggestionManager suggestionManager;
     private final OsrsLoginRS osrsLoginRS;
     private final PortfolioStateRS portfolioStateRS;
     private final BankStateRS bankStateRS;
-    private final LocalFlipLedger localFlipLedger;
+    private final SuggestionManager suggestionManager;
     private final com.runeassist.flip.HeldCostTracker heldCostTracker;
     private final FlipHistorySyncService flipHistorySyncService;
 
@@ -44,7 +36,6 @@ public class FlipsDialogController {
     private JDialog dialog;
     private VisualizeFlipPanel visualizeFlipPanel;
 
-    // Tab indices after Path A analytics cut: Portfolio, Price graph, Visualize flip
     private static final int TAB_PORTFOLIO = 0;
     private static final int TAB_PRICE_GRAPH = 1;
     private static final int TAB_VISUALIZE_FLIP = 2;
@@ -54,27 +45,19 @@ public class FlipsDialogController {
             @Named("runeAssistExecutor") ScheduledExecutorService executorService,
             ItemController itemController,
             RuneAssistConfig config,
-            ApiRequestHandler apiRequestHandler,
-            PriceGraphConfigManager priceGraphConfigManager,
-            OsrsLoginManager osrsLoginManager,
             SuggestionManager suggestionManager,
             OsrsLoginRS osrsLoginRS,
             PortfolioStateRS portfolioStateRS,
             BankStateRS bankStateRS,
-            LocalFlipLedger localFlipLedger,
             com.runeassist.flip.HeldCostTracker heldCostTracker,
             FlipHistorySyncService flipHistorySyncService) {
         this.itemController = itemController;
         this.executorService = executorService;
         this.config = config;
-        this.apiRequestHandler = apiRequestHandler;
-        this.priceGraphConfigManager = priceGraphConfigManager;
-        this.osrsLoginManager = osrsLoginManager;
         this.suggestionManager = suggestionManager;
         this.osrsLoginRS = osrsLoginRS;
         this.portfolioStateRS = portfolioStateRS;
         this.bankStateRS = bankStateRS;
-        this.localFlipLedger = localFlipLedger;
         this.heldCostTracker = heldCostTracker;
         this.flipHistorySyncService = flipHistorySyncService;
     }
@@ -88,13 +71,7 @@ public class FlipsDialogController {
             tabbedPane.setUI(new RuneAssistTabbedPaneUI());
             tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
 
-            visualizeFlipPanel = new VisualizeFlipPanel(
-                    itemController,
-                    priceGraphConfigManager,
-                    config,
-                    apiRequestHandler,
-                    localFlipLedger
-            );
+            visualizeFlipPanel = new VisualizeFlipPanel(itemController, config);
             PortfolioPanel portfolioPanel = new PortfolioPanel(
                     itemController,
                     config,
@@ -105,16 +82,9 @@ public class FlipsDialogController {
                     osrsLoginRS,
                     portfolioStateRS,
                     bankStateRS,
-                    itemId -> showPriceGraphTab(itemId, false, null)
+                    this::openItemPriceGraph
             );
-            priceGraphPanel = new PriceGraphPanel(
-                    itemController,
-                    priceGraphConfigManager,
-                    config,
-                    apiRequestHandler,
-                    osrsLoginManager,
-                    suggestionManager
-            );
+            priceGraphPanel = new PriceGraphPanel(itemController, config, suggestionManager);
             tabbedPane.addTab("Portfolio", portfolioPanel);
             tabbedPane.addTab("Price graph", priceGraphPanel);
             tabbedPane.addTab("Visualize flip", visualizeFlipPanel);
@@ -125,22 +95,16 @@ public class FlipsDialogController {
             dialog.setMinimumSize(new Dimension(800, 600));
 
             tabbedPane.addChangeListener(e -> {
-                int selectedIndex = tabbedPane.getSelectedIndex();
-                switch (selectedIndex) {
-                    case TAB_PORTFOLIO:
-                        portfolioPanel.onTabShown();
-                        break;
-                    case TAB_PRICE_GRAPH:
-                        priceGraphPanel.onTabShown();
-                        break;
-                    default:
-                        break;
+                if (tabbedPane.getSelectedIndex() == TAB_PORTFOLIO) {
+                    portfolioPanel.onTabShown();
+                } else if (tabbedPane.getSelectedIndex() == TAB_PRICE_GRAPH) {
+                    priceGraphPanel.onTabShown();
                 }
             });
             dialog.setContentPane(tabbedPane);
 
             GraphicsEnvironment env = GraphicsEnvironment.getLocalGraphicsEnvironment();
-            Rectangle bounds = env.getMaximumWindowBounds(); // Excludes taskbar
+            Rectangle bounds = env.getMaximumWindowBounds();
             dialog.setSize(bounds.width, bounds.height);
             dialog.setLocation(bounds.x, bounds.y);
 
@@ -151,44 +115,44 @@ public class FlipsDialogController {
         });
     }
 
-    public void showPriceGraphTab(Integer openOnPriceGraphItemId, boolean suggestionPriceGraph, PriceLine priceLine) {
-        tabbedPane.setSelectedIndex(TAB_PRICE_GRAPH);
-        if(openOnPriceGraphItemId != null) {
-            priceGraphPanel.isShowingSuggestionPriceData = false;
-            priceGraphPanel.searchBox.setItem(new ItemIdName(openOnPriceGraphItemId, itemController.getItemName(openOnPriceGraphItemId)));
-            priceGraphPanel.offerPriceLine = priceLine;
-        } else if (suggestionPriceGraph)  {
-            priceGraphPanel.showSuggestionPriceGraph();
-        } else {
-            priceGraphPanel.showLandingCard();
+    public void openItemPriceGraph(int itemId) {
+        String name = itemController.getItemName(itemId);
+        PriceGraphWebsite.open(config, name, itemId);
+        if (priceGraphPanel != null) {
+            priceGraphPanel.showItem(itemId);
         }
-        dialog.setVisible(true);
+    }
+
+    public void showPriceGraphTab(Integer itemId) {
+        if (itemId != null && itemId > 0) {
+            openItemPriceGraph(itemId);
+        }
+        if (tabbedPane != null) {
+            tabbedPane.setSelectedIndex(TAB_PRICE_GRAPH);
+        }
+        if (priceGraphPanel != null) {
+            if (itemId != null && itemId > 0) {
+                priceGraphPanel.showItem(itemId);
+            } else {
+                priceGraphPanel.showLandingCard();
+            }
+        }
+        if (dialog != null) {
+            dialog.setVisible(true);
+        }
     }
 
     public void openSuggestionPriceGraph() {
         Suggestion suggestion = suggestionManager.getSuggestion();
-        if (config.priceGraphWebsite().equals(RuneAssistConfig.PriceGraphWebsite.RUNEASSIST)) {
-            if (isSuggestionWithoutGraphData(suggestion)) {
-                showPriceGraphTab(suggestion.getItemId(), false, null);
-            } else if (suggestion != null && !suggestion.isWaitSuggestion()) {
-                showPriceGraphTab(null, true, null);
-            } else {
-                showPriceGraphTab(null, false, null);
-            }
-            return;
-        }
-
         if (suggestion == null || suggestion.isWaitSuggestion()) {
+            showPriceGraphTab(null);
             return;
         }
-        String url = config.priceGraphWebsite().getUrl(suggestion.getName(), suggestion.getItemId());
-        LinkBrowser.browse(url);
+        PriceGraphWebsite.open(config, suggestion.getName(), suggestion.getItemId());
+        if (priceGraphPanel != null) {
+            priceGraphPanel.showItem(suggestion.getItemId());
+        }
     }
-
-    private boolean isSuggestionWithoutGraphData(Suggestion suggestion) {
-        return suggestion != null && !suggestion.isWaitSuggestion() && suggestion.isDumpAlert;
-    }
-
 
     public void showPortfolioTab() {
         tabbedPane.setSelectedIndex(TAB_PORTFOLIO);

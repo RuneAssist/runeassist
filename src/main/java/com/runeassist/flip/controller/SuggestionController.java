@@ -6,8 +6,6 @@ import com.runeassist.flip.rs.AccountLoginRS;
 import com.runeassist.flip.rs.PortfolioStateRS;
 import com.runeassist.flip.ui.*;
 import com.runeassist.flip.ui.flipsdialog.FlipsDialogController;
-import com.runeassist.flip.ui.graph.model.Data;
-import com.runeassist.flip.ui.graph.model.PriceLine;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -92,7 +90,7 @@ public class SuggestionController {
                 suggestionPanel.refresh();
             }
         }
-        if(suggestionManager.isSuggestionRequestInProgress() || suggestionManager.isGraphDataReadingInProgress()) {
+        if(suggestionManager.isSuggestionRequestInProgress()) {
             return;
         }
         // There is a race condition when the collect button is hit at the same time as offers fill.
@@ -286,21 +284,9 @@ public class SuggestionController {
         }
         suggestionManager.setSuggestionRequestInProgress(true);
         suggestionManager.setSuggestionRefreshPending(false);
-        boolean skipGraphData = config.lowDataMode();
-        suggestionManager.setGraphDataReadingInProgress(!skipGraphData);
         Consumer<Suggestion> suggestionConsumer = (newSuggestion) -> handleSuggestionReceived(oldSuggestion, newSuggestion, accountStatus);
-        Consumer<Data> graphDataConsumer = (d) -> {
-            SwingUtilities.invokeLater(() -> {
-                if (flipDialogController.priceGraphPanel != null) {
-                    flipDialogController.priceGraphPanel.setSuggestionPriceData(d);
-                }
-            });
-            suggestionManager.setGraphDataReadingInProgress(false);
-        };
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
-        // Typed suggestion from Ares POST /v1/suggestion (compose-only).
-        suggestionManager.setGraphDataReadingInProgress(false); // graph is served separately
         runeAssistSource.getSuggestionAsync(suggestionConsumer);
     }
 
@@ -338,7 +324,6 @@ public class SuggestionController {
                 suggestionManager.setSuggestion(null);
             }
             suggestionManager.setSuggestionRequestInProgress(false);
-            suggestionManager.setGraphDataReadingInProgress(false);
             suggestionManager.setSuggestionNeeded(true);
             if (suggestionPanel != null) {
                 suggestionPanel.refresh();
@@ -350,7 +335,6 @@ public class SuggestionController {
             log.info("keeping in-progress MODIFY item {} slot {}; discarding {}",
                     oldSuggestion.getItemId(), oldSuggestion.getBoxId(), newSuggestion);
             suggestionManager.setSuggestionRequestInProgress(false);
-            suggestionManager.setGraphDataReadingInProgress(false);
             if (suggestionPanel != null) {
                 suggestionPanel.refresh();
             }
@@ -374,22 +358,6 @@ public class SuggestionController {
         offerManager.setOfferJustPlaced(false);
         suggestionPanel.refresh();
         showNotifications(oldSuggestion, newSuggestion, accountStatus);
-        if (!newSuggestion.isWaitSuggestion()) {
-            SwingUtilities.invokeLater(() -> {
-                if (flipDialogController.priceGraphPanel != null) {
-                    flipDialogController.priceGraphPanel.newSuggestedItemId(
-                            newSuggestion.getItemId(),
-                            buildPriceLine(newSuggestion)
-                    );
-                }
-            });
-        } else {
-            SwingUtilities.invokeLater(() -> {
-                if (flipDialogController.priceGraphPanel != null) {
-                    flipDialogController.priceGraphPanel.suggestedPriceLine = null;
-                }
-            });
-        }
         if (client.getVarcIntValue(VarClientInt.INPUT_TYPE) == 14) {
             clientThread.invokeLater(gePreviousSearch::showSuggestedItemInSearch);
         }
@@ -442,24 +410,6 @@ public class SuggestionController {
         } catch (Exception e) {
             log.warn("failed to play dump alert sound", e);
         }
-    }
-
-    private PriceLine buildPriceLine(Suggestion suggestion) {
-        if (suggestion.isBuySuggestion()) {
-            return new PriceLine(
-                    suggestion.getPrice(),
-                    "Suggested buy price",
-                    false
-            );
-        }
-        if (suggestion.isSellSuggestion()) {
-            return new PriceLine(
-                    suggestion.getPrice(),
-                    "Suggested sell price",
-                    true
-            );
-        }
-        return null;
     }
 
     void showNotifications(Suggestion oldSuggestion, Suggestion newSuggestion, AccountStatus accountStatus) {

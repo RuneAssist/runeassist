@@ -6,7 +6,6 @@ import com.google.inject.Singleton;
 import com.runeassist.flip.model.ComposeSuggestionMapper;
 import com.runeassist.flip.model.ComposeSuggestionResponse;
 import com.runeassist.flip.model.Suggestion;
-import com.runeassist.flip.ui.graph.model.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
@@ -23,7 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
- * Live HTTP to RuneAssist Ares for price graphs and the dump-alert stream.
+ * Live HTTP to RuneAssist Ares for the dump-alert stream.
  */
 @Slf4j
 @Singleton
@@ -37,21 +36,6 @@ public class ApiRequestHandler {
 
     private final OkHttpClient client;
     private final Gson gson;
-
-    /**
-     * Fetch an item's price-history graph from RuneAssist's backend (JSON matching {@link Data}).
-     */
-    public void asyncGetRuneAssistGraph(int itemId, Consumer<Data> onData, Consumer<Throwable> onError) {
-        Request request = new Request.Builder()
-                .url(ARES_ORIGIN + "/v1/graph?id=" + itemId)
-                .header("User-Agent", UA)
-                .build();
-        client.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, java.io.IOException e) {
-                onError.accept(e);
-            }
-
             @Override
             public void onResponse(Call call, Response response) {
                 try (Response r = response) {

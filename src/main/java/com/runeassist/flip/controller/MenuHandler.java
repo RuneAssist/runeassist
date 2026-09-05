@@ -5,7 +5,6 @@ import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.BankStateRS;
 import com.runeassist.flip.rs.PortfolioStateRS;
 import com.runeassist.flip.ui.flipsdialog.FlipsDialogController;
-import com.runeassist.flip.ui.graph.model.PriceLine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.callback.ClientThread;
@@ -78,8 +77,7 @@ public class MenuHandler {
                             Widget slotWidget = client.getWidget(465, 7 + i);
                             if (slotWidget != null && slotWidget.getId() == slotWidgetId) {
                                 int itemId = offers[i].getItemId();
-                                PriceLine priceLine = buildPriceLine(offers[i]);
-                                flipsDialogController.showPriceGraphTab(itemId, false, priceLine);
+                                flipsDialogController.showPriceGraphTab(itemId);
                                 log.debug("matched widget to slot {}, item {}", i, offers[i].getItemId());
                             }
                         }
@@ -109,7 +107,7 @@ public class MenuHandler {
                     .createMenuEntry(-1)
                     .setOption("RuneAssist graph")
                     .setTarget(menuTarget)
-                    .onClick((MenuEntry e) -> flipsDialogController.showPriceGraphTab(graphItemId, false, null));
+                    .onClick((MenuEntry e) -> flipsDialogController.showPriceGraphTab(graphItemId));
         }
     }
 
@@ -328,24 +326,6 @@ public class MenuHandler {
         }
         return itemId;
     }
-
-    private PriceLine buildPriceLine(GrandExchangeOffer offer) {
-        switch (offer.getState()) {
-            case BOUGHT:
-            case BUYING:
-                return new PriceLine(
-                        offer.getPrice(),
-                        "offer buy price",
-                        false
-                );
-            case SOLD :
-            case SELLING:
-                return new PriceLine(
-                        offer.getPrice(),
-                        "offer sell price",
-                        true
-                );
-        }
         return null;
     }
 
