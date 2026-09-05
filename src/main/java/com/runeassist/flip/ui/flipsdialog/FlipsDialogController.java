@@ -2,7 +2,6 @@ package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.config.RuneAssistConfig;
-import com.runeassist.flip.controller.CloudSyncService;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.manager.PriceGraphConfigManager;
 import com.runeassist.flip.model.*;
@@ -43,7 +42,6 @@ public class FlipsDialogController {
     private final TransactionManager transactionManager;
     private final LocalFlipLedger localFlipLedger;
     private final OfferManager offerManager;
-    private final CloudSyncService cloudSyncService;
     private final com.runeassist.flip.HeldCostTracker heldCostTracker;
 
     public PriceGraphPanel priceGraphPanel;
@@ -72,7 +70,6 @@ public class FlipsDialogController {
             TransactionManager transactionManager,
             LocalFlipLedger localFlipLedger,
             OfferManager offerManager,
-            CloudSyncService cloudSyncService,
             com.runeassist.flip.HeldCostTracker heldCostTracker) {
         this.itemController = itemController;
         this.flipsManager = flipsManager;
@@ -91,7 +88,6 @@ public class FlipsDialogController {
         this.transactionManager = transactionManager;
         this.localFlipLedger = localFlipLedger;
         this.offerManager = offerManager;
-        this.cloudSyncService = cloudSyncService;
         this.heldCostTracker = heldCostTracker;
     }
 
@@ -112,15 +108,15 @@ public class FlipsDialogController {
                     localFlipLedger
             );
             flipsPanel = new FlipsPanel(flipsManager, itemController, accountLoginRS,
-                    executorService, config, apiRequestHandler, cloudSyncService, osrsLoginRS, localFlipLedger, (f) -> {
+                    executorService, config, osrsLoginRS, localFlipLedger, (f) -> {
                 showVisualizeFlip(f);
             });
             missedFlipsPanel = new MissedFlipsPanel(osrsLoginRS, flipsManager, itemController, accountLoginRS,
-                    executorService, geHistoryStateRS, localFlipLedger, offerManager, cloudSyncService);
+                    executorService, geHistoryStateRS, localFlipLedger, offerManager);
             ItemAggregatePanel itemsPanel = new ItemAggregatePanel(flipsManager, itemController,
                     accountLoginRS, executorService, config);
             AccountsAggregatePanel accountsPanel = new AccountsAggregatePanel(accountLoginRS,
-                    executorService, config, apiRequestHandler, flipsManager);
+                    executorService, config, flipsManager);
             ProfitPanel profitPanel = new ProfitPanel(flipsManager, executorService, accountLoginRS, config);
             PortfolioPanel portfolioPanel = new PortfolioPanel(
                     itemController,
@@ -134,7 +130,7 @@ public class FlipsDialogController {
                     itemId -> showPriceGraphTab(itemId, false, null)
             );
             TransactionsPanel transactionsPanel = new TransactionsPanel(accountLoginRS, itemController,
-                    executorService, apiRequestHandler, osrsLoginManager, config, flipsManager,
+                    executorService, osrsLoginManager, config, flipsManager,
                     transactionManager, localFlipLedger);
             priceGraphPanel = new PriceGraphPanel(
                     itemController,

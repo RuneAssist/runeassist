@@ -128,8 +128,6 @@ public class RuneAssistPlugin extends Plugin {
 	@Inject
 	private com.runeassist.flip.TelemetryService telemetry;
 	@Inject
-	private com.runeassist.flip.controller.CloudSyncService cloudSyncService;
-	@Inject
 	private com.runeassist.flip.GeHistoryDump geHistoryDump;
 	@Inject
 	private com.runeassist.flip.GeHistoryHeldBackfill geHistoryHeldBackfill;
@@ -191,7 +189,6 @@ public class RuneAssistPlugin extends Plugin {
 		}
 		flipsDialogController.initDialog(SwingUtilities.getWindowAncestor(mainPanel));
 		telemetry.onUploadSettingsChanged();
-		cloudSyncService.start();
 		executorService.scheduleAtFixedRate(() ->
 			clientThread.invoke(() -> {
 				boolean loginValid = osrsLoginManager.isValidLoginState();
@@ -300,7 +297,6 @@ public class RuneAssistPlugin extends Plugin {
 		if (mainPanel != null) {
 			mainPanel.refresh();
 		}
-		cloudSyncService.onLogin(name);
 	}
 
 	@Subscribe
@@ -375,7 +371,6 @@ public class RuneAssistPlugin extends Plugin {
 		switch (event.getGameState())
 		{
 			case LOGIN_SCREEN:
-				cloudSyncService.flushNow();
 				sessionManager.reset();
 				suggestionManager.reset();
 				osrsLoginManager.reset();
@@ -422,7 +417,6 @@ public class RuneAssistPlugin extends Plugin {
 	@Subscribe
 	public void onClientShutdown(ClientShutdown clientShutdownEvent) {
 		log.debug("client shutdown event received");
-		cloudSyncService.flushNow();
 		offerManager.saveAll();
 		if(accountLoginRS.get().isLoggedIn()) {
 			String displayName = osrsLoginManager.getLastDisplayName();
@@ -467,9 +461,6 @@ public class RuneAssistPlugin extends Plugin {
 					|| "telemetryEndpoint".equals(event.getKey())
 					|| "telemetryToken".equals(event.getKey())) {
 				telemetry.onUploadSettingsChanged();
-			}
-			if ("cloudSync".equals(event.getKey())) {
-				cloudSyncService.onEnabledChanged();
 			}
 			// RuneAssist fork: BankTags portfolio-tag feature disabled.
 			// if (event.getKey().equals("portfolioBankTag")) {

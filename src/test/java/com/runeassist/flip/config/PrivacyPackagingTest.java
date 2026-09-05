@@ -42,7 +42,7 @@ public class PrivacyPackagingTest {
             "displayName", "author", "description", "tags", "plugins", "version", "build", "support"));
 
     @Test
-    public void shareTelemetryAndCloudSyncDefaultOff() {
+    public void shareTelemetryDefaultOff() {
         RuneAssistConfig cfg = new RuneAssistConfig() {
             @Override
             public String webhook() {
@@ -50,21 +50,15 @@ public class PrivacyPackagingTest {
             }
         };
         assertFalse(cfg.shareTelemetry());
-        assertFalse(cfg.cloudSync());
     }
 
     @Test
     public void privacyTogglesHaveHubWarnings() throws Exception {
         ConfigItem telemetry = RuneAssistConfig.class.getMethod("shareTelemetry").getAnnotation(ConfigItem.class);
-        ConfigItem cloudSync = RuneAssistConfig.class.getMethod("cloudSync").getAnnotation(ConfigItem.class);
         assertNotNull(telemetry);
-        assertNotNull(cloudSync);
         assertTrue(telemetry.warning().toLowerCase().contains("ip address"));
-        assertTrue(cloudSync.warning().toLowerCase().contains("ip address"));
         assertTrue(telemetry.warning().toLowerCase().contains("3rd-party")
                 || telemetry.warning().toLowerCase().contains("3rd party"));
-        assertTrue(cloudSync.warning().toLowerCase().contains("3rd-party")
-                || cloudSync.warning().toLowerCase().contains("3rd party"));
     }
 
     @Test

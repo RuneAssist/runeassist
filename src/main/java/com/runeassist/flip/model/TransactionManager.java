@@ -1,7 +1,5 @@
 package com.runeassist.flip.model;
 
-import com.runeassist.flip.controller.CloudSyncService;
-import com.runeassist.flip.controller.Persistance;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -15,15 +13,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class TransactionManager {
-
-    // dependencies
     private final ScheduledExecutorService executorService;
     private final OsrsLoginManager osrsLoginManager;
     private final LocalFlipLedger localFlipLedger;
     private final OfferManager offerManager;
-    private final CloudSyncService cloudSyncService;
 
-    // state
+    /** In-session leftover GE fills only — no disk backup. */
     private final ConcurrentMap<String, List<Transaction>> cachedUnAckedTransactions = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, AtomicBoolean> transactionSyncScheduled = new ConcurrentHashMap<>();
 
@@ -34,13 +29,12 @@ public class TransactionManager {
                 scheduled.set(false);
             }
         }
-        // Legacy copilot transaction upload is disabled. CloudSyncService
-        // handles opt-in history sync independently of this queue.
+        // Legacy copilot / cloud-history upload removed; session ledger is local-only.
     }
 
     /**
-     * Load persisted local flips for this account and replay any leftover unacked
-     * GE fills that were recorded before the local ledger existed.
+     * Load the session flip book for this account and replay any leftover unacked
+     * GE fills still held in memory.
      */
     public void hydrateLocal(String displayName) {
         if (displayName == null || displayName.isEmpty()) {
@@ -54,11 +48,10 @@ public class TransactionManager {
             leftover = new ArrayList<>(getUnAckedTransactions(displayName));
         }
         if (!leftover.isEmpty()) {
-            log.info("replaying {} stored GE fills into local flip ledger for {}", leftover.size(), displayName);
+            log.info("replaying {} stored GE fills into session flip ledger for {}", leftover.size(), displayName);
             localFlipLedger.applyAll(leftover, displayName);
             synchronized (this) {
                 getUnAckedTransactions(displayName).clear();
-                Persistance.storeUnAckedTransactions(Collections.emptyList(), displayName);
             }
         }
     }
@@ -110,30 +103,25 @@ public class TransactionManager {
         }
         hydrateLocal(displayName);
         long profit = localFlipLedger.apply(transaction, displayName);
-        cloudSyncService.enqueue(transaction, displayName);
-        // Drop from the old unacked queue so a later hydrate does not double-book.
         synchronized (this) {
             List<Transaction> unAckedTransactions = getUnAckedTransactions(displayName);
             UUID id = transaction.getId();
             if (id != null) {
                 unAckedTransactions.removeIf(t -> id.equals(t.getId()));
-                Persistance.storeUnAckedTransactions(unAckedTransactions, displayName);
             }
         }
         return profit;
     }
 
     public List<Transaction> getUnAckedTransactions(String displayName) {
-        return cachedUnAckedTransactions.computeIfAbsent(displayName, (k) -> Persistance.loadUnAckedTransactions(displayName));
+        return cachedUnAckedTransactions.computeIfAbsent(displayName, (k) -> new ArrayList<>());
     }
 
     public synchronized void scheduleSyncIn(int seconds, String displayName) {
         AtomicBoolean scheduled = transactionSyncScheduled.computeIfAbsent(displayName, k -> new AtomicBoolean(false));
-        if(scheduled.compareAndSet(false, true)) {
-            log.info("scheduling {} attempt to sync {} transactions in {}s", displayName, getUnAckedTransactions(displayName).size(), seconds);
-            executorService.schedule(() ->  {
-                this.syncUnAckedTransactions(displayName);
-            }, seconds, TimeUnit.SECONDS);
+        if (scheduled.compareAndSet(false, true)) {
+            log.info("scheduling {} session ledger settle in {}s", displayName, seconds);
+            executorService.schedule(() -> this.syncUnAckedTransactions(displayName), seconds, TimeUnit.SECONDS);
         } else {
             log.debug("skipping scheduling sync as already scheduled");
         }
