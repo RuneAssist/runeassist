@@ -196,11 +196,9 @@ public class HeldCostTracker
     }
 
     /**
-     * Drop tracked held stock for {@code itemId} -- what the portfolio panel's "Remove from
-     * portfolio" now does. FC's version posted to their cloud {@code toggle-item-portfolio}
-     * endpoint, which this fork never reaches, so removal silently did nothing at all.
-     * {@code qty <= 0} removes every lot for the item; otherwise the oldest lots go first,
-     * the same FIFO order a sell would consume them in. Returns the quantity removed.
+     * Drop tracked held stock for {@code itemId} (portfolio panel "Remove from portfolio").
+     * {@code qty <= 0} removes every lot for the item; otherwise oldest lots go first (FIFO).
+     * Returns the quantity removed.
      *
      * <p>This forgets a cost basis; it does not sell, bank or otherwise touch the item in
      * game. Units still filling on a live buy offer are re-floored back into the portfolio on

@@ -41,7 +41,7 @@ public class SessionManager {
 
     /**
      * Begin or resume the flipping session for the logged-in OSRS account.
-     * RuneAssist fork: FC started this on Copilot email login; we key off RSN instead.
+     * Start the session clock from the OSRS display name (RSN).
      */
     public synchronized void startOrResume() {
         String displayName = osrsLoginManager.getPlayerDisplayName();

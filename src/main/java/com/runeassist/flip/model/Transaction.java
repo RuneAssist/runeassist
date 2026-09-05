@@ -20,8 +20,6 @@ public class Transaction {
     private int boxId;
     private long amountSpent;
     private Instant timestamp;
-    private boolean copilotPriceUsed;
-    private boolean wasCopilotSuggestion;
     private boolean login;
     private boolean consistent;
 
@@ -34,7 +32,7 @@ public class Transaction {
                 this.amountSpent == other.amountSpent;
     }
 
-        @Override
+    @Override
     public String toString() {
         return String.format("%s %d %d on slot %d", type, quantity, itemId, boxId);
     }

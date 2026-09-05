@@ -13,8 +13,6 @@ import java.util.UUID;
 @Slf4j
 public class AckedTransaction {
 
-    public static final int RAW_SIZE = 64;
-
     private UUID id;
     private UUID clientFlipId;
     private int accountId;

@@ -59,10 +59,10 @@ public class AccountStatusCollectTest {
     }
 
     private static Offer fillingBuy(int slot, int itemId) {
-        return new Offer(OfferStatus.BUY, itemId, 1000L, 100, 50_000L, 50, slot, true, false);
+        return new Offer(OfferStatus.BUY, itemId, 1000L, 100, 50_000L, 50, slot, true);
     }
 
     private static Offer finishedSell(int slot, int itemId) {
-        return new Offer(OfferStatus.SELL, itemId, 2025L, 10, 20_250L, 10, slot, false, false);
+        return new Offer(OfferStatus.SELL, itemId, 2025L, 10, 20_250L, 10, slot, false);
     }
 }

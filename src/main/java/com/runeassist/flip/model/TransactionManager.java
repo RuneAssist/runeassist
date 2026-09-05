@@ -20,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class TransactionManager {
-
     private final OsrsLoginManager osrsLoginManager;
     private final LocalFlipLedger localFlipLedger;
     private final OfferManager offerManager;
@@ -32,6 +31,7 @@ public class TransactionManager {
     public void syncUnAckedTransactions(String displayName) {
         flipHistorySyncService.flushNow();
     }
+
 
     /**
      * Load the session flip book and replay any leftover unacked GE fills into the

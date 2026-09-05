@@ -2,7 +2,7 @@
 
 RuneLite plugin for Grand Exchange flipping. Suggestions come from Ares server composition (`POST /v1/suggestion`) with held-cost tracking. Opt-in, pseudonymous telemetry is off by default (Configuration → Privacy).
 
-Based on [Flipping Copilot](https://github.com/cbrewitt/flipping-copilot), used under the BSD 2-Clause License (see `LICENSE` and `THIRD_PARTY_LICENSES.md`).
+BSD-2 derivative of [Flipping Copilot](https://github.com/cbrewitt/flipping-copilot) — see `LICENSE` and `THIRD_PARTY_LICENSES.md`.
 
 Sideload the built jar, or wait for Plugin Hub publishing. Plugin class: `com.runeassist.flip.controller.RuneAssistPlugin`.
 
@@ -20,9 +20,7 @@ Plugin Hub maintainers: see `plugin-hub/README.md` for the manifest draft and su
 
 Local data directories: `~/.runelite/runeassist-flip/` (suggestion/held-cost state and unacked GE transaction queue pending upload) and `~/.runelite/runeassist/telemetry/` (telemetry JSONL, written locally regardless of the telemetry toggle so a later opt-in can upload history).
 
-## Relationship to Flipping Copilot
-
-RuneAssist Flipping is a BSD-2 derivative of [Flipping Copilot](https://github.com/cbrewitt/flipping-copilot) (see `LICENSE` and `THIRD_PARTY_LICENSES.md`). It is a separate plugin, not a replacement, because it uses a different backend (its own server, not Flipping Copilot's) and server-side suggestion composition. Both plugins can be installed at once; if Plugin Hub's Flipping Copilot is enabled, RuneAssist yields (shows a "Turn off Plugin Hub Flipping Copilot" wait state instead of competing suggestions) — see `HubPluginConflict`.
+If Plugin Hub Flipping Copilot is also enabled, RuneAssist yields (see `HubPluginConflict`).
 
 ## Build
 
