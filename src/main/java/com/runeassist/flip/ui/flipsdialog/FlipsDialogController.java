@@ -43,11 +43,12 @@ public class FlipsDialogController {
     private JDialog dialog;
     private VisualizeFlipPanel visualizeFlipPanel;
 
-    // Tab indices: Portfolio, Price graph, Visualize flip, Transactions
+    // Tab indices: Portfolio, Price graph, Visualize flip, Transactions, Analytics (web)
     private static final int TAB_PORTFOLIO = 0;
     private static final int TAB_PRICE_GRAPH = 1;
     private static final int TAB_VISUALIZE_FLIP = 2;
     private static final int TAB_TRANSACTIONS = 3;
+    private static final int TAB_WEB_ANALYTICS = 4;
 
     @Inject
     public FlipsDialogController(
@@ -124,6 +125,7 @@ public class FlipsDialogController {
             tabbedPane.addTab("Price graph", priceGraphPanel);
             tabbedPane.addTab("Visualize flip", visualizeFlipPanel);
             tabbedPane.addTab("Transactions", transactionsPanel);
+            tabbedPane.addTab("Analytics", new WebAnalyticsPanel(this::openWebAnalytics));
 
             JDialog dialog = new JDialog(windowAncestor);
             dialog.setTitle("RuneAssist Flipping");
@@ -208,6 +210,17 @@ public class FlipsDialogController {
     public void showPortfolioTab() {
         tabbedPane.setSelectedIndex(TAB_PORTFOLIO);
         dialog.setVisible(true);
+    }
+
+
+    public void showWebAnalyticsTab() {
+        tabbedPane.setSelectedIndex(TAB_WEB_ANALYTICS);
+        dialog.setVisible(true);
+    }
+
+    /** Open website dashboard analytics (null section = full dashboard). */
+    public void openWebAnalytics(String section) {
+        LinkBrowser.browse(WebAnalyticsLinks.url(flipHistorySyncService.websiteUrl(), section));
     }
 
     public void showVisualizeFlip(FlipV2 flip) {
