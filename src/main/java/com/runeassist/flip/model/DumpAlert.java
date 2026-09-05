@@ -2,7 +2,6 @@ package com.runeassist.flip.model;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 
 import java.nio.charset.StandardCharsets;
 
@@ -20,14 +19,18 @@ public class DumpAlert {
         if (bytes == null || bytes.length == 0 || gson == null) {
             return frame;
         }
-        String json = new String(bytes, StandardCharsets.UTF_8);
-        JsonObject root = JsonParser.parseString(json).getAsJsonObject();
-        if (root == null || !root.has("suggestion") || root.get("suggestion").isJsonNull()) {
-            return frame;
+        try {
+            String json = new String(bytes, StandardCharsets.UTF_8);
+            JsonObject root = gson.fromJson(json, JsonObject.class);
+            if (root == null || !root.has("suggestion") || root.get("suggestion").isJsonNull()) {
+                return frame;
+            }
+            ComposeSuggestionResponse.SuggestionDto dto =
+                    gson.fromJson(root.get("suggestion"), ComposeSuggestionResponse.SuggestionDto.class);
+            frame.suggestion = ComposeSuggestionMapper.toSuggestion(dto, "ares-dump");
+        } catch (Exception ignored) {
+            // malformed frame — caller logs
         }
-        ComposeSuggestionResponse.SuggestionDto dto =
-                gson.fromJson(root.get("suggestion"), ComposeSuggestionResponse.SuggestionDto.class);
-        frame.suggestion = ComposeSuggestionMapper.toSuggestion(dto, "ares-dump");
         return frame;
     }
 }
