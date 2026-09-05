@@ -1,6 +1,5 @@
 package com.runeassist.flip.controller;
 
-import com.runeassist.flip.model.Transaction;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +15,6 @@ import java.util.*;
 public class Persistance {
     public static Gson gson;
     public static final File PLUGIN_DIR = new File(RuneLite.RUNELITE_DIR, "runeassist-flip");
-    public static final String UN_ACKED_TRANSACTIONS_FILE_TEMPLATE = "%s_un_acked.jsonl";
     public static final String LOGIN_RESPONSE_JSON_FILE = "login-response.json";
     public static File directory;
 
@@ -64,58 +62,7 @@ public class Persistance {
     }
 
 
-    public static List<Transaction> loadUnAckedTransactions(String displayName) {
-        List<Transaction> transactions = new ArrayList<>();
-        File file = new File(PLUGIN_DIR, String.format(UN_ACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
-        if (!file.exists()) {
-            log.info("no existing un acked transactions file for {}", displayName);
-            return new ArrayList<>();
-        }
-        Set<UUID> added = new HashSet<>();
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.isEmpty()) {
-                    continue;
-                }
-                try {
-                    Transaction transaction = gson.fromJson(line, Transaction.class);
-                    // there was previously a bug where the same transaction was being added many times to the list
-                    // just clean things here to be safe
-                    if (!added.contains(transaction.getId())) {
-                        transactions.add(transaction);
-                        added.add(transaction.getId());
-                    }
-                } catch (JsonSyntaxException e) {
-                    log.warn("error deserializing transaction line '{}' file {}", line, file, e);
-                }
-            }
-        } catch (FileNotFoundException e) {
-            log.info("no existing un acked transactions file for {}", displayName);
-            return new ArrayList<>();
-        } catch (IOException e) {
-            log.warn("error loading un acked transaction file {}", file, e);
-            return new ArrayList<>();
-        } catch (JsonSyntaxException e) {
-            log.warn("corrupted un acked transaction file {}", file, e);
-            return new ArrayList<>();
-        }
-        log.info("loaded {} stored transactions for {}", transactions.size(), displayName);
-        return transactions;
-    }
 
-    public static void storeUnAckedTransactions(List<Transaction> transactions, String displayName) {
-        File unackedTransactionsFile = new File(PLUGIN_DIR, String.format(UN_ACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
-        try (BufferedWriter w = new BufferedWriter(new FileWriter(unackedTransactionsFile, false))) {
-            for (Transaction transaction : transactions) {
-                String json = gson.toJson(transaction);
-                w.write(json);
-                w.newLine();
-            }
-        } catch (IOException e) {
-            log.warn("error storing un acked transactions to file {}", unackedTransactionsFile, e);
-        }
-    }
 
     public static String hashDisplayName(String displayName) {
         if(displayName == null) {
