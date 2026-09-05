@@ -1,5 +1,6 @@
 package com.runeassist.flip.model;
 
+import com.runeassist.flip.ui.graph.model.Data;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -9,6 +10,7 @@ import java.util.List;
 /**
  * Successful body from Ares {@code POST /v1/suggestion}. {@link #suggestion} is required when
  * {@link #ok} is true; clients map it onto the local {@link Suggestion} model.
+ * Optional {@link #graph} matches {@code GET /v1/graph} when the server bundles it.
  */
 @Getter
 @Setter
@@ -18,6 +20,11 @@ public class ComposeSuggestionResponse
     /** Ranker / compose provenance, e.g. {@code ares}. */
     private String source = "";
     private SuggestionDto suggestion;
+    /**
+     * Optional price-history payload (same shape as {@code GET /v1/graph}), bundled when
+     * the client requested {@code includeGraph} and the pick has a concrete item.
+     */
+    private Data graph;
     private String error;
 
     /**

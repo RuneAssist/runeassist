@@ -51,6 +51,8 @@ public class SuggestionController {
     private final GePreviousSearch gePreviousSearch;
     // Suggestions come from RuneAssistSuggestionSource (Ares compose).
     private final com.runeassist.flip.RuneAssistSuggestionSource runeAssistSource;
+    private final ApiRequestHandler apiRequestHandler;
+
 
     private MainPanel mainPanel;
     private RuneAssistPanel runeAssistPanel;
@@ -94,6 +96,8 @@ public class SuggestionController {
             return;
         }
         // There is a race condition when the collect button is hit at the same time as offers fill.
+        // In such a case we can end up with the uncollectedManager falsely thinking there is items to collect.
+        // We identify if this has happened here by checking if the collect button is actually visible.
         if(isUncollectedOutOfSync()) {
             log.warn("uncollected is out of sync, it thinks there are items to collect but the GE is open and the Collect button not visible");
             uncollectedManager.clearAllUncollected(osrsLoginManager.getAccountHash());
@@ -114,6 +118,8 @@ public class SuggestionController {
         }
         Suggestion p = suggestionManager.getSuggestion();
         // Dump alerts highlight Back while a sell setup is open. Leaving that
+        // screen used to look like "account state changed" and fetch a SELL of
+        // inventory, overwriting the dump. Hold until Confirm or Skip.
         if (p != null && p.isRecentUnActionedDumpAlert()) {
             return false;
         }
@@ -126,6 +132,11 @@ public class SuggestionController {
             }
             if (liveOfferItemId(grandExchange.getOpenSlot()) != -1) {
                 // The "very out of date" path exists to un-freeze a ghost editor (left open
+                // with nothing behind it) so the card doesn't lock up forever -- see
+                // isModifyInProgress's comment. But a live offer behind the open slot (e.g.
+                // the player manually re-listing leftover stock after a partial fill/cancel,
+                // unrelated to any suggestion) means they're actively using this screen; do
+                // not yank the card to an unrelated item's suggestion out from under them.
                 return false;
             }
         }
@@ -133,7 +144,13 @@ public class SuggestionController {
         return suggestionManager.isSuggestionNeeded() || suggestionManager.suggestionOutOfDate();
     }
 
-    /** Click-to-modify / offer editor open for the current MODIFY card. Do not fetch */
+    /**
+     * Click-to-modify / offer editor open for the current MODIFY card. Do not fetch
+     * a replacement (the 60s "very out of date" path used to bypass isSlotOpen and
+     * then treat the cancelled slot as empty, emitting BUY). A leftover lock with
+     * the editor closed (logout, hop, GE home) must not freeze the card — empty
+     * slots should get BUY.
+     */
     private boolean isModifyInProgress(Suggestion p) {
         if (p != null && p.actionedTick != -1 && p.actionedTick <= client.getTickCount()) {
             return false;
@@ -271,20 +288,12 @@ public class SuggestionController {
         suggestionManager.setSuggestionRefreshPending(false);
         boolean skipGraphData = config.lowDataMode();
         suggestionManager.setGraphDataReadingInProgress(!skipGraphData);
-        Consumer<Suggestion> suggestionConsumer = (newSuggestion) -> handleSuggestionReceived(oldSuggestion, newSuggestion, accountStatus);
-        Consumer<Data> graphDataConsumer = (d) -> {
-            SwingUtilities.invokeLater(() -> {
-                if (flipDialogController.priceGraphPanel != null) {
-                    flipDialogController.priceGraphPanel.setSuggestionPriceData(d);
-                }
-            });
-            suggestionManager.setGraphDataReadingInProgress(false);
-        };
+        Consumer<Suggestion> suggestionConsumer = (newSuggestion) ->
+                handleSuggestionReceived(oldSuggestion, newSuggestion, accountStatus, !skipGraphData);
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
-        // Typed suggestion from Ares POST /v1/suggestion (compose-only).
-        suggestionManager.setGraphDataReadingInProgress(false); // graph is served separately
-        runeAssistSource.getSuggestionAsync(suggestionConsumer);
+        // Typed suggestion from Ares POST /v1/suggestion; graph may be bundled or fetched.
+        runeAssistSource.getSuggestionAsync(suggestionConsumer, !skipGraphData);
     }
 
     void handleDumpSuggestion(Suggestion suggestion) {
@@ -299,13 +308,15 @@ public class SuggestionController {
             return;
         }
         if (accountStatus.emptySlotExists()) {
-            handleSuggestionReceived(suggestionManager.getSuggestion(), suggestion, accountStatus);
+            handleSuggestionReceived(suggestionManager.getSuggestion(), suggestion, accountStatus,
+                    !config.lowDataMode());
         } else {
             log.info("discarding dump suggestion as no free slot");
         }
     }
 
-    private synchronized void handleSuggestionReceived(Suggestion oldSuggestion, Suggestion newSuggestion, AccountStatus accountStatus) {
+    private synchronized void handleSuggestionReceived(Suggestion oldSuggestion, Suggestion newSuggestion,
+                                                       AccountStatus accountStatus, boolean loadGraph) {
         if (!newSuggestion.isDumpAlert && !suggestionManager.isSuggestionRequestInProgress()) {
             // this is the edge case when a dump suggestion is received whilst a standard request is in progress
             log.info("discarding suggestion as not dump alert and no request in progress {}", newSuggestion);
@@ -375,6 +386,51 @@ public class SuggestionController {
         if (client.getVarcIntValue(VarClientInt.INPUT_TYPE) == 14) {
             clientThread.invokeLater(gePreviousSearch::showSuggestedItemInSearch);
         }
+        feedSuggestionGraph(newSuggestion, loadGraph);
+    }
+
+    /**
+     * Populate the suggestion price graph from a bundled compose {@code graph} and/or
+     * {@code GET /v1/graph}, feeding the same consumer FC used with /v2/suggestion.
+     */
+    private void feedSuggestionGraph(Suggestion suggestion, boolean loadGraph) {
+        if (!loadGraph) {
+            suggestionManager.setGraphDataReadingInProgress(false);
+            return;
+        }
+        suggestionManager.setGraphDataReadingInProgress(true);
+        Consumer<Data> graphDataConsumer = (d) -> {
+            SwingUtilities.invokeLater(() -> {
+                if (flipDialogController.priceGraphPanel != null) {
+                    flipDialogController.priceGraphPanel.setSuggestionPriceData(d);
+                }
+            });
+            suggestionManager.setGraphDataReadingInProgress(false);
+        };
+        if (suggestion == null || suggestion.isWaitSuggestion() || suggestion.getItemId() <= 0) {
+            Data d = new Data();
+            if (suggestion != null && suggestion.isWaitSuggestion()) {
+                d.fromWaitSuggestion = true;
+            } else {
+                d.loadingErrorMessage = "No graph data loaded for this item.";
+            }
+            graphDataConsumer.accept(d);
+            return;
+        }
+        if (suggestion.getGraphData() != null) {
+            graphDataConsumer.accept(suggestion.getGraphData());
+            return;
+        }
+        final int itemId = suggestion.getItemId();
+        apiRequestHandler.asyncGetRuneAssistGraph(itemId,
+                graphDataConsumer,
+                (Throwable err) -> {
+                    log.debug("suggestion graph fetch failed for item {}: {}", itemId, err.toString());
+                    Data d = new Data();
+                    d.itemId = itemId;
+                    d.loadingErrorMessage = "No graph data loaded for this item.";
+                    graphDataConsumer.accept(d);
+                });
     }
 
     /**

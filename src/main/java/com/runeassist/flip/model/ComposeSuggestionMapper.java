@@ -13,7 +13,8 @@ public final class ComposeSuggestionMapper
     }
 
     /**
-     * @return mapped suggestion, or null if the response is missing / has an unknown type
+     * @return mapped suggestion, or null if the response is missing / has an unknown type.
+     * Copies an optional bundled {@code graph} onto {@link Suggestion#setGraphData}.
      */
     public static Suggestion toSuggestion(ComposeSuggestionResponse response)
     {
@@ -21,7 +22,12 @@ public final class ComposeSuggestionMapper
         {
             return null;
         }
-        return toSuggestion(response.getSuggestion(), response.getSource());
+        Suggestion s = toSuggestion(response.getSuggestion(), response.getSource());
+        if (s != null && response.getGraph() != null)
+        {
+            s.setGraphData(response.getGraph());
+        }
+        return s;
     }
 
     public static Suggestion toSuggestion(ComposeSuggestionResponse.SuggestionDto dto, String source)

@@ -195,7 +195,13 @@ public class FlipsDialogController {
     }
 
     private boolean isSuggestionWithoutGraphData(Suggestion suggestion) {
-        return suggestion != null && !suggestion.isWaitSuggestion() && suggestion.isDumpAlert;
+        if (suggestion == null || suggestion.isWaitSuggestion()) {
+            return false;
+        }
+        // Fall back to a direct item fetch when the bundled/prefetched suggestion graph
+        // is not ready yet (low-data mode, still in flight, or soft-failed attach).
+        return priceGraphPanel == null || priceGraphPanel.suggestionPriceData == null
+                || priceGraphPanel.suggestionPriceData.itemId != suggestion.getItemId();
     }
 
 
