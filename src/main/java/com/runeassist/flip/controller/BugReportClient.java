@@ -19,8 +19,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 
 /**
- * Thin server client for opt-in bug reports (and the dashboard URL). Not a flip-history
- * sync path — device token is only used so {@code /v1/account/feedback} can attribute
+ * Thin server client for opt-in bug reports (and the dashboard URL). Not a flip-history path — device token is only used so {@code /v1/account/feedback} can attribute
  * reports after the user confirms the dialog.
  */
 @Slf4j
@@ -59,7 +58,7 @@ public class BugReportClient {
 
     /**
      * Submit a bug report after the caller has shown a consent dialog. Registers a device
-     * token if needed; independent of telemetry / former cloud-sync toggles.
+     * token if needed; independent of telemetry / telemetry toggles.
      */
     public void reportBug(String displayName, String message, byte[] screenshotPng, Consumer<Boolean> callback) {
         executor.execute(() -> {

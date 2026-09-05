@@ -31,9 +31,9 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Thin Ares HTTP client for market data and suggestion composition. Flip <em>ranking</em>
- * is server-side ({@code POST /v1/flips}, {@code GET /v1/decants}, {@code GET /v1/market/health}).
+ * is server-side ({@code POST /v1/flips}, {@code GET /v1/market/health}).
  * Typed suggestions come from {@code POST /v1/suggestion}. Quote/limit helpers stay here for
- * live inventory / per-tick latency (portfolio unrealized, buy-limit stamps).
+ * live inventory / per-tick latency. Decant ranking is not composed on-device.
  */
 @Slf4j
 @Singleton
@@ -42,13 +42,10 @@ public class AresMarketClient
     private static final String UA = "RuneAssist-flip/1.0 (github.com/RuneAssist/runeassist)";
     private static final String ARES_FLIPS = "https://runeassist.ares-server.co.uk/v1/flips";
     private static final String ARES_SUGGESTION = "https://runeassist.ares-server.co.uk/v1/suggestion";
-    private static final String ARES_DECANTS = "https://runeassist.ares-server.co.uk/v1/decants";
     private static final String ARES_HEALTH = "https://runeassist.ares-server.co.uk/v1/market/health";
     private static final String ARES_LIMITS = "https://runeassist.ares-server.co.uk/v1/market/limits";
     private static final String ARES_QUOTE = "https://runeassist.ares-server.co.uk/v1/market/quote";
-    private static final String ARES_FAMILIES = "https://runeassist.ares-server.co.uk/v1/decants/families";
     private static final long LIMITS_TTL = 6 * 60 * 60 * 1000L;
-    private static final long FAMILIES_TTL = 60_000L;
     private static final MediaType JSON = MediaType.parse("application/json");
     private static final Type CANDIDATE_LIST = new TypeToken<List<Map<String, Object>>>(){}.getType();
 
@@ -57,8 +54,6 @@ public class AresMarketClient
 
     private volatile Map<Integer, Integer> geLimits = new ConcurrentHashMap<>();
     private volatile long limitsFetchedAt = 0;
-    private volatile List<Map<String, Object>> decantFamilies = new ArrayList<>();
-    private volatile long familiesFetchedAt = 0;
     /** True when the last {@link #topFlips} call returned a reachable Ares response. */
     private volatile boolean lastFromAres = false;
     /** True when the last Ares {@code /v1/flips} call failed (HTTP/timeout/parse), not empty-ok. */
@@ -187,151 +182,6 @@ public class AresMarketClient
             log.info("Ares /v1/flips returned 0 candidates");
         }
         return new ArrayList<>();
-    }
-
-    /**
-     * Ranked decant opportunities from Ares {@code GET /v1/decants}, or empty if none /
-     * unreachable. Ranking is server-side only.
-     */
-    public List<Map<String, Object>> topDecants(int maxResults)
-    {
-        Request request = new Request.Builder()
-            .url(ARES_DECANTS + "?top=" + Math.max(1, maxResults))
-            .header("User-Agent", UA)
-            .get()
-            .build();
-        try (Response r = httpClient.newCall(request).execute())
-        {
-            if (!r.isSuccessful() || r.body() == null)
-            {
-                log.warn("Ares /v1/decants HTTP {}", r.code());
-                return new ArrayList<>();
-            }
-            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
-            if (root == null || !root.has("decants")) return new ArrayList<>();
-            List<Map<String, Object>> rows = gson.fromJson(root.get("decants"), CANDIDATE_LIST);
-            return rows == null ? new ArrayList<>() : rows;
-        }
-        catch (Exception e)
-        {
-            log.warn("Ares /v1/decants failed: {}", e.getMessage());
-            return new ArrayList<>();
-        }
-    }
-
-    /**
-     * Gain from decanting stock you already hold and selling the result, versus simply selling
-     * it as it is. Positive means decanting first is worth more.
-     *
-     * <p>Not the same as {@link #topDecants}: that ranks opportunities worth starting. Once
-     * bottles are held, buy cost is sunk — only convert-then-sell vs sell-as-is matters.
-     * Doses are conserved: {@code heldQty * heldDose / targetDose} bottles (floored).
-     */
-    static long decantGainOverRawSell(long heldQty, int heldDose, int targetDose,
-                                      long heldSellAt, long heldTax,
-                                      long targetSellAt, long targetTax)
-    {
-        if (heldQty <= 0 || heldDose <= 0 || targetDose <= 0) return 0;
-        long asIs = heldQty * Math.max(0, heldSellAt - heldTax);
-        long converted = (heldQty * heldDose) / targetDose;
-        long decanted = converted * Math.max(0, targetSellAt - targetTax);
-        return decanted - asIs;
-    }
-
-    /**
-     * Best decant for stock already held, or null if converting isn't worth more than
-     * selling as-is. Uses {@code /v1/decants/families}; held qty never leaves the client.
-     */
-    public Map<String, Object> decantForHeld(int heldItemId, long heldQty)
-    {
-        if (heldQty <= 0) return null;
-        List<Map<String, Object>> families = ensureFamilies();
-        if (families.isEmpty()) return null;
-
-        for (Map<String, Object> fam : families)
-        {
-            Object dosesObj = fam.get("doses");
-            if (!(dosesObj instanceof List)) continue;
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> doses = (List<Map<String, Object>>) dosesObj;
-
-            Map<String, Object> heldDose = null;
-            for (Map<String, Object> d : doses)
-            {
-                if (num(d.get("itemId")) == heldItemId) { heldDose = d; break; }
-            }
-            if (heldDose == null) continue;
-
-            long heldDoseCount = num(heldDose.get("dose"));
-            long heldSellAt = num(heldDose.get("sell"));
-            long heldTax = num(heldDose.get("tax"));
-            if (heldDoseCount <= 0 || heldSellAt <= 0) return null;
-
-            Map<String, Object> best = null;
-            long bestGain = 0, bestSellQty = 0;
-            for (Map<String, Object> d : doses)
-            {
-                long dose = num(d.get("dose"));
-                if (dose <= 0 || dose == heldDoseCount) continue;
-                long gain = decantGainOverRawSell(heldQty, (int) heldDoseCount, (int) dose,
-                    heldSellAt, heldTax, num(d.get("sell")), num(d.get("tax")));
-                if (gain > bestGain)
-                {
-                    bestGain = gain;
-                    best = d;
-                    bestSellQty = (heldQty * heldDoseCount) / dose;
-                }
-            }
-            if (best == null || bestSellQty < 1) return null;
-
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("family", fam.get("family"));
-            row.put("buyItemId", heldItemId);
-            row.put("buyName", heldDose.get("name"));
-            row.put("buyDose", heldDoseCount);
-            row.put("buyAt", num(heldDose.get("buy")));
-            row.put("buyQty", heldQty);
-            row.put("sellItemId", num(best.get("itemId")));
-            row.put("sellName", best.get("name"));
-            row.put("sellDose", num(best.get("dose")));
-            row.put("sellAt", num(best.get("sell")));
-            row.put("sellQty", bestSellQty);
-            row.put("projectedProfit", bestGain);
-            row.put("flags", new ArrayList<>(Arrays.asList("held")));
-            return row;
-        }
-        return null;
-    }
-
-    private static long num(Object o)
-    {
-        return o instanceof Number ? ((Number) o).longValue() : 0L;
-    }
-
-    private List<Map<String, Object>> ensureFamilies()
-    {
-        if (!decantFamilies.isEmpty() && System.currentTimeMillis() - familiesFetchedAt < FAMILIES_TTL)
-        {
-            return decantFamilies;
-        }
-        Request request = new Request.Builder().url(ARES_FAMILIES).header("User-Agent", UA).get().build();
-        try (Response r = httpClient.newCall(request).execute())
-        {
-            if (!r.isSuccessful() || r.body() == null) return decantFamilies;
-            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
-            if (root == null || !root.has("families")) return decantFamilies;
-            List<Map<String, Object>> rows = gson.fromJson(root.get("families"), CANDIDATE_LIST);
-            if (rows != null)
-            {
-                decantFamilies = rows;
-                familiesFetchedAt = System.currentTimeMillis();
-            }
-        }
-        catch (Exception e)
-        {
-            log.warn("Ares /v1/decants/families failed: {}", e.getMessage());
-        }
-        return decantFamilies;
     }
 
     /** Sell-side quote for a held item: {name, sell_at, ge_limit, tax_at_sell}, or null. */
