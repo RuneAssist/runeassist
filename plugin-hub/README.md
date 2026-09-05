@@ -2,7 +2,7 @@
 
 This directory is **not** a live [runelite/plugin-hub](https://github.com/runelite/plugin-hub) checkout. It is a paste-ready manifest plus steps so a maintainer with a Hub fork can open the real PR.
 
-RuneAssist is a BSD-2 adaptation of Flipping Copilot. Hub reviewers can see git history and a similar GE overlay. The manifest does not hide that; it only publishes this plugin.
+RuneAssist is a BSD-2 adaptation of Flipping Copilot (see `LICENSE` / `THIRD_PARTY_LICENSES.md`). Hub reviewers can see git history and a similar GE overlay; the manifest only publishes this plugin.
 
 ## Manifest to paste
 
@@ -13,7 +13,7 @@ Copy `plugin-hub/plugins/runeassist-flipping` from this repo. Before opening the
 1. Merge this plugin to `https://github.com/RuneAssist/runeassist` `main` (or another public commit you want Hub to build).
 2. Replace `commit=PASTE_40_CHAR_COMMIT_SHA` with the full 40-character SHA of that commit (`git rev-parse HEAD` on `main` after merge).
 3. Keep `repository=` as the public HTTPS URL ending in `.git`.
-4. Keep `warning=` exactly as written (same tone as Hub plugin `flipping-copilot`). Telemetry is opt-in in the client, but `/v1/suggestion` is **not** — it sends coin stack (`capital`), held stock with cost basis, risk/timeframe settings and buy-limit usage with no gate. That is why the warning lists coin stack and held stock alongside GE data and IP.
+4. Keep `warning=` exactly as written. Telemetry is opt-in in the client, but `/v1/suggestion` is **not** — it sends coin stack (`capital`), held stock with cost basis, risk/timeframe settings and buy-limit usage with no gate. That is why the warning lists coin stack and held stock alongside GE data and IP.
 5. `build=standard` lives in this repo’s `runelite-plugin.properties`, not in the Hub file. Do not add a custom `build.gradle` dependency unless you switch to `build=gradle` and go through Hub dependency verification.
 
 Expected Hub file:

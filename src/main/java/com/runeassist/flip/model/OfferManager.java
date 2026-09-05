@@ -26,15 +26,6 @@ public class OfferManager {
     // state
     @Getter
     @Setter
-    private int lastViewedSlotItemId = -1;
-    @Getter
-    @Setter
-    private long lastViewedSlotItemPrice = -1;
-    @Getter
-    @Setter
-    private int lastViewedSlotPriceTime = 0;
-    @Getter
-    @Setter
     private int viewedSlotItemId = -1;
     @Getter
     @Setter

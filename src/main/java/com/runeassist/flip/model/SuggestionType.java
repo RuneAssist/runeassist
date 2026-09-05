@@ -9,8 +9,6 @@ public enum SuggestionType {
     MODIFY_BUY(4),
     MODIFY_SELL(5),
     WAIT(6),
-    // RuneAssist-only: never sent/received over FC's proto wire format, so this protoInt has
-    // no collision risk with the upstream protocol.
     DECANT(7);
 
     private final int protoInt;

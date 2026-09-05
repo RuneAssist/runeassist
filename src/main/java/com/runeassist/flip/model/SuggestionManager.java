@@ -20,14 +20,6 @@ public class SuggestionManager {
     private Instant suggestionReceivedAt;
     private int lastOfferSubmittedTick = -1;
 
-    // these two variables get set based on the current suggestion when the confirm offer button is clicked.
-    // this allows us to track on the subsequent offer events whether the offer originates from a copilot suggestion
-    // this flag can then eventually be propagated onto each transaction and can be used by the server to
-    // determine which items in the inventory were bought based upon copilot suggestions and which are not
-    private int suggestionItemIdOnOfferSubmitted = -1;
-    private OfferStatus suggestionOfferStatusOnOfferSubmitted = null;
-
-
     public volatile int suggestionsDelayedUntil = 0;
 
     public void setSuggestion(Suggestion suggestion) {
@@ -43,8 +35,6 @@ public class SuggestionManager {
         suggestionReceivedAt = null;
         lastFailureAt = null;
         lastOfferSubmittedTick = -1;
-        suggestionItemIdOnOfferSubmitted = -1;
-        suggestionOfferStatusOnOfferSubmitted = null;
     }
 
     public boolean suggestionOutOfDate() {

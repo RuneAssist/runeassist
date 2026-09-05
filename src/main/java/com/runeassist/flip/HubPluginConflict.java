@@ -6,9 +6,8 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginManager;
 
 /**
- * Detects Plugin Hub "Flipping Copilot" ({@code com.flippingcopilot.*}) so
- * {@link com.runeassist.flip.controller.RuneAssistPlugin} does not emit competing
- * GE suggestions when both plugins are enabled.
+ * Detects the Plugin Hub flipping plugin ({@code com.flippingcopilot.*} /
+ * descriptor name "Flipping Copilot") so RuneAssist does not emit competing GE suggestions.
  */
 @Slf4j
 public final class HubPluginConflict
@@ -51,7 +50,7 @@ public final class HubPluginConflict
                 if (isHubPlugin(p))
                 {
                     boolean enabled = pluginManager.isPluginEnabled(p);
-                    log.debug("hub FC candidate class={} enabled={}", p.getClass().getName(), enabled);
+                    log.debug("hub conflict candidate class={} enabled={}", p.getClass().getName(), enabled);
                     if (enabled)
                     {
                         return true;
