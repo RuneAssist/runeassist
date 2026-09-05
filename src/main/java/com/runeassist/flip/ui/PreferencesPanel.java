@@ -17,12 +17,16 @@ import javax.inject.Named;
 import javax.inject.Singleton;
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -68,6 +72,7 @@ public class PreferencesPanel extends JPanel {
     private final SuggestionPreferencesManager preferencesManager;
     private final AccountSuggestionPreferencesRS accountPreferences;
     private final BugReportClient bugReportClient;
+    private final FlipHistorySyncService flipHistorySyncService;
     private final net.runelite.api.Client client;
     private final ClientThread clientThread;
     private final DrawManager drawManager;
@@ -85,6 +90,16 @@ public class PreferencesPanel extends JPanel {
     private final JPanel preferencesContent;
     private final JPanel loginPromptPanel;
     private final JComboBox<Option> minPredictedProfitDropdown;
+    private final JLabel cloudStatusLabel;
+    private final JPanel pairingCodePanel;
+    private final JTextField pairingCodeField;
+    private final JLabel pairingCodeHint;
+    private final JButton copyCodeButton;
+    private final JButton openLinkButton;
+    private final JButton linkDeviceBtn;
+    private final JButton redeemBtn;
+    private final JButton linkWebBtn;
+    private boolean pairingIsWebLink;
     private boolean suppressMinProfitEvents;
     private boolean suppressReservedSlotsEvents;
     private boolean suppressDumpAlertsEvents;
@@ -96,6 +111,7 @@ public class PreferencesPanel extends JPanel {
             ItemController itemController,
             AccountSuggestionPreferencesRS accountPreferences,
             BugReportClient bugReportClient,
+            FlipHistorySyncService flipHistorySyncService,
             net.runelite.api.Client client,
             ClientThread clientThread,
             DrawManager drawManager,
@@ -104,6 +120,7 @@ public class PreferencesPanel extends JPanel {
         this.preferencesManager = preferencesManager;
         this.accountPreferences = accountPreferences;
         this.bugReportClient = bugReportClient;
+        this.flipHistorySyncService = flipHistorySyncService;
         this.client = client;
         this.clientThread = clientThread;
         this.drawManager = drawManager;
@@ -316,6 +333,90 @@ public class PreferencesPanel extends JPanel {
         preferencesContent.add(formRow("Reserved slots", reservedSlotsDropdown));
         addVerticalGap(preferencesContent, 10);
 
+        JLabel cloudTitle = new JLabel("Cloud sync");
+        cloudTitle.setForeground(Color.WHITE);
+        cloudTitle.setFont(cloudTitle.getFont().deriveFont(Font.BOLD));
+        preferencesContent.add(cloudTitle);
+        addVerticalGap(preferencesContent, 4);
+
+        cloudStatusLabel = new JLabel();
+        cloudStatusLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        cloudStatusLabel.setFont(cloudStatusLabel.getFont().deriveFont(11f));
+        cloudStatusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        preferencesContent.add(cloudStatusLabel);
+        addVerticalGap(preferencesContent, 6);
+
+        pairingCodeField = new JTextField();
+        pairingCodeField.setEditable(false);
+        pairingCodeField.setFont(new Font(Font.MONOSPACED, Font.BOLD, 16));
+        pairingCodeField.setHorizontalAlignment(SwingConstants.CENTER);
+        pairingCodeField.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        pairingCodeField.setForeground(Color.WHITE);
+        pairingCodeField.setCaretColor(Color.WHITE);
+        pairingCodeField.setToolTipText("Select and copy, or use Copy");
+
+        copyCodeButton = new JButton("Copy");
+        copyCodeButton.setToolTipText("Copy pairing code");
+        RuneAssistColors.stylePrimaryButton(copyCodeButton);
+        copyCodeButton.addActionListener(e -> copyPairingCode());
+
+        openLinkButton = new JButton("Open");
+        openLinkButton.setToolTipText("Open the dashboard with this code filled in");
+        RuneAssistColors.stylePrimaryButton(openLinkButton);
+        openLinkButton.addActionListener(e -> openPairingInBrowser());
+        openLinkButton.setVisible(false);
+
+        JLabel codeLabel = new JLabel("Pairing code");
+        codeLabel.setForeground(RuneAssistColors.ACCENT);
+        codeLabel.setFont(codeLabel.getFont().deriveFont(Font.BOLD, 11f));
+        codeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        pairingCodeHint = RuneAssistColors.caption("Expires in 10 minutes.");
+        pairingCodeHint.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel codeButtonRow = transparentPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        codeButtonRow.add(openLinkButton);
+        codeButtonRow.add(copyCodeButton);
+
+        JPanel codeRow = transparentPanel(new BorderLayout(6, 0));
+        codeRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        codeRow.add(pairingCodeField, BorderLayout.CENTER);
+        codeRow.add(codeButtonRow, BorderLayout.EAST);
+
+        pairingCodePanel = verticalPanel(ColorScheme.DARKER_GRAY_COLOR);
+        pairingCodePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        pairingCodePanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(RuneAssistColors.ACCENT),
+                BorderFactory.createEmptyBorder(6, 8, 6, 8)));
+        pairingCodePanel.add(codeLabel);
+        addVerticalGap(pairingCodePanel, 4);
+        pairingCodePanel.add(codeRow);
+        addVerticalGap(pairingCodePanel, 4);
+        pairingCodePanel.add(pairingCodeHint);
+        pairingCodePanel.setVisible(false);
+        preferencesContent.add(pairingCodePanel);
+        addVerticalGap(preferencesContent, 6);
+
+        linkDeviceBtn = pairingActionButton("Link another device",
+                "Show a pairing code to enter on a second PC");
+        linkDeviceBtn.addActionListener(e -> startPairing("Link another device",
+                "Enter this code on the other PC (Preferences → Enter pairing code).", false));
+        preferencesContent.add(linkDeviceBtn);
+        addVerticalGap(preferencesContent, 4);
+
+        redeemBtn = pairingActionButton("Enter pairing code",
+                "Redeem a code from another device or from the website");
+        redeemBtn.addActionListener(e -> redeemPairing());
+        preferencesContent.add(redeemBtn);
+        addVerticalGap(preferencesContent, 4);
+
+        linkWebBtn = pairingActionButton("Link a website login",
+                "Show a pairing code to attach an email on the dashboard");
+        linkWebBtn.addActionListener(e -> startPairing("Link a website login",
+                "On the dashboard choose Pair plugin and enter this code plus your email.", true));
+        preferencesContent.add(linkWebBtn);
+        addVerticalGap(preferencesContent, 10);
+
         JLabel supportTitle = new JLabel("Support");
         supportTitle.setForeground(Color.WHITE);
         supportTitle.setFont(supportTitle.getFont().deriveFont(Font.BOLD));
@@ -326,11 +427,11 @@ public class PreferencesPanel extends JPanel {
         openDashboardLink.setForeground(RuneAssistColors.ACCENT);
         openDashboardLink.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         openDashboardLink.setAlignmentX(Component.LEFT_ALIGNMENT);
-        openDashboardLink.setToolTipText(bugReportClient.websiteUrl());
+        openDashboardLink.setToolTipText(flipHistorySyncService.websiteUrl());
         openDashboardLink.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                LinkBrowser.browse(bugReportClient.websiteUrl());
+                LinkBrowser.browse(flipHistorySyncService.websiteUrl());
             }
         });
         preferencesContent.add(openDashboardLink);
@@ -355,7 +456,157 @@ public class PreferencesPanel extends JPanel {
         }
         preferencesContent.add(Box.createVerticalGlue());
 
-        // Bug report + dashboard links only (no local flip-history cloud sync).
+        flipHistorySyncService.addStatusListener(this::refreshCloudStatus);
+        refreshCloudStatus();
+    }
+
+    private static JButton pairingActionButton(String text, String tip) {
+        JButton button = new JButton(text);
+        button.setToolTipText(tip);
+        button.setAlignmentX(Component.LEFT_ALIGNMENT);
+        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        button.setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH - 40, 28));
+        RuneAssistColors.styleGhostButton(button);
+        return button;
+    }
+
+    private void startPairing(String title, String how, boolean isWebLink) {
+        pairingIsWebLink = isWebLink;
+        setPairingBusy(true);
+        cloudStatusLabel.setText("Getting pairing code…");
+        executorService.execute(() -> {
+            try {
+                String code = flipHistorySyncService.startPairing();
+                SwingUtilities.invokeLater(() -> {
+                    setPairingBusy(false);
+                    showPairingCode(code, how);
+                });
+            } catch (Exception ex) {
+                log.warn("pairing start failed", ex);
+                SwingUtilities.invokeLater(() -> {
+                    setPairingBusy(false);
+                    refreshCloudStatus();
+                    cloudStatusLabel.setText("Could not get a pairing code. Check Cloud sync flip history is on.");
+                    JOptionPane.showMessageDialog(
+                            SwingUtilities.getWindowAncestor(this),
+                            "Could not get a pairing code. Check cloud sync is on and the server is reachable.",
+                            title,
+                            JOptionPane.WARNING_MESSAGE);
+                });
+            }
+        });
+    }
+
+    private void showPairingCode(String code, String how) {
+        String trimmed = code == null ? "" : code.trim();
+        if (trimmed.isEmpty() || looksLikeUrl(trimmed)) {
+            pairingCodeField.setText("");
+            pairingCodePanel.setVisible(false);
+            openLinkButton.setVisible(false);
+            refreshCloudStatus();
+            revalidate();
+            repaint();
+            return;
+        }
+        pairingCodeField.setText(trimmed);
+        pairingCodeField.setCaretPosition(0);
+        pairingCodeField.selectAll();
+        pairingCodeHint.setText("<html><body style='width:" + statusWrapPx() + "px'>"
+                + how + " Expires in 10 minutes.</body></html>");
+        pairingCodePanel.setVisible(true);
+        openLinkButton.setVisible(pairingIsWebLink);
+        stretchWidth(pairingCodePanel);
+        pairingCodePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE,
+                Math.max(96, pairingCodePanel.getPreferredSize().height)));
+        refreshCloudStatus();
+        copyPairingCode();
+        revalidate();
+        repaint();
+    }
+
+    private static boolean looksLikeUrl(String value) {
+        String lower = value.toLowerCase(Locale.ROOT);
+        return lower.startsWith("http://") || lower.startsWith("https://") || lower.contains("://");
+    }
+
+    private void openPairingInBrowser() {
+        String code = pairingCodeField.getText();
+        if (code == null || code.isEmpty()) {
+            return;
+        }
+        String encoded;
+        try {
+            encoded = URLEncoder.encode(code, StandardCharsets.UTF_8.name());
+        } catch (UnsupportedEncodingException ex) {
+            encoded = code;
+        }
+        LinkBrowser.browse(flipHistorySyncService.websiteUrl() + "#/login?code=" + encoded);
+    }
+
+    private void copyPairingCode() {
+        String code = pairingCodeField.getText();
+        if (code == null || code.isEmpty()) {
+            return;
+        }
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(code), null);
+        copyCodeButton.setText("Copied");
+        executorService.schedule(() -> SwingUtilities.invokeLater(() -> copyCodeButton.setText("Copy")),
+                2, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private void setPairingBusy(boolean busy) {
+        linkDeviceBtn.setEnabled(!busy);
+        redeemBtn.setEnabled(!busy);
+        linkWebBtn.setEnabled(!busy);
+    }
+
+    private void refreshCloudStatus() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::refreshCloudStatus);
+            return;
+        }
+        cloudStatusLabel.setText("<html><body style='width:" + statusWrapPx() + "px'>"
+                + flipHistorySyncService.statusMessage() + "</body></html>");
+        cloudStatusLabel.setForeground(flipHistorySyncService.isLinked()
+                ? ColorScheme.GRAND_EXCHANGE_PRICE
+                : ColorScheme.LIGHT_GRAY_COLOR);
+        stretchWidth(cloudStatusLabel);
+        if (!hasPairingCode()) {
+            pairingCodePanel.setVisible(false);
+        }
+    }
+
+    private boolean hasPairingCode() {
+        String code = pairingCodeField.getText();
+        return code != null && !code.isBlank() && !looksLikeUrl(code);
+    }
+
+    private void redeemPairing() {
+        String code = JOptionPane.showInputDialog(
+                SwingUtilities.getWindowAncestor(this),
+                "Enter the pairing code from your other device or the website:",
+                "Enter pairing code",
+                JOptionPane.PLAIN_MESSAGE);
+        if (code == null || code.trim().isEmpty()) {
+            return;
+        }
+        executorService.execute(() -> {
+            try {
+                flipHistorySyncService.redeemPairing(code);
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                        SwingUtilities.getWindowAncestor(this),
+                        "This client is now linked to that RuneAssist login.",
+                        "Enter pairing code",
+                        JOptionPane.INFORMATION_MESSAGE));
+            } catch (Exception ex) {
+                log.warn("pairing redeem failed", ex);
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                        SwingUtilities.getWindowAncestor(this),
+                        "Could not redeem that code. It may be expired or already used.",
+                        "Enter pairing code",
+                        JOptionPane.WARNING_MESSAGE));
+            }
+        });
     }
 
     private static JScrollPane scrollPreferences(JPanel content) {
