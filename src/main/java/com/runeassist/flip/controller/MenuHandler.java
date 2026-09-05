@@ -40,7 +40,6 @@ public class MenuHandler {
     private final ItemController itemController;
     private final PortfolioController portfolioController;
     private final AccountLoginController accountLoginController;
-    private final ApiRequestHandler apiRequestHandler;
     private final PortfolioStateRS portfolioStateRS;
     private final BankStateRS bankStateRS;
     private final ClientThread clientThread;

@@ -1,9 +1,7 @@
 package com.runeassist.flip.model;
 
-import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.controller.CloudSyncService;
 import com.runeassist.flip.controller.Persistance;
-import com.runeassist.flip.rs.AccountLoginRS;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -12,8 +10,6 @@ import javax.inject.Singleton;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 @Slf4j
 @Singleton
@@ -21,10 +17,7 @@ import java.util.function.Consumer;
 public class TransactionManager {
 
     // dependencies
-    private final FlipManager flipManager;
     private final ScheduledExecutorService executorService;
-    private final ApiRequestHandler api;
-    private final AccountLoginRS accountLoginRS;
     private final OsrsLoginManager osrsLoginManager;
     private final LocalFlipLedger localFlipLedger;
     private final OfferManager offerManager;

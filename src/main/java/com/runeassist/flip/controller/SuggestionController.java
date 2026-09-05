@@ -38,7 +38,6 @@ public class SuggestionController {
     private final OsrsLoginManager osrsLoginManager;
     private final HighlightController highlightController;
     private final GrandExchange grandExchange;
-    private final ApiRequestHandler apiRequestHandler;
     private final Notifier notifier;
     private final OfferManager offerManager;
     private final AccountLoginRS accountLoginRS;
