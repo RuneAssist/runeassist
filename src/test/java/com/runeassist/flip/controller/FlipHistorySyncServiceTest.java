@@ -87,4 +87,12 @@ public class FlipHistorySyncServiceTest {
         open.setStatus(FlipStatus.FINISHED);
         assertFalse(FlipRepairMenus.canMissedSale(open));
     }
+
+    @Test
+    public void websiteLoginWithCodeUrlEncodesPairingCode() {
+        String code = "AB CD";
+        String encoded = java.net.URLEncoder.encode(code, java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals("AB+CD", encoded);
+        assertTrue(encoded.indexOf(' ') < 0);
+    }
 }

@@ -94,7 +94,25 @@ public class RuneAssistPanel extends JPanel {
     }
 
     private void toggleSettings() {
-        settingsOpen = !settingsOpen;
+        setSettingsOpen(!settingsOpen);
+    }
+
+    /** Open Preferences (account / pairing). Used from the top-bar identity control. */
+    public void openSettings() {
+        setSettingsOpen(true);
+    }
+
+    private void setSettingsOpen(boolean open) {
+        if (!UIUtilities.ensureEdt(() -> setSettingsOpen(open))) {
+            return;
+        }
+        if (settingsOpen == open) {
+            if (open) {
+                preferencesPanel.refresh();
+            }
+            return;
+        }
+        settingsOpen = open;
         preferencesPanel.setVisible(settingsOpen);
         mainContent.setVisible(!settingsOpen);
         gearButton.setToolTipText(settingsOpen ? "Close settings" : "Settings");
