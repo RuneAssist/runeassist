@@ -35,11 +35,11 @@ import java.util.concurrent.*;
 
 @Slf4j
 // Self-wiring flipping plugin. Suggestions come from RuneAssistSuggestionSource
-// (Ares /v1/suggestion compose with /v1/flips + local engine fallback + held-cost).
+// (Ares /v1/suggestion compose + held-cost / held-decant).
 // No Flipping Copilot account or servers.
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
-		description = "Grand Exchange flipping assistant with an on-device suggestion engine, held-cost tracking, and server-ranked flip candidates. Contribution and cloud sync are opt-in (Configuration -> Privacy).",
+		description = "Grand Exchange flipping assistant with server compose suggestions, held-cost tracking, and Ares market data. Contribution and cloud sync are opt-in (Configuration -> Privacy).",
 		tags = {"runeassist", "flipping", "ge", "grand exchange", "merch", "money making", "profit"}
 )
 // RuneAssist fork: dropped @PluginDependency(BankTagsPlugin.class) -- a sideloaded plugin

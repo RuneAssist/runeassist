@@ -34,10 +34,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 /**
- * Source of the next flip {@link Suggestion}. Prefers Ares {@code POST /v1/suggestion}
- * (server ranks + composes). When that endpoint is missing or fails, falls back to
- * {@code /v1/flips} + {@link LocalSuggestionEngine}. Snapshots offers + coins on the
- * client thread; ranking stays proprietary on Ares.
+ * Source of the next flip {@link Suggestion}. Composes via Ares {@code POST /v1/suggestion}
+ * (server ranks + composes). Soft-fails to WAIT when compose is unreachable. Snapshots
+ * offers + coins on the client thread; ranking stays proprietary on Ares. Held-decant
+ * candidates can still override a compose BUY/SELL/WAIT when more actionable.
  */
 @Slf4j
 @Singleton
@@ -105,7 +105,7 @@ public class RuneAssistSuggestionSource
 
         if (HubPluginConflict.isEnabled(pluginManager))
         {
-            Suggestion wait = LocalSuggestionEngine.waitFallback(
+            Suggestion wait = WaitSuggestions.waitFallback(
                 HubPluginConflict.WAIT_MESSAGE, offersBySlot, maxSlots);
             wait.setWhy("");
             clientThread.invokeLater(() -> consumer.accept(wait));
@@ -130,8 +130,6 @@ public class RuneAssistSuggestionSource
             }
             Set<Integer> protectAbort = new HashSet<>(accountStatusManager.getProtectAbortItemIds());
 
-            // Prefer server composition when Ares ships /v1/suggestion. On 404/failure,
-            // LocalSuggestionEngine remains the fallback so the panel never goes blank.
             ComposeSuggestionRequest composeReq = buildComposeRequest(
                 coins, timeframe, risk, f2pOnly, maxSlots, remainingSlots, minProfit,
                 remainingHint, usedLimit, blocked, skipped, skipOffers, protectAbort,
@@ -142,16 +140,8 @@ public class RuneAssistSuggestionSource
             }
             catch (Exception e)
             {
-                log.warn("composeSuggestion failed; falling back to local engine", e);
+                log.warn("composeSuggestion failed; soft-fail to WAIT", e);
                 suggestion = null;
-            }
-
-            if (suggestion == null)
-            {
-                suggestion = composeLocally(displayName, coins, timeframe, risk, f2pOnly,
-                    maxSlots, remainingSlots, minProfit, remainingHint, usedLimit,
-                    blocked, skipped, skipOffers, protectAbort, offersBySlot, held,
-                    ownedModifySnap);
             }
 
             try
@@ -212,21 +202,21 @@ public class RuneAssistSuggestionSource
                     boolean slotsFull = remainingSlots <= 0;
                     String waitMsg;
                     if (slotsFull) {
-                        waitMsg = LocalSuggestionEngine.WAIT_SLOTS_FULL;
-                    } else if (market.lastAresUnreachable()) {
-                        waitMsg = LocalSuggestionEngine.WAIT_ARES_DOWN;
+                        waitMsg = WaitSuggestions.WAIT_SLOTS_FULL;
+                    } else if (market.lastComposeUnreachable() || market.lastAresUnreachable()) {
+                        waitMsg = WaitSuggestions.WAIT_ARES_DOWN;
                     } else {
-                        waitMsg = LocalSuggestionEngine.WAIT_NO_CANDIDATES;
+                        waitMsg = WaitSuggestions.WAIT_NO_CANDIDATES;
                     }
-                    suggestion = LocalSuggestionEngine.waitFallback(waitMsg, offersBySlot, maxSlots);
+                    suggestion = WaitSuggestions.waitFallback(waitMsg, offersBySlot, maxSlots);
                 }
                 if (suggestion.isWaitSuggestion()) {
                     if (suggestion.getMessage() == null || suggestion.getMessage().isEmpty()) {
-                        suggestion.setMessage(LocalSuggestionEngine.WAIT_NO_MARGIN);
+                        suggestion.setMessage(WaitSuggestions.WAIT_NO_MARGIN);
                     }
-                    if (market.lastAresUnreachable()
-                            && LocalSuggestionEngine.WAIT_NO_CANDIDATES.equals(suggestion.getMessage())) {
-                        suggestion.setMessage(LocalSuggestionEngine.WAIT_ARES_DOWN);
+                    if ((market.lastComposeUnreachable() || market.lastAresUnreachable())
+                            && WaitSuggestions.WAIT_NO_CANDIDATES.equals(suggestion.getMessage())) {
+                        suggestion.setMessage(WaitSuggestions.WAIT_ARES_DOWN);
                     }
                 }
                 try {
@@ -246,8 +236,8 @@ public class RuneAssistSuggestionSource
                 result = suggestion;
             } catch (Exception e) {
                 log.warn("failed to finalize suggestion; sending Wait", e);
-                result = LocalSuggestionEngine.waitFallback(
-                    LocalSuggestionEngine.WAIT_NO_MARGIN, offersBySlot, maxSlots);
+                result = WaitSuggestions.waitFallback(
+                    WaitSuggestions.WAIT_NO_MARGIN, offersBySlot, maxSlots);
                 result.setTimeIssued(Instant.now());
             }
             final Suggestion delivered = result;
@@ -383,109 +373,6 @@ public class RuneAssistSuggestionSource
         return merged;
     }
 
-    /**
-     * Remaining 4h buy-limit per scored item, minus units still filling on buy offers.
-     * Missing key = unknown (no live-fill tracker data) — do not treat as a full limit.
-     * GE history is not used to reconstruct the window.
-     */
-    private Map<Integer, Integer> remainingLimits(String displayName, List<Map<String, Object>> scored, long[][] offers)
-    {
-        Map<Integer, Integer> pendingBuy = new HashMap<>();
-        if (offers != null) for (long[] o : offers)
-        {
-            if (o == null || o.length < 6) continue;
-            if (o[1] != 1L) continue; // not a buy
-            int id = (int) o[0];
-            int left = (int) Math.max(0L, o[4] - o[3]); // total - sold
-            pendingBuy.merge(id, left, Integer::sum);
-        }
-
-        Map<Integer, Integer> out = new HashMap<>();
-        for (Map<String, Object> flip : scored)
-        {
-            if (flip == null || "sell".equals(flip.get("side"))) continue;
-            Object idObj = flip.get("id");
-            Object limObj = flip.get("ge_limit");
-            if (!(idObj instanceof Number) || !(limObj instanceof Number)) continue;
-            int id = ((Number) idObj).intValue();
-            int geLimit = ((Number) limObj).intValue();
-            if (geLimit <= 0) geLimit = market.geLimit(id);
-            int remaining = heldCostTracker.limitRemaining(displayName, id, geLimit);
-            if (remaining < 0) continue; // unknown GE limit
-            int pending = pendingBuy.getOrDefault(id, 0);
-            remaining = Math.max(0, remaining - pending);
-            boolean tracked = heldCostTracker.hasLimitTrackerData(displayName, id);
-            if (remaining == 0)
-            {
-                out.put(id, 0); // exhausted by live fills and/or pending buys
-                continue;
-            }
-            if (!tracked) continue; // remaining unknown — don't cap as if the full limit is left
-            out.put(id, remaining);
-        }
-        return out;
-    }
-
-    /** Attach Ares market health for filling offers and held stock (MODIFY/ABORT / dead margin). */
-    private void addMarketHealthForOffers(List<Map<String, Object>> combined, long[][] offers,
-                                          Map<Integer, long[]> held,
-                                          int timeframe, RiskLevel risk, boolean membersItemsAllowed)
-    {
-        if (offers == null && (held == null || held.isEmpty())) return;
-        Map<Integer, Map<String, Object>> marketById = new HashMap<>();
-        for (Map<String, Object> flip : combined)
-        {
-            if (flip == null || "sell".equals(flip.get("side"))) continue;
-            Object idObj = flip.get("id");
-            if (idObj instanceof Number) marketById.putIfAbsent(((Number) idObj).intValue(), flip);
-        }
-
-        // One batched /v1/market/health call per suggestion cycle.
-        java.util.LinkedHashSet<Integer> wanted = new java.util.LinkedHashSet<>();
-        if (offers != null) for (long[] o : offers)
-        {
-            if (o == null || o.length < 6 || o[5] != 1L) continue;
-            int id = (int) o[0];
-            if (id > 0) wanted.add(id);
-        }
-        if (held != null) for (Integer id : held.keySet())
-        {
-            if (id != null && id > 0 && !marketById.containsKey(id)) wanted.add(id);
-        }
-        if (wanted.isEmpty()) return;
-
-        Map<Integer, Map<String, Object>> health;
-        try { health = market.evaluateItems(wanted, timeframe, risk, membersItemsAllowed); }
-        catch (Exception e) { return; }
-
-        for (Integer id : wanted)
-        {
-            Map<String, Object> eval = health.get(id);
-            if (eval == null) continue;
-            mergeMarketHealth(combined, marketById, id, eval);
-        }
-    }
-
-    private void mergeMarketHealth(List<Map<String, Object>> combined,
-                                   Map<Integer, Map<String, Object>> marketById, int id,
-                                   Map<String, Object> eval)
-    {
-        Map<String, Object> existing = marketById.get(id);
-        if (existing != null)
-        {
-            if (Boolean.TRUE.equals(eval.get("dead")))
-            {
-                existing.put("dead", true);
-                existing.put("dead_reason", eval.get("dead_reason"));
-                existing.put("margin_post_tax", eval.get("margin_post_tax"));
-                existing.put("flags", eval.get("flags"));
-            }
-            return;
-        }
-        combined.add(eval);
-        marketById.put(id, eval);
-    }
-
     /** Units already counting against the 4h GE buy-limit: fills in-window + pending buy remainder. */
     private Map<Integer, Integer> usedBuyLimit(String displayName, long[][] offers)
     {
@@ -501,7 +388,7 @@ public class RuneAssistSuggestionSource
         return used;
     }
 
-    /** Client-thread-only snapshot of {@link #applyOwnedModify}'s inputs (see there). */
+    /** Client-thread-only snapshot of owned-modify state for the compose request. */
     private static final class OwnedModifySnapshot
     {
         int slot = -1;
@@ -557,76 +444,6 @@ public class RuneAssistSuggestionSource
             snap.name = current.getName() != null ? current.getName() : "";
         }
         return snap;
-    }
-
-    /**
-     * Fallback path while Ares {@code /v1/suggestion} is undeployed or unreachable.
-     * Keeps LocalSuggestionEngine so the plugin stays usable — remove once compose is
-     * mandatory server-side and the 404 probe is gone.
-     */
-    private Suggestion composeLocally(String displayName, long coins, int timeframe, RiskLevel risk,
-                                      boolean f2pOnly, int maxSlots, int remainingSlots, long minProfit,
-                                      Map<Integer, Integer> remainingHint, Map<Integer, Integer> usedLimit,
-                                      Set<Integer> blocked, Set<Integer> skipped, Set<Integer> skipOffers,
-                                      Set<Integer> protectAbort, long[][] offersBySlot,
-                                      Map<Integer, long[]> held, OwnedModifySnapshot ownedModifySnap)
-    {
-        List<Map<String, Object>> buys;
-        try
-        {
-            buys = market.topFlips(coins > 0 ? coins : 0L, timeframe, risk,
-                !f2pOnly, remainingSlots, remainingHint, usedLimit, blocked, skipped,
-                minProfit);
-        }
-        catch (Exception e)
-        {
-            log.warn("topFlips failed; continuing with sell-only rows", e);
-            buys = java.util.Collections.emptyList();
-        }
-
-        List<Map<String, Object>> combined = new java.util.ArrayList<>(buildSells(held, skipped));
-        if (buys != null) combined.addAll(buys);
-        addMarketHealthForOffers(combined, offersBySlot, held, timeframe, risk, !f2pOnly);
-
-        Map<Integer, Integer> remainingLimit = remainingLimits(displayName, combined, offersBySlot);
-
-        LocalSuggestionEngine.Input in = new LocalSuggestionEngine.Input();
-        in.scoredFlips = combined;
-        in.offersBySlot = offersBySlot;
-        in.held = held;
-        in.coins = coins;
-        in.maxSlots = maxSlots;
-        in.skippedItemIds = skipped;
-        in.blockedItemIds = blocked;
-        in.skipOfferItemIds = skipOffers;
-        in.protectAbortItemIds = protectAbort;
-        applyOwnedModify(in, ownedModifySnap);
-        in.remainingBuyLimit = remainingLimit;
-        in.minPredictedProfit = minProfit;
-        in.timeframeMinutes = timeframe;
-        in.nowMs = System.currentTimeMillis();
-
-        Suggestion suggestion;
-        try { suggestion = LocalSuggestionEngine.next(in); }
-        catch (Exception e) {
-            log.warn("suggestion engine failed; falling back to Wait with slot status", e);
-            suggestion = null;
-        }
-        if (suggestion != null && suggestion.isModifySuggestion()
-                && (skipOffers.contains(suggestion.getItemId())
-                    || skipped.contains(suggestion.getItemId())
-                    || blocked.contains(suggestion.getItemId())))
-        {
-            accountStatusManager.clearOwnedModify();
-            in.ownedModifyItemId = 0;
-            in.ownedModifySlot = -1;
-            try { suggestion = LocalSuggestionEngine.next(in); }
-            catch (Exception e) {
-                log.warn("suggestion engine retry after dropped MODIFY failed", e);
-                suggestion = null;
-            }
-        }
-        return suggestion;
     }
 
     private static ComposeSuggestionRequest buildComposeRequest(
@@ -725,22 +542,6 @@ public class RuneAssistSuggestionSource
         return out;
     }
 
-    /** Pure field copy onto {@code in} — no client-thread calls, safe from the background thread. */
-    private static void applyOwnedModify(LocalSuggestionEngine.Input in, OwnedModifySnapshot snap)
-    {
-        if (snap.itemId <= 0)
-        {
-            return;
-        }
-        in.ownedModifySlot = snap.slot;
-        in.ownedModifyItemId = snap.itemId;
-        in.ownedModifyBuy = snap.buy;
-        in.ownedModifyTargetPrice = snap.targetPrice;
-        in.ownedModifyQuantity = snap.quantity;
-        in.ownedModifyName = snap.name;
-        in.ownedModifyOfferPrice = snap.offerPrice;
-    }
-
     private boolean openSlotIsOwnedModify(int itemId, int modifySlot)
     {
         int open = grandExchange.getOpenSlot();
@@ -788,63 +589,6 @@ public class RuneAssistSuggestionSource
         return n;
     }
 
-    /** Turn held stock into sell rows (side="sell") using one batched Ares quote call. */
-    private List<Map<String, Object>> buildSells(Map<Integer, long[]> held, Set<Integer> skipped)
-    {
-        List<Map<String, Object>> out = new java.util.ArrayList<>();
-        if (held == null || held.isEmpty()) return out;
-        java.util.Set<Integer> ids = new java.util.HashSet<>();
-        for (Integer id : held.keySet())
-        {
-            if (id == null) continue;
-            if (skipped != null && skipped.contains(id)) continue;
-            ids.add(id);
-        }
-        Map<Integer, Map<String, Object>> quotes;
-        try { quotes = market.quotes(ids); }
-        catch (Exception ex) { return out; }
-        for (Integer id : ids)
-        {
-            long[] hv = held.get(id);
-            if (hv == null || hv.length < 2) continue;
-            long qty = hv[0], avgBuy = hv[1];
-            Map<String, Object> q = quotes.get(id);
-            if (q == null) continue;
-            Object sellObj = q.get("sell_at");
-            Object taxObj = q.get("tax_at_sell");
-            if (!(sellObj instanceof Number) || !(taxObj instanceof Number)) continue;
-            long sell = ((Number) sellObj).longValue();
-            long tax = ((Number) taxObj).longValue();
-            long marginEa = sell - tax - avgBuy;
-            if (marginEa <= 0) continue;
-            Map<String, Object> s = new java.util.LinkedHashMap<>();
-            s.put("id", id);
-            s.put("name", q.get("name"));
-            s.put("side", "sell");
-            s.put("loss", false);
-            s.put("buy_at", avgBuy);
-            s.put("sell_at", sell);
-            s.put("margin_post_tax", marginEa);
-            s.put("margin_pct", avgBuy > 0 ? Math.round(marginEa * 1000.0 / avgBuy) / 10.0 : 0.0);
-            s.put("suggested_qty", qty);
-            s.put("ge_limit", 0);
-            s.put("projected_profit", marginEa * qty);
-            s.put("flags", new java.util.ArrayList<String>());
-            s.put("score", marginEa * qty);
-            out.add(s);
-        }
-        out.sort((a, b) -> Long.compare(((Number) b.get("score")).longValue(),
-                                        ((Number) a.get("score")).longValue()));
-        return out;
-    }
-
-    /**
-     * The current best decant opportunity's suggestion, at whichever phase (buy the cheap
-     * dose, decant it, or sell the result) the player is actually in right now — read from
-     * live inventory/bank state via {@link DecantTracker}, not {@link HeldCostTracker}'s FIFO
-     * ledger (which never observes a bank decant). Returns null if there's no viable
-     * opportunity, or the relevant item is blocked/skipped/already on an active offer.
-     */
     /**
      * How to actually perform the decant, given what is being carried.
      *
@@ -1115,13 +859,13 @@ public class RuneAssistSuggestionSource
     }
 
     /**
-     * Whether the decant candidate should take the single suggestion slot over what
-     * {@link LocalSuggestionEngine} picked. Never preempts an ABORT/MODIFY on a live offer —
-     * those are urgent/necessary. A ready-to-decant reminder always wins over WAIT/BUY/SELL
-     * (it's a quick, low-friction action). Listing already-held target-dose stock wins over
-     * WAIT/BUY so we do not keep buying more cheap doses while 4-doses sit in inventory
-     * (and a BUY-toward-decant never replaces an engine SELL of that held stock). Otherwise a
-     * buy/sell leg only wins if it is genuinely more profitable than the engine's own pick.
+     * Whether the decant candidate should take the single suggestion slot over what compose
+     * returned. Never preempts an ABORT/MODIFY on a live offer — those are urgent/necessary.
+     * A ready-to-decant reminder always wins over WAIT/BUY/SELL (it's a quick, low-friction
+     * action). Listing already-held target-dose stock wins over WAIT/BUY so we do not keep
+     * buying more cheap doses while 4-doses sit in inventory (and a BUY-toward-decant never
+     * replaces a SELL of that held stock). Otherwise a buy/sell leg only wins if it is
+     * genuinely more profitable than the compose pick.
      */
     static boolean preferDecant(Suggestion normal, Suggestion decant)
     {

@@ -1,6 +1,6 @@
 # RuneAssist Flipping
 
-RuneLite plugin for Grand Exchange flipping. Suggestions prefer Ares server composition (`/v1/suggestion`) with an on-device engine fallback and held-cost tracking. Opt-in, pseudonymous telemetry is off by default (Configuration → Privacy).
+RuneLite plugin for Grand Exchange flipping. Suggestions come from Ares server composition (`POST /v1/suggestion`) with held-cost tracking. Opt-in, pseudonymous telemetry is off by default (Configuration → Privacy).
 
 Based on [Flipping Copilot](https://github.com/cbrewitt/flipping-copilot), used under the BSD 2-Clause License (see `LICENSE` and `THIRD_PARTY_LICENSES.md`).
 
@@ -10,8 +10,8 @@ Plugin Hub maintainers: see `plugin-hub/README.md` for the manifest draft and su
 
 ## Data sent to servers
 
-- **(default-on)** `POST https://runeassist.ares-server.co.uk/v1/suggestion` — when deployed: capital, live GE offers, held stock with avg buy, risk/timeframe, buy-limit usage, blocked/skipped ids, and IP. Returns a typed suggestion (ABORT/MODIFY/SELL/BUY/WAIT). Falls back locally if the endpoint is missing.
-- **(default-on, fallback / ranking)** `POST https://runeassist.ares-server.co.uk/v1/flips` — capital, timeframe, risk level, free GE slots, per-item remaining/used buy limits, blocked and skipped item ids, and IP. Ranks flip candidates when composition falls back to the on-device engine; no RSN.
+- **(default-on)** `POST https://runeassist.ares-server.co.uk/v1/suggestion` — capital, live GE offers, held stock with avg buy, risk/timeframe, buy-limit usage, blocked/skipped ids, and IP. Returns a typed suggestion (ABORT/MODIFY/SELL/BUY/WAIT). Soft-fails to a WAIT card if unreachable.
+- **(default-on, market ranking / helpers)** `POST https://runeassist.ares-server.co.uk/v1/flips` — capital, timeframe, risk level, free GE slots, per-item remaining/used buy limits, blocked and skipped item ids, and IP. Ranks flip candidates server-side (also used by tools/tests); no RSN.
 - **(default-on)** `GET https://runeassist.ares-server.co.uk/v1/graph` — price graph data for the item you're viewing.
 - **(opt-in, Configuration → Privacy)** Telemetry ("Contribute anonymous data") — uploads GE offers, completed GE history and flip-panel decisions under a pseudonymous account hash (SHA-256 of your RSN). Never sends chat, bank contents, or your RSN in plain text.
 - **(on demand)** Bug reports ("Report a bug" in Preferences) — sends your report text, RSN, and an optional screenshot (opt-in checkbox, off by default) only after you confirm the dialog, which discloses where the data goes.
@@ -20,7 +20,7 @@ Local-only data directories written by this plugin (never uploaded unless the to
 
 ## Relationship to Flipping Copilot
 
-RuneAssist Flipping is a BSD-2 derivative of [Flipping Copilot](https://github.com/cbrewitt/flipping-copilot) (see `LICENSE` and `THIRD_PARTY_LICENSES.md`). It is a separate plugin, not a replacement, because it uses a different backend (its own server, not Flipping Copilot's) and its own on-device suggestion engine. Both plugins can be installed at once; if Plugin Hub's Flipping Copilot is enabled, RuneAssist yields (shows a "Turn off Plugin Hub Flipping Copilot" wait state instead of competing suggestions) — see `HubPluginConflict`.
+RuneAssist Flipping is a BSD-2 derivative of [Flipping Copilot](https://github.com/cbrewitt/flipping-copilot) (see `LICENSE` and `THIRD_PARTY_LICENSES.md`). It is a separate plugin, not a replacement, because it uses a different backend (its own server, not Flipping Copilot's) and server-side suggestion composition. Both plugins can be installed at once; if Plugin Hub's Flipping Copilot is enabled, RuneAssist yields (shows a "Turn off Plugin Hub Flipping Copilot" wait state instead of competing suggestions) — see `HubPluginConflict`.
 
 ## Build
 
