@@ -80,7 +80,6 @@ public class TelemetryService
 
     @Inject private ConfigManager configManager;
     private final Gson gson;
-    @Inject private WikiPriceService wikiPriceService;
 
     private RuneAssistConfig flipConfig;
 
@@ -208,14 +207,11 @@ public class TelemetryService
     {
         if (!enabled()) return;
         String acct = acctHash(rsn);
-        // Cache-only read (see getPriceIfCached doc) -- never blocks, so safe on any thread this
-        // is called from. Captures the live market context an offer was placed/repriced against,
-        // which can't be reconstructed retroactively (the wiki only exposes current prices).
-        WikiPriceService.PriceData market = wikiPriceService.getPriceIfCached(itemId);
-        Integer marketHigh = market != null ? market.high : null;
-        Integer marketLow = market != null ? market.low : null;
-        if (!claimGeOffer(acct, slot, state, itemId, price, totalQuantity, quantitySold, spent,
-                marketHigh, marketLow))
+        // The market price an offer was placed against is stamped by the server on ingest,
+        // from the price snapshot nearest this row's own ts. It used to be read here from a
+        // cache with a five-minute TTL that never refreshed on read, so the server's is the
+        // fresher of the two as well as costing every install the whole price feed.
+        if (!claimGeOffer(acct, slot, state, itemId, price, totalQuantity, quantitySold, spent))
         {
             return;
         }
@@ -231,18 +227,17 @@ public class TelemetryService
         r.put("total_quantity", totalQuantity);
         r.put("quantity_sold", quantitySold);
         r.put("spent", spent);
-        r.put("market_high", marketHigh);
-        r.put("market_low", marketLow);
         write("ge_offer", r);
     }
 
     synchronized boolean claimGeOffer(String acct, int slot, String state, int itemId, int price,
-                                      int totalQuantity, int quantitySold, int spent,
-                                      Integer marketHigh, Integer marketLow)
+                                      int totalQuantity, int quantitySold, int spent)
     {
         String key = acct + "|" + slot;
+        // Deliberately does not include the market price: it moves independently of the offer,
+        // so keying on it re-emitted unchanged offers every time the market ticked.
         String value = state + "|" + itemId + "|" + price + "|" + totalQuantity + "|"
-            + quantitySold + "|" + spent + "|" + marketHigh + "|" + marketLow;
+            + quantitySold + "|" + spent;
         if (value.equals(lastGeOfferByAccountSlot.get(key)))
         {
             return false;
