@@ -28,14 +28,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Thin Ares HTTP client for market data and suggestion composition. Flip <em>ranking</em>
  * is server-side ({@code POST /v1/flips}, {@code GET /v1/decants}, {@code GET /v1/market/health}).
- * Composition prefers {@code POST /v1/suggestion}; when that endpoint is missing (404) or
- * unreachable, callers fall back to {@link LocalSuggestionEngine} with ranked {@code /v1/flips}
- * candidates. Quote/limit/held-decant helpers stay here for live inventory / per-tick latency.
+ * Typed suggestions come from {@code POST /v1/suggestion}. Quote/limit/held-decant helpers
+ * stay here for live inventory / per-tick latency.
  */
 @Slf4j
 @Singleton
@@ -67,12 +65,8 @@ public class AresMarketClient
     private volatile boolean lastAresUnreachable = false;
     /** True when the last {@link #composeSuggestion} call returned a usable suggestion. */
     private volatile boolean lastFromCompose = false;
-    /**
-     * Sticky: once Ares returns HTTP 404 for {@code /v1/suggestion}, skip further compose
-     * attempts this JVM lifetime and use local composition. Cleared only by process restart
-     * (or tests via {@link #resetComposeEndpointProbeForTests()}).
-     */
-    private final AtomicBoolean composeEndpointMissing = new AtomicBoolean(false);
+    /** True when the last {@link #composeSuggestion} call failed (HTTP/timeout/unusable body). */
+    private volatile boolean lastComposeUnreachable = false;
 
     @Inject
     public AresMarketClient(OkHttpClient httpClient, Gson gson)
@@ -99,35 +93,26 @@ public class AresMarketClient
         return lastFromCompose;
     }
 
-    /** True after Ares answered HTTP 404 for {@code /v1/suggestion} (compose not shipped yet). */
-    public boolean composeEndpointMissing()
+    /** True when the last {@link #composeSuggestion} failed; callers soft-fail to WAIT. */
+    public boolean lastComposeUnreachable()
     {
-        return composeEndpointMissing.get();
-    }
-
-    /** Test hook: forget a prior 404 so the next compose call probes the network again. */
-    void resetComposeEndpointProbeForTests()
-    {
-        composeEndpointMissing.set(false);
-        lastFromCompose = false;
+        return lastComposeUnreachable;
     }
 
     /**
      * Ask Ares to compose the next typed suggestion from a live GE / held snapshot.
-     * Returns null when the endpoint is missing (404), unreachable, or returns an unusable
-     * body — callers must fall back to {@link LocalSuggestionEngine}.
+     * Returns null when unreachable or the body is unusable — callers soft-fail to WAIT.
+     * Always probes the network (no sticky skip after a miss).
      *
      * <p>Blocks on HTTP; call off the client thread.</p>
      */
     public Suggestion composeSuggestion(ComposeSuggestionRequest request)
     {
         lastFromCompose = false;
+        lastComposeUnreachable = false;
         if (request == null)
         {
-            return null;
-        }
-        if (composeEndpointMissing.get())
-        {
+            lastComposeUnreachable = true;
             return null;
         }
 
@@ -144,15 +129,9 @@ public class AresMarketClient
             .newCall(req)
             .execute())
         {
-            if (r.code() == 404)
-            {
-                // Endpoint not deployed yet — stop probing until restart.
-                composeEndpointMissing.set(true);
-                log.info("Ares /v1/suggestion not found (404); using local composition fallback");
-                return null;
-            }
             if (!r.isSuccessful() || r.body() == null)
             {
+                lastComposeUnreachable = true;
                 log.warn("Ares /v1/suggestion HTTP {}", r.code());
                 return null;
             }
@@ -161,6 +140,7 @@ public class AresMarketClient
             Suggestion suggestion = ComposeSuggestionMapper.toSuggestion(parsed);
             if (suggestion == null)
             {
+                lastComposeUnreachable = true;
                 log.warn("Ares /v1/suggestion returned unusable body (ok={}, error={})",
                     parsed != null && parsed.isOk(),
                     parsed != null ? parsed.getError() : null);
@@ -169,12 +149,14 @@ public class AresMarketClient
             lastFromCompose = true;
             lastFromAres = true;
             lastAresUnreachable = false;
+            lastComposeUnreachable = false;
             log.debug("Ares /v1/suggestion composed {} {}",
                 suggestion.getType(), suggestion.getName());
             return suggestion;
         }
         catch (Exception e)
         {
+            lastComposeUnreachable = true;
             log.warn("Ares /v1/suggestion failed: {}", e.getMessage());
             return null;
         }
