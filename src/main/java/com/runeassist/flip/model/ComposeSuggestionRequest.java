@@ -51,6 +51,13 @@ public class ComposeSuggestionRequest
     private OwnedModifySnapshot ownedModify;
 
     /**
+     * When true (default), Ares may bundle a {@code /v1/graph}-shaped {@code graph}
+     * object on the compose response for the picked item (FC suggestion+graph parity).
+     * Set false for low-data mode.
+     */
+    private boolean includeGraph = true;
+
+    /**
      * Client clock ms. Optional — server normally uses its own clock; tests may pin this.
      */
     private long nowMs;
