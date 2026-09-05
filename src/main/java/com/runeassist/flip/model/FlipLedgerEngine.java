@@ -8,8 +8,9 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 /**
  * Canonical FIFO open/close matching used by {@link LocalFlipLedger}. Extracted so the
@@ -20,11 +21,19 @@ public final class FlipLedgerEngine {
 
     private FlipLedgerEngine() {}
 
+    /** Matches server flip-ledger {@code flipIdForTx} / UUID.nameUUIDFromBytes("flip:"+txId). */
+    public static UUID stableFlipId(Transaction tx) {
+        if (tx != null && tx.getId() != null) {
+            return UUID.nameUUIDFromBytes(("flip:" + tx.getId()).getBytes(StandardCharsets.UTF_8));
+        }
+        return UUID.randomUUID();
+    }
+
     public static final class Book {
         public int accountId;
         public Map<UUID, FlipV2> flips = new LinkedHashMap<>();
         public Map<Integer, FlipV2> openByItemId = new LinkedHashMap<>();
-        public Supplier<UUID> flipIds = UUID::randomUUID;
+        public Function<Transaction, UUID> flipIdFor = FlipLedgerEngine::stableFlipId;
     }
 
     public static final class ApplyResult {
@@ -162,7 +171,7 @@ public final class FlipLedgerEngine {
 
     private static FlipV2 newOpenFlip(Book book, Transaction transaction, int now) {
         FlipV2 flip = new FlipV2();
-        flip.setId(book.flipIds.get());
+        flip.setId(book.flipIdFor.apply(transaction));
         flip.setAccountId(book.accountId);
         flip.setItemId(transaction.getItemId());
         flip.setOpenedTime(now);

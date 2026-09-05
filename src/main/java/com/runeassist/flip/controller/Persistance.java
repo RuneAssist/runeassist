@@ -8,12 +8,14 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.List;
 
 @Slf4j
 public class Persistance {
     public static Gson gson;
     public static final File PLUGIN_DIR = new File(RuneLite.RUNELITE_DIR, "runeassist-flip");
     public static final String LOGIN_RESPONSE_JSON_FILE = "login-response.json";
+    public static final String UNACKED_TRANSACTIONS_FILE_TEMPLATE = "%s_unacked.jsonl";
     public static File directory;
 
     public static void setUp(String directoryPath) throws IOException {
@@ -56,6 +58,50 @@ public class Persistance {
             if (!directory.mkdir()) {
                 throw new IOException("unable to create parent directory!");
             }
+        }
+    }
+
+
+    public static List<com.runeassist.flip.model.Transaction> loadUnackedTransactions(String displayName) {
+        java.util.List<com.runeassist.flip.model.Transaction> transactions = new java.util.ArrayList<>();
+        java.io.File file = new java.io.File(PLUGIN_DIR, String.format(UNACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
+        if (!file.exists()) {
+            return transactions;
+        }
+        java.util.Set<java.util.UUID> added = new java.util.HashSet<>();
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isEmpty() || gson == null) {
+                    continue;
+                }
+                try {
+                    com.runeassist.flip.model.Transaction transaction = gson.fromJson(line, com.runeassist.flip.model.Transaction.class);
+                    if (transaction != null && transaction.getId() != null && added.add(transaction.getId())) {
+                        transactions.add(transaction);
+                    }
+                } catch (com.google.gson.JsonSyntaxException e) {
+                    log.warn("error deserializing unacked transaction line in {}", file, e);
+                }
+            }
+        } catch (java.io.IOException e) {
+            log.warn("error loading unacked transactions {}", file, e);
+        }
+        log.debug("loaded {} unacked transactions for {}", transactions.size(), displayName);
+        return transactions;
+    }
+
+    public static void storeUnackedTransactions(java.util.List<com.runeassist.flip.model.Transaction> transactions, String displayName) {
+        java.io.File file = new java.io.File(PLUGIN_DIR, String.format(UNACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
+        try (java.io.BufferedWriter w = new java.io.BufferedWriter(new java.io.FileWriter(file, false))) {
+            if (transactions != null && gson != null) {
+                for (com.runeassist.flip.model.Transaction transaction : transactions) {
+                    w.write(gson.toJson(transaction));
+                    w.newLine();
+                }
+            }
+        } catch (java.io.IOException e) {
+            log.warn("error storing unacked transactions to {}", file, e);
         }
     }
 

@@ -358,6 +358,32 @@ public class LocalFlipLedger {
      * Raw GE fills for cloud upload. Oldest first. Reconstructs from signed acked rows
      * when a ledger file predates {@code sourceTransactions}.
      */
+    public synchronized List<Transaction> listSourceTransactions(String displayName) {
+        if (displayName == null || displayName.isEmpty()) {
+            return Collections.emptyList();
+        }
+        hydrate(displayName);
+        AccountBook book = books.get(displayName);
+        if (book == null) {
+            return Collections.emptyList();
+        }
+        if (!book.sourceTransactions.isEmpty()) {
+            List<Transaction> copy = new ArrayList<>(book.sourceTransactions.size());
+            for (Transaction t : book.sourceTransactions) {
+                copy.add(copyTransaction(t));
+            }
+            return copy;
+        }
+        List<Transaction> reconstructed = new ArrayList<>();
+        for (int i = book.transactions.size() - 1; i >= 0; i--) {
+            Transaction t = fromAcked(book.transactions.get(i));
+            if (t != null) {
+                reconstructed.add(t);
+            }
+        }
+        return reconstructed;
+    }
+
     private long applyToBook(AccountBook book, Transaction transaction) {
         UUID txId = transaction.getId() != null ? transaction.getId() : UUID.randomUUID();
         transaction.setId(txId);
