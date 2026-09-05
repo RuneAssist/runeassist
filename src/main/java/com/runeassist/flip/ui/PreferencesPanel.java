@@ -73,6 +73,8 @@ public class PreferencesPanel extends JPanel {
     private final AccountSuggestionPreferencesRS accountPreferences;
     private final BugReportClient bugReportClient;
     private final FlipHistorySyncService flipHistorySyncService;
+    @SuppressWarnings("unused") // Guice: keep stream controller alive with prefs UI
+    private final DumpsStreamController dumpsStreamController;
     private final net.runelite.api.Client client;
     private final ClientThread clientThread;
     private final DrawManager drawManager;
@@ -112,6 +114,7 @@ public class PreferencesPanel extends JPanel {
             AccountSuggestionPreferencesRS accountPreferences,
             BugReportClient bugReportClient,
             FlipHistorySyncService flipHistorySyncService,
+            DumpsStreamController dumpsStreamController,
             net.runelite.api.Client client,
             ClientThread clientThread,
             DrawManager drawManager,
@@ -121,6 +124,7 @@ public class PreferencesPanel extends JPanel {
         this.accountPreferences = accountPreferences;
         this.bugReportClient = bugReportClient;
         this.flipHistorySyncService = flipHistorySyncService;
+        this.dumpsStreamController = dumpsStreamController;
         this.client = client;
         this.clientThread = clientThread;
         this.drawManager = drawManager;
