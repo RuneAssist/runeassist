@@ -12,6 +12,8 @@ import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.plugins.PluginManager;
+import net.runelite.client.plugins.banktags.BankTagsPlugin;
+import net.runelite.client.plugins.banktags.BankTagsService;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.outline.ModelOutlineRenderer;
@@ -55,8 +57,8 @@ public class HighlightController {
     private final OverlayManager overlayManager;
     private final HighlightColorController highlightColorController;
     private final PluginManager pluginManager;
-    // RuneAssist fork: BankTags fields removed so the sideloaded plugin constructs without
-    // depending on the core BankTags plugin. (Portfolio bank-tag highlight disabled.)
+    private final BankTagsPlugin bankTagsPlugin;
+    private final BankTagsService bankTagsService;
     private final ModelOutlineRenderer modelOutlineRenderer;
 
     // state
@@ -630,9 +632,9 @@ public class HighlightController {
     }
 
     private Widget getPortfolioBankTagButton() {
-        // RuneAssist fork: BankTags integration disabled; the portfolio bank-tag button
-        // highlight is dropped (it hard-depended on the core BankTags plugin).
-        if (true) {
+        if (!config.portfolioBankTag()
+                || !pluginManager.isPluginActive(bankTagsPlugin)
+                || PORTFOLIO_BANK_TAG.equals(bankTagsService.getActiveTag())) {
             return null;
         }
 
