@@ -9,6 +9,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -135,5 +136,39 @@ public class DecantTrackerTest {
         s.setId(itemId);
         s.setExpectedProfit(profit);
         return s;
+    }
+
+    @Test
+    public void doseFamilyRecognisesPotionsAndRejectsEverythingElse() {
+        assertEquals("Super strength", DecantTracker.doseFamily("Super strength(3)"));
+        assertEquals("Prayer potion", DecantTracker.doseFamily("Prayer potion(4)"));
+        assertEquals("Divine super combat potion", DecantTracker.doseFamily("Divine super combat potion(1)"));
+        // Not dose potions: no suffix, a zero dose, multi-digit, or a bracket that is not a dose.
+        assertNull(DecantTracker.doseFamily("Abyssal whip"));
+        assertNull(DecantTracker.doseFamily("Super strength(0)"));
+        assertNull(DecantTracker.doseFamily("Super strength(12)"));
+        assertNull(DecantTracker.doseFamily("Bracelet of ethereum (uncharged)"));
+        assertNull(DecantTracker.doseFamily("(3)"));
+        assertNull(DecantTracker.doseFamily(null));
+    }
+
+    @Test
+    public void doseConservingShiftRecognisesARealDecant() {
+        // 208x (3) -> 156x (4): 624 doses either way, the case this was built for.
+        assertTrue(DecantTracker.isDoseConservingShift(208, 3, 156, 4));
+        // 4x (1) -> 1x (4).
+        assertTrue(DecantTracker.isDoseConservingShift(4, 1, 1, 4));
+    }
+
+    @Test
+    public void doseConservingShiftRejectsAnythingThatDoesNotBalance() {
+        // Doses lost or gained: not a decant, so leave the cost basis alone.
+        assertFalse(DecantTracker.isDoseConservingShift(208, 3, 155, 4));
+        assertFalse(DecantTracker.isDoseConservingShift(10, 3, 10, 3));
+        // A one-sided change is a buy or a sell, not a conversion.
+        assertFalse(DecantTracker.isDoseConservingShift(0, 3, 156, 4));
+        assertFalse(DecantTracker.isDoseConservingShift(208, 3, 0, 4));
+        assertFalse(DecantTracker.isDoseConservingShift(-208, 3, 156, 4));
+        assertFalse(DecantTracker.isDoseConservingShift(208, 0, 156, 4));
     }
 }
