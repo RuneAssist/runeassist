@@ -326,8 +326,6 @@ public class MenuHandler {
         }
         return itemId;
     }
-        return null;
-    }
 
     public void injectConfirmMenuEntry(MenuEntryAdded event) {
         if(!config.disableLeftClickConfirm()) {
