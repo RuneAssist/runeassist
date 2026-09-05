@@ -21,10 +21,13 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Session-only replacement for Flipping Copilot's transaction→flip server.
- * GE fills become {@link Transaction}s in {@link TransactionManager}; this class matches
- * them FIFO-style into {@link FlipV2}s in memory and pushes them into {@link FlipManager}
- * so the panel / flips dialog can show live-session profit. No disk backup of flip history.
+ * Live-session FIFO matching for instant Recent Flips UI. GE fills become
+ * {@link Transaction}s in {@link TransactionManager}; this class matches them
+ * into {@link FlipV2}s and pushes them into {@link FlipManager} so the panel
+ * updates immediately. Durable flip history is server-owned via
+ * {@link com.runeassist.flip.controller.FlipHistorySyncService} (upload +
+ * flips-delta pull after device/OSRS link) — this ledger is not a local-only
+ * history mode.
  */
 @Slf4j
 @Singleton
@@ -269,7 +272,7 @@ public class LocalFlipLedger {
 
 
     /**
-     * Soft-delete a flip from the session UI.
+     * Soft-delete a flip from the live UI (FlipManager).
      */
     public synchronized FlipV2 deleteFlip(String displayName, UUID flipId) {
         if (displayName == null || displayName.isEmpty() || flipId == null) {

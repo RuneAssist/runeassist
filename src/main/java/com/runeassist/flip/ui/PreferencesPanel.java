@@ -333,10 +333,16 @@ public class PreferencesPanel extends JPanel {
         preferencesContent.add(formRow("Reserved slots", reservedSlotsDropdown));
         addVerticalGap(preferencesContent, 10);
 
-        JLabel cloudTitle = new JLabel("Cloud sync");
+        JLabel cloudTitle = new JLabel("Flip history");
         cloudTitle.setForeground(Color.WHITE);
         cloudTitle.setFont(cloudTitle.getFont().deriveFont(Font.BOLD));
         preferencesContent.add(cloudTitle);
+        addVerticalGap(preferencesContent, 4);
+
+        JLabel cloudIntro = RuneAssistColors.caption(
+                "Recent Flips sync from the server after this client is linked (device register + OSRS account). There is no local-only history mode.");
+        cloudIntro.setAlignmentX(Component.LEFT_ALIGNMENT);
+        preferencesContent.add(cloudIntro);
         addVerticalGap(preferencesContent, 4);
 
         cloudStatusLabel = new JLabel();
@@ -486,10 +492,10 @@ public class PreferencesPanel extends JPanel {
                 SwingUtilities.invokeLater(() -> {
                     setPairingBusy(false);
                     refreshCloudStatus();
-                    cloudStatusLabel.setText("Could not get a pairing code. Check Cloud sync flip history is on.");
+                    cloudStatusLabel.setText("Could not get a pairing code. Check the server is reachable.");
                     JOptionPane.showMessageDialog(
                             SwingUtilities.getWindowAncestor(this),
-                            "Could not get a pairing code. Check cloud sync is on and the server is reachable.",
+                            "Could not get a pairing code. Check the server is reachable.",
                             title,
                             JOptionPane.WARNING_MESSAGE);
                 });

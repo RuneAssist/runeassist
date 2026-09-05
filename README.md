@@ -13,10 +13,11 @@ Plugin Hub maintainers: see `plugin-hub/README.md` for the manifest draft and su
 - **(default-on)** `POST https://runeassist.ares-server.co.uk/v1/suggestion` — capital, live GE offers, held stock with avg buy, risk/timeframe, buy-limit usage, blocked/skipped ids, and IP. Returns a typed suggestion (ABORT/MODIFY/SELL/BUY/WAIT). Soft-fails to a WAIT card if unreachable.
 - **(default-on, market ranking / helpers)** `POST https://runeassist.ares-server.co.uk/v1/flips` — capital, timeframe, risk level, free GE slots, per-item remaining/used buy limits, blocked and skipped item ids, and IP. Ranks flip candidates server-side (also used by tools/tests); no RSN.
 - **(default-on)** `GET https://runeassist.ares-server.co.uk/v1/graph` — price graph data for the item you're viewing.
+- **(default-on after device link)** Flip history — GE transactions upload to your RuneAssist account; Recent Flips restore via `client-flips-delta`. Link/pair from Preferences (no local-only history mode).
 - **(opt-in, Configuration → Privacy)** Telemetry ("Contribute anonymous data") — uploads GE offers, completed GE history and flip-panel decisions under a pseudonymous account hash (SHA-256 of your RSN). Never sends chat, bank contents, or your RSN in plain text.
 - **(on demand)** Bug reports ("Report a bug" in Preferences) — sends your report text, RSN, and an optional screenshot (opt-in checkbox, off by default) only after you confirm the dialog, which discloses where the data goes.
 
-Local-only data directories written by this plugin (never uploaded unless the toggles above are on): `~/.runelite/runeassist-flip/` (suggestion/held-cost state) and `~/.runelite/runeassist/telemetry/` (telemetry JSONL, written locally regardless of the telemetry toggle so a later opt-in can upload history).
+Local data directories: `~/.runelite/runeassist-flip/` (suggestion/held-cost state and unacked GE transaction queue pending upload) and `~/.runelite/runeassist/telemetry/` (telemetry JSONL, written locally regardless of the telemetry toggle so a later opt-in can upload history).
 
 ## Relationship to Flipping Copilot
 

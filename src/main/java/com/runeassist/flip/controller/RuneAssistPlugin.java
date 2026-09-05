@@ -39,7 +39,7 @@ import java.util.concurrent.*;
 // No Flipping Copilot account or servers.
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
-		description = "Grand Exchange flipping assistant with server compose suggestions, held-cost tracking, and Ares market data. Contribution and cloud sync are opt-in (Configuration -> Privacy).",
+		description = "Grand Exchange flipping assistant with server compose suggestions, held-cost tracking, and Ares market data. Anonymous contribution is opt-in (Configuration -> Privacy).",
 		tags = {"runeassist", "flipping", "ge", "grand exchange", "merch", "money making", "profit"}
 )
 // RuneAssist fork: dropped @PluginDependency(BankTagsPlugin.class) -- a sideloaded plugin
@@ -456,9 +456,6 @@ public class RuneAssistPlugin extends Plugin {
 					|| "telemetryEndpoint".equals(event.getKey())
 					|| "telemetryToken".equals(event.getKey())) {
 				telemetry.onUploadSettingsChanged();
-			}
-			if ("cloudSync".equals(event.getKey())) {
-				flipHistorySyncService.onEnabledChanged();
 			}
 			// RuneAssist fork: BankTags portfolio-tag feature disabled.
 			// if (event.getKey().equals("portfolioBankTag")) {

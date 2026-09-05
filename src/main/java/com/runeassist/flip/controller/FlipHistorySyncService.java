@@ -35,11 +35,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * FC-shaped flip history sync. Opt-in via {@link RuneAssistConfig#cloudSync()}.
- * Uploads GE source transactions to Ares and restores history by pulling
- * {@code /v1/account/client-flips-delta} into {@link FlipManager}. Live session
- * matching still happens in {@link LocalFlipLedger}; stable flip ids keep both
- * sides mergeable.
+ * Server-owned flip history (FC-shaped). GE fills go to a local unacked queue
+ * until uploaded; after device register / OSRS account link, txs upload and
+ * {@code /v1/account/client-flips-delta} fills {@link FlipManager}. There is no
+ * supported local-only or session-only history mode — Recent Flips come from
+ * the server once this client is linked. {@link LocalFlipLedger} still matches
+ * the live session for instant UI; stable flip ids keep both sides mergeable.
  */
 @Slf4j
 @Singleton
@@ -101,7 +102,7 @@ public class FlipHistorySyncService {
                 log.debug("flip history sync flush: {}", e.getMessage());
             }
         }, FLUSH_SEC, FLUSH_SEC, TimeUnit.SECONDS);
-        if (isEnabled() && !isLinked()) {
+        if (!isLinked()) {
             executor.execute(() -> {
                 try {
                     ensureRegistered();
@@ -114,29 +115,22 @@ public class FlipHistorySyncService {
         }
     }
 
-    public boolean isEnabled() {
-        return config.cloudSync();
-    }
-
     public boolean isLinked() {
         return deviceToken() != null && userId() != null;
     }
 
-    /** Short line for Preferences → Cloud sync. */
+    /** Short line for Preferences → Flip history. */
     public String statusMessage() {
-        if (!isEnabled()) {
-            return "Cloud sync is off. Enable “Cloud sync flip history” in Configuration → Privacy.";
-        }
         if (isLinked()) {
-            return "This PC is linked. Use the buttons below to pair another device or the website.";
+            return "This client is linked. Flip history syncs to your RuneAssist account — pair another device or the website below.";
         }
         if (registering) {
-            return "Not linked yet — linking… Buttons below still work.";
+            return "Registering this client… Flip history needs a linked device (like signing in). Buttons below still work.";
         }
         if (lastError != null) {
-            return "Not linked yet (" + lastError + "). Use the buttons below to retry.";
+            return "Not linked yet (" + lastError + "). Link this client below so Recent Flips can sync from the server.";
         }
-        return "Not linked yet. Use the buttons below — linking happens in the background.";
+        return "Not linked yet. Link this client below so Recent Flips sync from the server across sessions.";
     }
 
     public void addStatusListener(Runnable listener) {
@@ -145,26 +139,12 @@ public class FlipHistorySyncService {
         }
     }
 
-    public void onEnabledChanged() {
-        if (isEnabled() && !isLinked()) {
-            executor.execute(() -> {
-                try {
-                    ensureRegistered();
-                } catch (Exception e) {
-                    log.warn("flip history sync register: {}", e.getMessage());
-                }
-            });
-        } else {
-            fireStatus();
-        }
-    }
-
     public String websiteUrl() {
         return "https://runeassist.com/app/";
     }
 
     public void onLogin(String displayName) {
-        if (!isEnabled() || displayName == null || displayName.isEmpty()) {
+        if (displayName == null || displayName.isEmpty()) {
             return;
         }
         executor.execute(() -> {
@@ -177,7 +157,7 @@ public class FlipHistorySyncService {
     }
 
     public void enqueue(Transaction transaction, String displayName) {
-        if (!isEnabled() || transaction == null || transaction.getId() == null || displayName == null) {
+        if (transaction == null || transaction.getId() == null || displayName == null) {
             return;
         }
         executor.execute(() -> {
@@ -293,7 +273,7 @@ public class FlipHistorySyncService {
     }
 
     private void flush() {
-        if (!isEnabled() || deviceToken() == null) {
+        if (deviceToken() == null) {
             return;
         }
         while (true) {
