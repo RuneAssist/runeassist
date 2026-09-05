@@ -46,7 +46,7 @@ public class MenuHandler {
     private final PlayerLocationController playerLocationController;
     private final ChatboxPanelManager chatboxPanelManager;
     private final com.runeassist.flip.HeldCostTracker heldCostTracker;
-    private final com.runeassist.flip.FlipScorer flipScorer;
+    private final com.runeassist.flip.AresMarketClient market;
     private final ExecutorService executorService;
 
     private static final String MENU_ADD = "Add-All to portfolio";
@@ -183,7 +183,7 @@ public class MenuHandler {
         executorService.execute(() -> {
             long unitCost = 0;
             try {
-                Map<String, Object> quote = flipScorer.quote(itemId);
+                Map<String, Object> quote = market.quote(itemId);
                 if (quote != null && quote.get("buy_at") instanceof Number) {
                     unitCost = ((Number) quote.get("buy_at")).longValue();
                 }

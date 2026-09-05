@@ -313,7 +313,7 @@ public class SuggestionController {
         };
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
-        // RuneAssist fork: get the suggestion from our local scorer instead of FC's server.
+        // Ranked candidates from Ares; LocalSuggestionEngine composes against live GE state.
         suggestionManager.setGraphDataReadingInProgress(false); // graph is served separately
         runeAssistSource.getSuggestionAsync(suggestionConsumer);
     }
