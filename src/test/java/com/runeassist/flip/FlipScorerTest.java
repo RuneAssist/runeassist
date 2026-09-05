@@ -29,6 +29,28 @@ public class FlipScorerTest {
     }
 
     @Test
+    public void slotWorthFloorScalesWithTheStackButNeverStarvesSmallAccounts() {
+        // 430m across 8 slots is ~53.75m of deployable capital per slot; 0.25% of that is ~134k,
+        // clamped to the 100k ceiling so the panel can still find candidates.
+        assertEquals(100_000L, FlipScorer.slotWorthFloor(430_000_000L, 8, 3_000L));
+        // A 5m account has ~625k per slot; 0.25% is ~1.5k, below the absolute floor, so the
+        // floor is unchanged and a new player sees the same suggestions as before.
+        assertEquals(3_000L, FlipScorer.slotWorthFloor(5_000_000L, 8, 3_000L));
+        // Mid-size: 40m over 8 slots -> 5m per slot -> 12.5k, above the absolute floor.
+        assertEquals(12_500L, FlipScorer.slotWorthFloor(40_000_000L, 8, 3_000L));
+    }
+
+    @Test
+    public void slotWorthFloorIsSafeOnMissingOrNonsenseInputs() {
+        assertEquals(3_000L, FlipScorer.slotWorthFloor(0, 8, 3_000L));
+        assertEquals(3_000L, FlipScorer.slotWorthFloor(-1, 8, 3_000L));
+        assertEquals(3_000L, FlipScorer.slotWorthFloor(430_000_000L, 0, 3_000L));
+        // Fewer slots means more capital behind each one, so the bar rises (still clamped).
+        assertTrue(FlipScorer.slotWorthFloor(40_000_000L, 2, 3_000L)
+            > FlipScorer.slotWorthFloor(40_000_000L, 8, 3_000L));
+    }
+
+    @Test
     public void decantingHeldStockBeatsSellingItAsIs() {
         // The case that motivated this, measured live: 208x Super strength(3) held, bought at
         // 2375ea. Selling as-is at 2403 (2% tax = 48) nets 489,840 -- a loss against the
