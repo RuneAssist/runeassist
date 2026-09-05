@@ -6,6 +6,8 @@ import com.runeassist.flip.rs.AccountLoginRS;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.GrandExchangeOfferState;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.time.Instant;

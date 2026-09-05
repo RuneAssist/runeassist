@@ -108,7 +108,7 @@ public class FlipsDialogController {
                     localFlipLedger
             );
             flipsPanel = new FlipsPanel(flipsManager, itemController, accountLoginRS,
-                    executorService, config, apiRequestHandler, osrsLoginRS, localFlipLedger, (f) -> {
+                    executorService, config, osrsLoginRS, localFlipLedger, (f) -> {
                 showVisualizeFlip(f);
             });
             missedFlipsPanel = new MissedFlipsPanel(osrsLoginRS, flipsManager, itemController, accountLoginRS,
@@ -116,7 +116,7 @@ public class FlipsDialogController {
             ItemAggregatePanel itemsPanel = new ItemAggregatePanel(flipsManager, itemController,
                     accountLoginRS, executorService, config);
             AccountsAggregatePanel accountsPanel = new AccountsAggregatePanel(accountLoginRS,
-                    executorService, config, apiRequestHandler, flipsManager);
+                    executorService, config, flipsManager);
             ProfitPanel profitPanel = new ProfitPanel(flipsManager, executorService, accountLoginRS, config);
             PortfolioPanel portfolioPanel = new PortfolioPanel(
                     itemController,
@@ -130,7 +130,7 @@ public class FlipsDialogController {
                     itemId -> showPriceGraphTab(itemId, false, null)
             );
             TransactionsPanel transactionsPanel = new TransactionsPanel(accountLoginRS, itemController,
-                    executorService, apiRequestHandler, osrsLoginManager, config, flipsManager,
+                    executorService, osrsLoginManager, config, flipsManager,
                     transactionManager, localFlipLedger);
             priceGraphPanel = new PriceGraphPanel(
                     itemController,

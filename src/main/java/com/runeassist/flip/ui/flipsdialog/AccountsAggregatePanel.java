@@ -1,7 +1,6 @@
 package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.config.RuneAssistConfig;
-import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.model.AccountAggregate;
 import com.runeassist.flip.model.FlipManager;
 import com.runeassist.flip.rs.AccountLoginRS;
@@ -27,7 +26,6 @@ public class AccountsAggregatePanel extends JPanel {
 
     // dependencies
     private final AccountLoginRS accountLoginRS;
-    private final ApiRequestHandler apiRequestHandler;
     private final FlipManager flipManager;
     private final ExecutorService executorService;
 
@@ -40,10 +38,8 @@ public class AccountsAggregatePanel extends JPanel {
     public AccountsAggregatePanel(AccountLoginRS accountLoginRS,
                                   @Named("runeAssistExecutor") ExecutorService executorService,
                                   RuneAssistConfig config,
-                                  ApiRequestHandler apiRequestHandler,
                                   FlipManager flipManager) {
         this.accountLoginRS = accountLoginRS;
-        this.apiRequestHandler = apiRequestHandler;
         this.flipManager = flipManager;
         this.executorService = executorService;
 
@@ -98,13 +94,10 @@ public class AccountsAggregatePanel extends JPanel {
             if (result == JOptionPane.YES_OPTION) {
                 tablePanel.setSpinnerVisible(true);
                 log.info("Deleting account: {}", account.getAccountId());
-                Runnable onSuccess = () -> {
-                    accountLoginRS.removeAccount(account.getAccountId());
-                    executorService.submit(() -> flipManager.deleteAccount(account.getAccountId()));
-                    tablePanel.setSpinnerVisible(false);
-                    sortAndFilter.reloadAggregates(true);
-                };
-                apiRequestHandler.asyncDeleteAccount(account.getAccountId(), onSuccess, () -> tablePanel.setSpinnerVisible(false));
+                accountLoginRS.removeAccount(account.getAccountId());
+                executorService.submit(() -> flipManager.deleteAccount(account.getAccountId()));
+                tablePanel.setSpinnerVisible(false);
+                sortAndFilter.reloadAggregates(true);
             }
         });
         menu.add(deleteItem);

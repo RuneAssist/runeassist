@@ -1,7 +1,6 @@
 package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.config.RuneAssistConfig;
-import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.AccountLoginRS;
@@ -37,7 +36,6 @@ public class FlipsPanel extends JPanel {
     // dependencies
     private final FlipManager flipsManager;
     private final AccountLoginRS accountLoginRS;
-    private final ApiRequestHandler apiRequestHandler;
     private final OsrsLoginRS osrsLoginRS;
     private final LocalFlipLedger localFlipLedger;
     private final Consumer<FlipV2> onVisualizeFlip;
@@ -57,13 +55,11 @@ public class FlipsPanel extends JPanel {
                       AccountLoginRS accountLoginRS,
                       @Named("runeAssistExecutor") ExecutorService executorService,
                       RuneAssistConfig config,
-                      ApiRequestHandler apiRequestHandler,
                       OsrsLoginRS osrsLoginRS,
                       LocalFlipLedger localFlipLedger,
                       Consumer<FlipV2> onVisualizeFlip) {
         this.flipsManager = flipsManager;
         this.accountLoginRS = accountLoginRS;
-        this.apiRequestHandler = apiRequestHandler;
         this.osrsLoginRS = osrsLoginRS;
         this.localFlipLedger = localFlipLedger;
         this.onVisualizeFlip = onVisualizeFlip;
