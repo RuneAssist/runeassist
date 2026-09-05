@@ -90,7 +90,9 @@ public class FlipsDialogController {
                     itemController,
                     priceGraphConfigManager,
                     config,
-                    apiRequestHandler
+                    apiRequestHandler,
+                    flipHistorySyncService,
+                    osrsLoginManager
             );
             PortfolioPanel portfolioPanel = new PortfolioPanel(
                     itemController,
