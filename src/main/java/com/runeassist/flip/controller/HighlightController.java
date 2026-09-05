@@ -48,6 +48,7 @@ public class HighlightController {
     // dependencies
     private final RuneAssistConfig config;
     private final SuggestionManager suggestionManager;
+    private final com.runeassist.flip.model.PausedManager pausedManager;
     private final SuggestionPreferencesManager suggestionPreferencesManager;
     private final GrandExchange grandExchange;
     private final AccountStatusManager accountStatusManager;
@@ -91,6 +92,12 @@ public class HighlightController {
         }
         if(!config.suggestionHighlights()) {
             log.debug("highlight redraw: suggestionHighlights config is OFF");
+            return;
+        }
+        // removeAll() above has already cleared, so returning here leaves nothing drawn. Without
+        // this the last suggestion's highlights stayed on the GE while the panel said paused.
+        if (pausedManager.isPaused()) {
+            log.debug("highlight redraw: skipped, suggestions paused");
             return;
         }
         if (offerManager.isOfferJustPlaced()) {
