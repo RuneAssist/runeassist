@@ -127,15 +127,15 @@ public class FlipHistorySyncService {
     /** Short line for Preferences → Flip history. */
     public String statusMessage() {
         if (isLinked()) {
-            return "This client is linked. Flip history syncs to your RuneAssist account — pair another device or the website below.";
+            return "This client is linked. Recent Flips history is enabled for your RuneAssist account — pair another device or the website below.";
         }
         if (registering) {
-            return "Registering this client… Flip history needs a linked device (like signing in). Buttons below still work.";
+            return "Registering this client… Linking (like signing in) enables Recent Flips history. Buttons below still work.";
         }
         if (lastError != null) {
-            return "Not linked yet (" + lastError + "). Link this client below so Recent Flips can sync from the server.";
+            return "Not linked yet (" + lastError + "). Link this client below to enable Recent Flips history.";
         }
-        return "Not linked yet. Link this client below so Recent Flips sync from the server across sessions.";
+        return "Not linked yet. Link this client below to enable Recent Flips history across sessions.";
     }
 
     public void addStatusListener(Runnable listener) {
@@ -485,6 +485,7 @@ public class FlipHistorySyncService {
     }
 
     private String osrsKey(String displayName) {
+        // Config key prefix kept for install continuity (not a product "cloud sync" toggle).
         return "cloudOsrs." + Persistance.hashDisplayName(displayName);
     }
 
