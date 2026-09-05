@@ -361,7 +361,7 @@ public class StatsPanelV2 extends JPanel {
                                     menu, this, f, displayName, flipHistorySyncService, true, false))));
             Integer accountId = flipManager.getIntervalAccount();
             if (accountId == null && displayName != null) {
-                accountId = LocalFlipLedger.accountIdFor(displayName);
+                accountId = FlipHistorySyncService.accountIdFor(displayName);
             }
             java.util.List<FlipV2> missed = accountId == null
                     ? java.util.Collections.emptyList()
