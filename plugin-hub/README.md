@@ -11,12 +11,12 @@ File name in plugin-hub: `plugins/runeassist-flipping`
 Copy `plugin-hub/plugins/runeassist-flipping` from this repo. Before opening the Hub PR:
 
 1. Merge this plugin to `https://github.com/RuneAssist/runeassist` `main` (or another public commit you want Hub to build).
-2. Ensure `commit=` is the full 40-character SHA of the plugin tree Hub should build (`git rev-parse origin/main` after feature merges). The draft currently pins `23d4ca8b441a134f9172d16c76beb3b3e3e13b33` (post FC-parity / portfolio / dump-alert tip). Re-bump after further `src/` changes.
+2. Ensure `commit=` is the full 40-character SHA of the plugin tree Hub should build (`git rev-parse origin/main` after feature merges). The draft currently pins `23d4ca8b441a134f9172d16c76beb3b3e3e13b33` (post FC-parity feature tip; Hub diet + graphs kept). Re-bump after further `src/` changes.
 3. Keep `repository=` as the public HTTPS URL ending in `.git`.
 4. Keep `warning=` exactly as written. `/v1/suggestion` sends coin stack (`capital`), held stock with cost basis, risk/timeframe settings and buy-limit usage with no gate (local telemetry was removed). That is why the warning lists coin stack and held stock alongside GE data and IP.
 5. `build=standard` lives in this repo’s `runelite-plugin.properties`, not in the Hub file. Do not add a custom `build.gradle` dependency unless you switch to `build=gradle` and go through Hub dependency verification.
 
-**Hub review size (approx):** RuneLite’s bot budget is **200k tokens including their prompt**. This repo’s historical estimate is `utf8_bytes(src/main/java/**/*.java) / 5` ≈ **192k** at the pinned tip (~7.8k under 200k for source alone). `cl100k_base` on the same Java is ≈ **200k** (code-only), so keep shrinking if the bot complains. Tests/`src/test` are excluded from these counts.
+**Hub review size (approx):** RuneLite's bot budget is **200k tokens including their prompt**. This repo's estimate is `utf8_bytes(src/main/java/**/*.java) / 5` ≈ **180k** at the pinned tip. `cl100k_base` on the same Java is ≈ **187k** (code-only).
 
 Expected Hub file:
 
@@ -48,7 +48,7 @@ Follow https://github.com/runelite/plugin-hub#submitting-a-plugin :
 5. Open a pull request against `runelite/plugin-hub` `master` (**Compare across forks**). Description sketch:
    - RuneAssist Flipping is a Grand Exchange assistant: server compose (`/v1/suggestion`), held-cost tracking, Ares market data (`/v1/flips`, graph, quotes).
    - Adapted from Flipping Copilot under BSD-2 (`LICENSE` / `THIRD_PARTY_LICENSES.md` in the plugin repo).
-   - Telemetry defaults **off**; Hub `warning=` covers coin stack, held stock, GE data + IP to a third party.
+   - Hub `warning=` covers coin stack, held stock, GE data + IP to a third party (local telemetry removed in Hub diet).
    - `build=standard` in `runelite-plugin.properties`.
 6. Watch Hub CI (`.github/workflows/build.yml` and RuneLite Plugin Hub Checks). Fix plugin-repo issues, push a new plugin commit, then update `commit=` on the Hub PR. Keep a single Hub PR.
 
