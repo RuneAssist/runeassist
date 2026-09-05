@@ -12,8 +12,6 @@ import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.plugins.PluginManager;
-import net.runelite.client.plugins.banktags.BankTagsPlugin;
-import net.runelite.client.plugins.banktags.BankTagsService;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.outline.ModelOutlineRenderer;
@@ -102,10 +100,6 @@ public class HighlightController {
         }
         if (offerManager.isOfferJustPlaced()) {
             log.debug("highlight redraw: skipped, offer just placed");
-            return;
-        }
-        if(suggestionManager.getSuggestionError() != null) {
-            log.debug("highlight redraw: skipped, suggestion error={}", suggestionManager.getSuggestionError());
             return;
         }
         Suggestion suggestion = suggestionManager.getSuggestion();

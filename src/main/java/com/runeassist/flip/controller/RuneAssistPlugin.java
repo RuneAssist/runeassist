@@ -76,8 +76,6 @@ public class RuneAssistPlugin extends Plugin {
 	@Inject
 	private KeybindHandler keybindHandler;
 	@Inject
-	private AccountLoginController accountLoginController;
-	@Inject
 	private OverlayManager overlayManager;
 	@Inject
 	private AccountLoginRS accountLoginRS;
@@ -169,11 +167,8 @@ public class RuneAssistPlugin extends Plugin {
 				.panel(mainPanel)
 				.build();
 		clientToolbar.addNavigation(navButton);
-		accountLoginController.setLoginPanel(mainPanel.loginPanel);
-		accountLoginController.setMainPanel(mainPanel);
 		suggestionController.setRuneAssistPanel(mainPanel.runeAssistPanel);
 		suggestionController.setMainPanel(mainPanel);
-		suggestionController.setLoginPanel(mainPanel.loginPanel);
 		suggestionController.setSuggestionPanel(mainPanel.runeAssistPanel.suggestionPanel);
 		grandExchangeCollectHandler.setSuggestionPanel(mainPanel.runeAssistPanel.suggestionPanel);
 		statsPanel = mainPanel.runeAssistPanel.statsPanel;
@@ -215,12 +210,10 @@ public class RuneAssistPlugin extends Plugin {
 		highlightController.deactivateAndRemoveAll();
 		clientThread.invokeLater(() -> slotProfitColorizer.resetAllSlots());
 		clientToolbar.removeNavigation(navButton);
-		if(accountLoginRS.get().isLoggedIn()) {
-			String displayName = osrsLoginManager.getLastDisplayName();
-			Integer accountId = accountLoginRS.get().getAccountId(displayName);
-			if (accountId != null && accountId != -1) {
-				webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, false);
-			}
+		String displayName = osrsLoginManager.getLastDisplayName();
+		Integer accountId = accountLoginRS.get().getAccountId(displayName);
+		if (accountId != null && accountId != -1) {
+			webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, false);
 		}
 		keybindHandler.unregister();
 		telemetry.shutdown();
@@ -285,7 +278,7 @@ public class RuneAssistPlugin extends Plugin {
 		transactionManager.hydrateLocal(name);
 		transactionManager.seedLiveOffers(name, client.getGrandExchangeOffers());
 		int accountId = LocalFlipLedger.accountIdFor(name);
-		accountLoginRS.addAccountIfMissing(accountId, name, LocalFlipLedger.LOCAL_USER_ID);
+		accountLoginRS.addAccountIfMissing(accountId, name);
 		flipManager.setPluginUserId(LocalFlipLedger.LOCAL_USER_ID);
 		flipManager.setIntervalAccount(accountId);
 		if (statsPanel != null) {
@@ -402,9 +395,6 @@ public class RuneAssistPlugin extends Plugin {
 						return false;
 					}
 					bindOsrsSession(name);
-					if(accountLoginRS.get().isLoggedIn()) {
-						transactionManager.scheduleSyncIn(0, name);
-					}
 					return true;
 				});
 		}
@@ -419,12 +409,10 @@ public class RuneAssistPlugin extends Plugin {
 	public void onClientShutdown(ClientShutdown clientShutdownEvent) {
 		log.debug("client shutdown event received");
 		offerManager.saveAll();
-		if(accountLoginRS.get().isLoggedIn()) {
-			String displayName = osrsLoginManager.getLastDisplayName();
-			Integer accountId = accountLoginRS.get().getAccountId(displayName);
-			if (accountId != null && accountId != -1) {
-				webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, false);
-			}
+		String displayName = osrsLoginManager.getLastDisplayName();
+		Integer accountId = accountLoginRS.get().getAccountId(displayName);
+		if (accountId != null && accountId != -1) {
+			webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, false);
 		}
 	}
 

@@ -55,7 +55,6 @@ public class SuggestionPanel extends JPanel {
     private final HighlightController highlightController;
     private final ItemManager itemManager;
     private final GrandExchange grandExchange;
-    private final PremiumInstanceController premiumInstanceController;
     private final FlipsDialogController flipsDialogController;
     private final ProfitCalculator profitCalculator;
     private final SuggestionController suggestionController;
@@ -95,7 +94,7 @@ public class SuggestionPanel extends JPanel {
                            ClientThread clientThread,
                            HighlightController highlightController,
                            ItemManager itemManager,
-                           GrandExchange grandExchange,  PremiumInstanceController premiumInstanceController, FlipsDialogController flipsDialogController, ProfitCalculator profitCalculator, SuggestionController suggestionController) {
+                           GrandExchange grandExchange, FlipsDialogController flipsDialogController, ProfitCalculator profitCalculator, SuggestionController suggestionController) {
         this.config = config;
         this.suggestionManager = suggestionManager;
         this.suggestionPreferencesManager = suggestionPreferencesManager;
@@ -109,7 +108,6 @@ public class SuggestionPanel extends JPanel {
         this.highlightController = highlightController;
         this.itemManager = itemManager;
         this.grandExchange = grandExchange;
-        this.premiumInstanceController = premiumInstanceController;
         this.flipsDialogController = flipsDialogController;
         this.profitCalculator = profitCalculator;
         this.suggestionController = suggestionController;
@@ -517,40 +515,14 @@ public class SuggestionPanel extends JPanel {
         innerSuggestionMessage = message;
         setButtonsVisible(false);
 
+        // FC's server was the only source of the "<manage>" premium-instance link; local
+        // suggestions never emit one, so the message is shown as-is.
         String displayMessage = message;
-        if (message != null && message.contains("<manage>")) {
-            displayMessage = message.replace("<manage>",
-                    "<a href='#' style='text-decoration:underline'>manage</a>");
-
-            boolean hasListener = false;
-            for (MouseListener listener : suggestionText.getMouseListeners()) {
-                if (listener instanceof ManageClickListener) {
-                    hasListener = true;
-                    break;
-                }
-            }
-
-            if (!hasListener) {
-                suggestionText.addMouseListener(new ManageClickListener());
-                suggestionText.setCursor(new Cursor(Cursor.HAND_CURSOR));
-            }
-        } else {
-            suggestionText.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
-        }
+        suggestionText.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
         suggestionText.setText("<html><center>" + displayMessage + "<br>" + serverMessage + "</center></html>");
         showMessageCard();
         suggestionTextContainer.revalidate();
         suggestionTextContainer.repaint();
-    }
-
-    private class ManageClickListener extends MouseAdapter {
-        @Override
-        public void mouseClicked(MouseEvent e) {
-            String text = suggestionText.getText();
-            if (text.contains("manage")) {
-                premiumInstanceController.loadAndOpenPremiumInstanceDialog();
-            }
-        }
     }
 
     public boolean isCollectItemsSuggested() {
@@ -665,15 +637,6 @@ public class SuggestionPanel extends JPanel {
             return;
         }
         hideLoading();
-
-        final HttpResponseException suggestionError = suggestionManager.getSuggestionError();
-        if(suggestionError != null) {
-            highlightController.redraw();
-            setHeadline("Error");
-            populateFlags(null);
-            setMessage("Error: " + suggestionError.getMessage());
-            return;
-        }
 
         if(!client.isClientThread()) {
             clientThread.invoke(this::displaySuggestion);

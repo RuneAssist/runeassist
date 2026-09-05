@@ -39,7 +39,6 @@ public class MenuHandler {
     private final FlipsDialogController flipsDialogController;
     private final ItemController itemController;
     private final PortfolioController portfolioController;
-    private final AccountLoginController accountLoginController;
     private final PortfolioStateRS portfolioStateRS;
     private final BankStateRS bankStateRS;
     private final ClientThread clientThread;

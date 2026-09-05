@@ -111,12 +111,6 @@ public class PortfolioStateRS extends ReactiveStateImpl<PortfolioState> {
         });
     }
 
-    public void updatePortfolioState(Suggestion suggestion, ToggleItemPortfolioResult result) {
-        updatePortfolioState(
-                suggestion == null ? null : suggestion.getBankItems(),
-                result == null ? null : result.getPortfolioItems(),
-                result == null ? null : result.getTime());
-    }
 
     public void updatePortfolioState(Map<Integer, Integer> suggestionBank,
                                      List<Suggestion.PortfolioItem> portfolioItems,
