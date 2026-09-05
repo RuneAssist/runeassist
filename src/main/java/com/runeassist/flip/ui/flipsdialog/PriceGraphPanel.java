@@ -1,238 +1,92 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ItemController;
-import com.runeassist.flip.manager.PriceGraphConfigManager;
-import com.runeassist.flip.model.*;
-import com.runeassist.flip.ui.UIUtilities;
-import com.runeassist.flip.ui.components.ItemSearchBox;
-import com.runeassist.flip.ui.components.TrackingCardLayout;
-import com.runeassist.flip.ui.graph.*;
-import com.runeassist.flip.ui.graph.model.Data;
-import com.runeassist.flip.ui.graph.model.PriceLine;
-import lombok.extern.slf4j.Slf4j;
+import com.runeassist.flip.model.Suggestion;
+import com.runeassist.flip.model.SuggestionManager;
 import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.util.LinkBrowser;
 
 import javax.swing.*;
 import java.awt.*;
 
-
-@Slf4j
+/** Website CTA for price graphs (in-plugin chart UI removed for Hub token budget). */
 public class PriceGraphPanel extends JPanel {
-
-    // Dependencies
     private final ItemController itemController;
-    private final ApiRequestHandler apiRequestHandler;
-    private final OsrsLoginManager osrsLoginManager;
-    private final PriceGraphConfigManager priceGraphConfigManager;
+    private final RuneAssistConfig config;
     private final SuggestionManager suggestionManager;
+    private Integer pendingItemId;
 
-    // UI Components
-    public final ItemSearchBox searchBox;
-    private final JPanel contentPanel;
-    private final JLabel errorLabel = new JLabel();
-    private final GraphPanel graphPanel;
-    private final StatsPanel statsPanel;
-    private final TrackingCardLayout contentCardLayout = new TrackingCardLayout();
-    private final JButton showSuggestionButton;
-
-    // State
-    private volatile int currentItemId;
-    public volatile PriceLine offerPriceLine;
-
-
-    // when isShowingSuggestionPriceData, the graph will auto update with the latest suggestion
-    public volatile boolean isShowingSuggestionPriceData;
-    public volatile Data suggestionPriceData;
-    public volatile PriceLine suggestedPriceLine;
-
-
-    public PriceGraphPanel(ItemController itemController,
-                           PriceGraphConfigManager configManager,
-                           RuneAssistConfig pluginConfig,
-                           ApiRequestHandler apiRequestHandler,
-                           OsrsLoginManager osrsLoginManager, SuggestionManager suggestionManager) {
+    public PriceGraphPanel(ItemController itemController, RuneAssistConfig config, SuggestionManager suggestionManager) {
         this.itemController = itemController;
-        this.apiRequestHandler = apiRequestHandler;
-        this.osrsLoginManager = osrsLoginManager;
-        this.priceGraphConfigManager = configManager;
+        this.config = config;
         this.suggestionManager = suggestionManager;
-
-        setLayout(new BorderLayout());
+        setLayout(new GridBagLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-        JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        topPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        JPanel box = new JPanel();
+        box.setOpaque(false);
+        box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
 
-        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        searchPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        JLabel title = new JLabel("Price graphs live on the website");
+        title.setForeground(Color.WHITE);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 16f));
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel searchLabel = new JLabel("Search item:");
-        searchLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        searchPanel.add(searchLabel);
+        JLabel blurb = new JLabel("<html><center>Open an item graph in your browser.<br>"
+                + "Use the Graph button on a suggestion, or right-click an offer.</center></html>");
+        blurb.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        blurb.setAlignmentX(Component.CENTER_ALIGNMENT);
 
+        JButton openBtn = new JButton("Open website graph");
+        openBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        openBtn.addActionListener(e -> openCurrent());
 
-        searchBox = new ItemSearchBox(
-                (searchText, ignoredSet) -> itemController.search(searchText, itemController.allItemIds()),
-                this::onItemSelected
-        );
-        searchBox.setPreferredSize(new Dimension(300, 30));
-        searchPanel.add(searchBox);
-
-        topPanel.add(searchPanel, BorderLayout.WEST);
-
-        // Add the suggestion button to the right side
-        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        rightPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-        showSuggestionButton = new JButton("Switch to suggested item");
-        showSuggestionButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        showSuggestionButton.setFocusable(false);
-        showSuggestionButton.setVisible(!isShowingSuggestionPriceData);
-        showSuggestionButton.addActionListener(e -> {
-            searchBox.clear();
-            showSuggestionPriceGraph();
-        });
-        rightPanel.add(showSuggestionButton);
-
-        contentPanel = new JPanel(contentCardLayout);
-
-        try {
-            JLabel gearButton = UIUtilities.gearButton("Graph Settings", ()-> {
-                if(contentCardLayout.getCurrentCard().equals(Cards.SETTINGS_CARD.name())) {
-                    contentCardLayout.showPrevious(contentPanel);
-                } else {
-                    contentCardLayout.show(contentPanel, Cards.SETTINGS_CARD.name());
-                }
-            });
-            rightPanel.add(gearButton, BorderLayout.EAST);
-        } catch (Exception e) {
-            log.error("error creating graph settings button", e);
-        }
-
-        topPanel.add(rightPanel, BorderLayout.EAST);
-
-        add(topPanel, BorderLayout.NORTH);
-
-        graphPanel = new GraphPanel(configManager);
-        statsPanel = new StatsPanel(configManager, pluginConfig);
-        statsPanel.setBackground(configManager.getConfig().backgroundColor);
-        statsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-        contentPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-        contentPanel.add(DialogUi.centeredMessage("Search for item to see price graph", ColorScheme.DARK_GRAY_COLOR, true, 16f), Cards.LANDING_CARD.name());
-        contentPanel.add(DialogUi.centeredMessage("Log into game to use price graphs.", ColorScheme.DARK_GRAY_COLOR, true, 16f), Cards.LOGIN_PROMPT.name());
-        contentPanel.add(DialogUi.loadingCard("Loading price data...", ColorScheme.DARK_GRAY_COLOR), Cards.LOADING_CARD.name());
-        contentPanel.add(DialogUi.splitGraphCard(graphPanel, statsPanel), Cards.GRAPH_CARD.name());
-        contentPanel.add(DialogUi.errorCard(errorLabel, () -> {
-            if (currentItemId > 0) {
-                onItemSelected(currentItemId);
-            }
-        }), Cards.ERROR_CARD.name());
-        contentPanel.add(new ConfigPanel(priceGraphConfigManager, () -> contentCardLayout.showPrevious(contentPanel)), Cards.SETTINGS_CARD.name());
-
-        add(contentPanel, BorderLayout.CENTER);
-
-        contentCardLayout.show(contentPanel, Cards.LANDING_CARD.name());
+        box.add(title);
+        box.add(Box.createVerticalStrut(10));
+        box.add(blurb);
+        box.add(Box.createVerticalStrut(16));
+        box.add(openBtn);
+        add(box);
     }
 
-    private void onItemSelected(Integer itemId) {
-        if (itemId == null) {
-            return;
-        }
-        if(osrsLoginManager.getPlayerDisplayName() == null) {
-            contentCardLayout.show(contentPanel, Cards.LOGIN_PROMPT.name());
-            return;
-        }
-        offerPriceLine = null;
-        isShowingSuggestionPriceData = false;
-        showSuggestionButton.setVisible(suggestionPriceData != null || suggestionManager.isGraphDataReadingInProgress());
-        currentItemId = itemId;
-        log.debug("Loading price graph for item: {}", itemId);
-        contentCardLayout.show(contentPanel, Cards.LOADING_CARD.name());
-        // Load the graph from the RuneAssist Ares backend.
-        final PriceLine priceLine = offerPriceLine;
-        apiRequestHandler.asyncGetRuneAssistGraph(itemId,
-            (Data d) -> SwingUtilities.invokeLater(() -> {
-                if (d == null || d.high1hTimes == null) showErrorCard("No price history for this item.");
-                else showGraphCard(new DataManager(d, null), priceLine);
-            }),
-            (Throwable e) -> SwingUtilities.invokeLater(() -> showErrorCard("Price graph unavailable.")));
-    }
+    public void onTabShown() {}
 
-    public void setLoadingCard() {
-        contentCardLayout.show(contentPanel, Cards.LOADING_CARD.name());
-    }
-
-    public void setSuggestionPriceData(Data d) {
-        suggestionPriceData = d;
-        if (isShowingSuggestionPriceData) {
-            if (d == null || d.lowLatestTimes == null) {
-                showLandingCard();
-                return;
-            }
-            DataManager dm = new DataManager(d, null);
-            showGraphCard(dm, suggestedPriceLine);
-        }
-    }
-
-    private void showErrorCard(String errorMessage) {
-        showSuggestionButton.setVisible(false);
-        errorLabel.setText("<html><center>" + errorMessage + "</center></html>");
-        contentCardLayout.show(contentPanel, Cards.ERROR_CARD.name());
-    }
-
-    private void showGraphCard(DataManager dm, PriceLine suggestedPriceLine) {
-        showSuggestionButton.setVisible(true);
-        graphPanel.setData(dm, suggestedPriceLine);
-        contentCardLayout.show(contentPanel, Cards.GRAPH_CARD.name());
-        statsPanel.populate(dm, itemController);
-    }
-
-    public void showLandingCard() {
-        showSuggestionButton.setVisible(false);
-        if(osrsLoginManager.getPlayerDisplayName() == null) {
-            contentCardLayout.show(contentPanel, Cards.LOGIN_PROMPT.name());
-            return;
-        }
-        contentCardLayout.show(contentPanel, Cards.LANDING_CARD.name());
-    }
-
-    public void onTabShown() {
-        String currentCard = contentCardLayout.getCurrentCard();
-        if(currentCard.equals(Cards.LANDING_CARD.name()) || currentCard.equals(Cards.LOGIN_PROMPT.name())) {
-            showLandingCard();
-        }
+    public void showItem(int itemId) {
+        pendingItemId = itemId > 0 ? itemId : null;
+        openCurrent();
     }
 
     public void showSuggestionPriceGraph() {
-        isShowingSuggestionPriceData = true;
-        showSuggestionButton.setVisible(false);
-        if (suggestionPriceData != null) {
-            setLoadingCard();
-            setSuggestionPriceData(suggestionPriceData);
+        Suggestion s = suggestionManager.getSuggestion();
+        if (s != null && !s.isWaitSuggestion() && s.getItemId() > 0) {
+            showItem(s.getItemId());
+        } else {
+            LinkBrowser.browse(home());
         }
     }
 
-    public void newSuggestedItemId(int itemId, PriceLine suggestedPriceLine) {
-        this.suggestedPriceLine = suggestedPriceLine;
-        if (suggestionPriceData != null && suggestionPriceData.itemId != itemId) {
-            suggestionPriceData = null;
-            if (isShowingSuggestionPriceData) {
-                showSuggestionPriceGraph();
-            }
-        }
+    public void showLandingCard() {
+        pendingItemId = null;
     }
 
-    enum Cards {
-        LANDING_CARD,
-        LOGIN_PROMPT,
-        GRAPH_CARD,
-        LOADING_CARD,
-        ERROR_CARD,
-        SETTINGS_CARD,
+    private void openCurrent() {
+        int itemId = pendingItemId != null ? pendingItemId : suggestionItemId();
+        if (itemId > 0) {
+            String name = itemController != null ? itemController.getItemName(itemId) : "";
+            PriceGraphWebsite.open(config, name, itemId);
+            return;
+        }
+        LinkBrowser.browse(home());
+    }
+
+    private int suggestionItemId() {
+        Suggestion s = suggestionManager.getSuggestion();
+        return s != null && !s.isWaitSuggestion() ? s.getItemId() : 0;
+    }
+
+    private String home() {
+        String url = PriceGraphWebsite.itemUrl(config, "", 0);
+        return url != null ? url : "https://runeassist.com/app/";
     }
 }

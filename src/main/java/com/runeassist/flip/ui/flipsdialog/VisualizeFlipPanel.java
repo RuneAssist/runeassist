@@ -1,111 +1,67 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ItemController;
-import com.runeassist.flip.manager.PriceGraphConfigManager;
-import com.runeassist.flip.model.AckedTransaction;
 import com.runeassist.flip.model.FlipV2;
-import com.runeassist.flip.model.LocalFlipLedger;
-import com.runeassist.flip.model.VisualizeFlipResponse;
-import com.runeassist.flip.ui.graph.*;
-import com.runeassist.flip.ui.graph.model.Data;
-import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.List;
-import java.util.function.Consumer;
 
-@Slf4j
+/** Opens flip item charts on the website (no in-plugin chart). */
 public class VisualizeFlipPanel extends JPanel {
-
     private final ItemController itemController;
-    private final ApiRequestHandler apiRequestHandler;
-    private final LocalFlipLedger localFlipLedger;
+    private final RuneAssistConfig config;
+    private final JLabel statusLabel = new JLabel();
+    private FlipV2 currentFlip;
 
-    private final JLabel errorLabel = new JLabel();
-    private final GraphPanel graphPanel;
-    private final FlipStatsPanel statsPanel;
-    private final CardLayout contentCardLayout = new CardLayout();
-
-    private volatile FlipV2 currentFlip;
-
-    public VisualizeFlipPanel(ItemController itemController,
-                              PriceGraphConfigManager configManager,
-                              RuneAssistConfig pluginConfig,
-                              ApiRequestHandler apiRequestHandler,
-                              LocalFlipLedger localFlipLedger) {
+    public VisualizeFlipPanel(ItemController itemController, RuneAssistConfig config) {
         this.itemController = itemController;
-        this.apiRequestHandler = apiRequestHandler;
-        this.localFlipLedger = localFlipLedger;
-
-        setLayout(contentCardLayout);
+        this.config = config;
+        setLayout(new GridBagLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-        graphPanel = new GraphPanel(configManager);
-        statsPanel = new FlipStatsPanel(configManager, pluginConfig);
-        statsPanel.setBackground(configManager.getConfig().backgroundColor);
-        statsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        JPanel box = new JPanel();
+        box.setOpaque(false);
+        box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
 
-        add(DialogUi.centeredMessage("Open a flip from the side panel to visualize it here.", ColorScheme.DARK_GRAY_COLOR, true, 16f), Cards.LANDING_CARD.name());
-        add(DialogUi.loadingCard("Loading price data...", ColorScheme.DARK_GRAY_COLOR), Cards.LOADING_CARD.name());
-        add(DialogUi.splitGraphCard(graphPanel, statsPanel), Cards.GRAPH_CARD.name());
-        add(DialogUi.errorCard(errorLabel, () -> {
-            if (currentFlip != null) {
-                showFlipVisualization(currentFlip);
-            }
-        }), Cards.ERROR_CARD.name());
+        JLabel title = new JLabel("Flip charts are on the website");
+        title.setForeground(Color.WHITE);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 16f));
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        contentCardLayout.show(this, Cards.LANDING_CARD.name());
+        statusLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        statusLabel.setText("<html><center>Open a flip from Recent Flips to view it in the browser.</center></html>");
+
+        JButton openBtn = new JButton("Open on website");
+        openBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        openBtn.addActionListener(e -> openCurrent());
+
+        box.add(title);
+        box.add(Box.createVerticalStrut(10));
+        box.add(statusLabel);
+        box.add(Box.createVerticalStrut(16));
+        box.add(openBtn);
+        add(box);
     }
 
     public void showFlipVisualization(FlipV2 flip) {
+        currentFlip = flip;
         if (flip == null) {
+            statusLabel.setText("<html><center>Open a flip from Recent Flips to view it in the browser.</center></html>");
             return;
         }
-        currentFlip = flip;
-        contentCardLayout.show(this, Cards.LOADING_CARD.name());
-        Consumer<String> onFailure = (String errorMessage) -> {
-            SwingUtilities.invokeLater(() -> showErrorCard(errorMessage));
-        };
-        localFlipLedger.ensureHydrated(flip.getAccountId());
-        List<AckedTransaction> lots = localFlipLedger.transactionsForFlip(flip.getId());
-        apiRequestHandler.asyncGetRuneAssistGraph(flip.getItemId(),
-            (Data d) -> {
-                if (d == null || !d.hasPriceSeries()) {
-                    onFailure.accept("No price history for this item.");
-                    return;
-                }
-                d.clearPredictionData();
-                VisualizeFlipResponse overlay = VisualizeFlipResponse.fromLocalLots(d, flip, lots);
-                SwingUtilities.invokeLater(() -> showGraphCard(new DataManager(overlay.getGraphData(), overlay), flip));
-            },
-            (Throwable e) -> {
-                String detail = e != null && e.getMessage() != null && !e.getMessage().isEmpty()
-                        ? e.getMessage()
-                        : "check your connection and try again";
-                log.warn("visualize flip graph failed for item {}", flip.getItemId(), e);
-                onFailure.accept("Could not load price history from RuneAssist (" + detail + ").");
-            });
+        String name = itemController != null ? itemController.getItemName(flip.getItemId()) : ("item " + flip.getItemId());
+        statusLabel.setText("<html><center>Opening " + name + " on the website…</center></html>");
+        openCurrent();
     }
 
-    private void showErrorCard(String errorMessage) {
-        errorLabel.setText("<html><center>" + errorMessage + "</center></html>");
-        contentCardLayout.show(this, Cards.ERROR_CARD.name());
-    }
-
-    private void showGraphCard(DataManager dm, FlipV2 f) {
-        graphPanel.setData(dm);
-        contentCardLayout.show(this, Cards.GRAPH_CARD.name());
-        statsPanel.populate(f, itemController);
-    }
-
-    enum Cards {
-        LANDING_CARD,
-        GRAPH_CARD,
-        LOADING_CARD,
-        ERROR_CARD
+    private void openCurrent() {
+        if (currentFlip == null || currentFlip.getItemId() <= 0) {
+            return;
+        }
+        String name = itemController != null ? itemController.getItemName(currentFlip.getItemId()) : "";
+        PriceGraphWebsite.open(config, name, currentFlip.getItemId());
     }
 }
