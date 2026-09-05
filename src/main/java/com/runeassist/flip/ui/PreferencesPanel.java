@@ -92,7 +92,7 @@ public class PreferencesPanel extends JPanel {
     private final JPanel preferencesContent;
     private final JPanel loginPromptPanel;
     private final JComboBox<Option> minPredictedProfitDropdown;
-    private final JLabel cloudStatusLabel;
+    private final JLabel historyStatusLabel;
     private final JPanel pairingCodePanel;
     private final JTextField pairingCodeField;
     private final JLabel pairingCodeHint;
@@ -337,23 +337,23 @@ public class PreferencesPanel extends JPanel {
         preferencesContent.add(formRow("Reserved slots", reservedSlotsDropdown));
         addVerticalGap(preferencesContent, 10);
 
-        JLabel cloudTitle = new JLabel("Flip history");
-        cloudTitle.setForeground(Color.WHITE);
-        cloudTitle.setFont(cloudTitle.getFont().deriveFont(Font.BOLD));
-        preferencesContent.add(cloudTitle);
+        JLabel historyTitle = new JLabel("Flip history");
+        historyTitle.setForeground(Color.WHITE);
+        historyTitle.setFont(historyTitle.getFont().deriveFont(Font.BOLD));
+        preferencesContent.add(historyTitle);
         addVerticalGap(preferencesContent, 4);
 
-        JLabel cloudIntro = RuneAssistColors.caption(
-                "Link this client (device + OSRS account) to unlock Recent Flips — same gate as signing in. History is stored on your RuneAssist account; there is no local-only history mode.");
-        cloudIntro.setAlignmentX(Component.LEFT_ALIGNMENT);
-        preferencesContent.add(cloudIntro);
+        JLabel historyIntro = RuneAssistColors.caption(
+                "Link this client (device register + OSRS account) to enable Recent Flips history — like signing in. History is stored on the server; there is no separate cloud-sync setting.");
+        historyIntro.setAlignmentX(Component.LEFT_ALIGNMENT);
+        preferencesContent.add(historyIntro);
         addVerticalGap(preferencesContent, 4);
 
-        cloudStatusLabel = new JLabel();
-        cloudStatusLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        cloudStatusLabel.setFont(cloudStatusLabel.getFont().deriveFont(11f));
-        cloudStatusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        preferencesContent.add(cloudStatusLabel);
+        historyStatusLabel = new JLabel();
+        historyStatusLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        historyStatusLabel.setFont(historyStatusLabel.getFont().deriveFont(11f));
+        historyStatusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        preferencesContent.add(historyStatusLabel);
         addVerticalGap(preferencesContent, 6);
 
         pairingCodeField = new JTextField();
@@ -466,8 +466,8 @@ public class PreferencesPanel extends JPanel {
         }
         preferencesContent.add(Box.createVerticalGlue());
 
-        flipHistorySyncService.addStatusListener(this::refreshCloudStatus);
-        refreshCloudStatus();
+        flipHistorySyncService.addStatusListener(this::refreshHistoryStatus);
+        refreshHistoryStatus();
     }
 
     private static JButton pairingActionButton(String text, String tip) {
@@ -483,7 +483,7 @@ public class PreferencesPanel extends JPanel {
     private void startPairing(String title, String how, boolean isWebLink) {
         pairingIsWebLink = isWebLink;
         setPairingBusy(true);
-        cloudStatusLabel.setText("Getting pairing code…");
+        historyStatusLabel.setText("Getting pairing code…");
         executorService.execute(() -> {
             try {
                 String code = flipHistorySyncService.startPairing();
@@ -495,8 +495,8 @@ public class PreferencesPanel extends JPanel {
                 log.warn("pairing start failed", ex);
                 SwingUtilities.invokeLater(() -> {
                     setPairingBusy(false);
-                    refreshCloudStatus();
-                    cloudStatusLabel.setText("Could not get a pairing code. Check the server is reachable.");
+                    refreshHistoryStatus();
+                    historyStatusLabel.setText("Could not get a pairing code. Check the server is reachable.");
                     JOptionPane.showMessageDialog(
                             SwingUtilities.getWindowAncestor(this),
                             "Could not get a pairing code. Check the server is reachable.",
@@ -513,7 +513,7 @@ public class PreferencesPanel extends JPanel {
             pairingCodeField.setText("");
             pairingCodePanel.setVisible(false);
             openLinkButton.setVisible(false);
-            refreshCloudStatus();
+            refreshHistoryStatus();
             revalidate();
             repaint();
             return;
@@ -528,7 +528,7 @@ public class PreferencesPanel extends JPanel {
         stretchWidth(pairingCodePanel);
         pairingCodePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE,
                 Math.max(96, pairingCodePanel.getPreferredSize().height)));
-        refreshCloudStatus();
+        refreshHistoryStatus();
         copyPairingCode();
         revalidate();
         repaint();
@@ -570,17 +570,17 @@ public class PreferencesPanel extends JPanel {
         linkWebBtn.setEnabled(!busy);
     }
 
-    private void refreshCloudStatus() {
+    private void refreshHistoryStatus() {
         if (!SwingUtilities.isEventDispatchThread()) {
-            SwingUtilities.invokeLater(this::refreshCloudStatus);
+            SwingUtilities.invokeLater(this::refreshHistoryStatus);
             return;
         }
-        cloudStatusLabel.setText("<html><body style='width:" + statusWrapPx() + "px'>"
+        historyStatusLabel.setText("<html><body style='width:" + statusWrapPx() + "px'>"
                 + flipHistorySyncService.statusMessage() + "</body></html>");
-        cloudStatusLabel.setForeground(flipHistorySyncService.isLinked()
+        historyStatusLabel.setForeground(flipHistorySyncService.isLinked()
                 ? ColorScheme.GRAND_EXCHANGE_PRICE
                 : ColorScheme.LIGHT_GRAY_COLOR);
-        stretchWidth(cloudStatusLabel);
+        stretchWidth(historyStatusLabel);
         if (!hasPairingCode()) {
             pairingCodePanel.setVisible(false);
         }

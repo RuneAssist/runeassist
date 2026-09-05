@@ -14,7 +14,7 @@ Plugin Hub maintainers: see `plugin-hub/README.md` for the manifest draft and su
 - **(default-on, market ranking / helpers)** `POST https://runeassist.ares-server.co.uk/v1/flips` — capital, timeframe, risk level, free GE slots, per-item remaining/used buy limits, blocked and skipped item ids, and IP. Ranks flip candidates server-side (also used by tools/tests); no RSN.
 - **(default-on)** `GET https://runeassist.ares-server.co.uk/v1/graph` — price graph data for the item you're viewing.
 - **(when Dump alerts prefs are on + GE open)** `POST https://runeassist.ares-server.co.uk/v1/dump-alerts` — long-lived stream of buy-side dump suggestions (length-prefixed JSON). Filters use your dump min-profit / F2P / blocklist prefs; no RSN.
-- **(default-on after device link)** Flip history — linking a device + OSRS account unlocks Recent Flips (stored on your RuneAssist account; `client-flips-delta`). Pair from Preferences — not an optional sync toggle; there is no local-only history mode.
+- **(after device register + OSRS account link)** Flip history — GE transactions upload to your RuneAssist account; Recent Flips restore via `client-flips-delta`. Linking/auth enables history (Preferences); there is no separate cloud-sync setting.
 - **(opt-in, Configuration → Privacy)** Telemetry ("Contribute anonymous data") — uploads GE offers, completed GE history and flip-panel decisions under a pseudonymous account hash (SHA-256 of your RSN). Never sends chat, bank contents, or your RSN in plain text.
 - **(on demand)** Bug reports ("Report a bug" in Preferences) — sends your report text, RSN, and an optional screenshot (opt-in checkbox, off by default) only after you confirm the dialog, which discloses where the data goes.
 

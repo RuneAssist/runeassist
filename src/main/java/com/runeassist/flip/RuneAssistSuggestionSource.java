@@ -8,6 +8,7 @@ import com.runeassist.flip.model.RiskLevel;
 import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.model.SuggestionPreferencesManager;
 import com.runeassist.flip.model.SuggestionType;
+import com.runeassist.flip.util.ProfitCalculator;
 import net.runelite.api.Client;
 import net.runelite.api.GrandExchangeOffer;
 import net.runelite.api.GrandExchangeOfferState;
@@ -560,61 +561,5 @@ public class RuneAssistSuggestionSource
         for (Item item : inv.getItems())
             if (item.getId() == 995) return item.getQuantity();
         return 0;
-    }
-
-    /**
-     * Inventory + bank item counts, unnoted itemId -> qty. Must be read on the client thread
-     * (like {@link #inventoryCoins()}/{@link #readOffers()} above) —
-     * {@code client.getItemContainer} asserts client-thread-only, so this cannot be called from
-     * the background scoring thread. Feeds {@link DecantTracker}, which has no direct
-     * {@link Client} access for that reason. Noted stacks are collapsed onto their unnoted
-     * wiki/GE ids so holding Super defence(4) notes counts as holding Super defence(4).
-     */
-    private Map<Integer, Long> snapshotOwnedQty()
-    {
-        Map<Integer, Long> raw = new HashMap<>();
-        addContainerQty(raw, client.getItemContainer(InventoryID.INVENTORY));
-        addContainerQty(raw, client.getItemContainer(InventoryID.BANK));
-        return DecantTracker.collapseToUnnoted(raw, this::toUnnotedItemId);
-    }
-
-    /**
-     * Potion families carried in the inventory right now.
-     *
-     * <p>Bob Barter decants every potion in the inventory to the chosen dose, not just the one
-     * being suggested, so anything else carried is converted too -- and silently, as far as
-     * cost basis is concerned, since only the suggested pair is watched. This is what the
-     * suggestion warns about. Client thread only, like the other container reads.
-     */
-    private Set<String> snapshotInventoryPotionFamilies()
-    {
-        Set<String> families = new java.util.LinkedHashSet<>();
-        ItemContainer inv = client.getItemContainer(InventoryID.INVENTORY);
-        if (inv == null) return families;
-        for (Item item : inv.getItems())
-        {
-            if (item == null || item.getId() <= 0) continue;
-            ItemComposition composition = client.getItemDefinition(item.getId());
-            if (composition == null) continue;
-            String family = DecantTracker.doseFamily(composition.getName());
-            if (family != null) families.add(family);
-        }
-        return families;
-    }
-
-    private int toUnnotedItemId(int itemId)
-    {
-        ItemComposition composition = client.getItemDefinition(itemId);
-        return DecantTracker.unnotedId(composition, itemId);
-    }
-
-    private static void addContainerQty(Map<Integer, Long> out, ItemContainer container)
-    {
-        if (container == null) return;
-        for (Item item : container.getItems())
-        {
-            if (item == null || item.getId() <= 0) continue;
-            out.merge(item.getId(), (long) item.getQuantity(), Long::sum);
-        }
     }
 }
