@@ -154,6 +154,9 @@ public class StatsPanelV2 extends JPanel {
         add(bottomPanel, BorderLayout.SOUTH);
 
         flipManager.setFlipsChangedCallback(() -> refresh(true, osrsLoginManager.isValidLoginState()));
+        if (flipHistorySyncService != null) {
+            flipHistorySyncService.addStatusListener(() -> refresh(true, lastValidState));
+        }
     }
 
     private void setupFlipsDialogButton() {
@@ -396,13 +399,17 @@ public class StatsPanelV2 extends JPanel {
         if (flipsMaybeChanged) {
             flipsPanel.removeAll();
             String displayName = osrsLoginManager.getPlayerDisplayName();
-            flipManager.getPageFlips(paginator.getPageNumber(), 50)
-                    .forEach(f -> flipsPanel.add(new FlipPanel(
+            java.util.List<FlipV2> page = flipManager.getPageFlips(paginator.getPageNumber(), 50);
+            if (page.isEmpty() && flipHistorySyncService != null && !flipHistorySyncService.isLinked()) {
+                flipsPanel.add(historyLinkPrompt());
+            } else {
+                page.forEach(f -> flipsPanel.add(new FlipPanel(
                             f,
                             config,
                             () -> flipsDialogController.showVisualizeFlip(f),
                             menu -> FlipRepairMenus.addStandardActions(
                                     menu, this, f, displayName, flipHistorySyncService, true, false))));
+            }
             Integer accountId = flipManager.getIntervalAccount();
             if (accountId == null && displayName != null) {
                 accountId = FlipHistorySyncService.accountIdFor(displayName);
@@ -465,5 +472,18 @@ public class StatsPanelV2 extends JPanel {
         if (hourlyProfitRow != null) {
             hourlyProfitRow.setVisible(visible);
         }
+    }
+
+    private JPanel historyLinkPrompt() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setOpaque(false);
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 4, 10, 4));
+        JLabel label = new JLabel("<html><body style='width:180px'>"
+                + "Link this client in Settings to enable Recent Flips history "
+                + "(device register + OSRS character).</body></html>");
+        label.setForeground(RuneAssistColors.MUTED);
+        label.setFont(FontManager.getRunescapeSmallFont());
+        panel.add(label, BorderLayout.CENTER);
+        return panel;
     }
 }
