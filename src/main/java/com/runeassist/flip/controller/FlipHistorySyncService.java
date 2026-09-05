@@ -268,6 +268,7 @@ public class FlipHistorySyncService {
             }
         }
         if (!flips.isEmpty()) {
+            flipManager.setPluginUserId(LocalFlipLedger.LOCAL_USER_ID);
             flipManager.mergeFlips(flips, LocalFlipLedger.LOCAL_USER_ID);
             log.info("flip history pulled {} flips for {}", flips.size(), displayName);
         }
