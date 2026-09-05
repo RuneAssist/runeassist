@@ -133,18 +133,83 @@ public class FlipHistorySyncService {
         return cached != null && !cached.isEmpty();
     }
 
-    /** Short line for Preferences → Flip history. */
-    public String statusMessage() {
+    /** Compact account id for UI (first 8 of UUID). */
+    public String shortUserId() {
+        String id = userId();
+        if (id == null || id.isEmpty()) {
+            return null;
+        }
+        return id.length() <= 8 ? id : id.substring(0, 8);
+    }
+
+    /**
+     * Compact top-bar label: linked / registering / not linked.
+     * Prefer OSRS RSN when that character is already attached.
+     */
+    public String identityLabel() {
         if (isLinked()) {
-            return "Linked — Recent Flips enabled.";
+            String rsn = osrsLoginManager.getPlayerDisplayName();
+            if (rsn != null && isOsrsLinked(rsn)) {
+                return rsn;
+            }
+            String shortId = shortUserId();
+            return shortId != null ? "Linked · " + shortId : "Linked";
         }
         if (registering) {
-            return "Registering this client…";
+            return "Linking…";
+        }
+        return "Not linked";
+    }
+
+    /** Tooltip / secondary line for the identity control. */
+    public String identityDetail() {
+        if (isLinked()) {
+            String rsn = osrsLoginManager.getPlayerDisplayName();
+            if (rsn != null && isOsrsLinked(rsn)) {
+                String shortId = shortUserId();
+                return "Flip history on for " + rsn
+                        + (shortId != null ? " · account " + shortId : "")
+                        + ". Click for account settings.";
+            }
+            if (rsn != null) {
+                return "Device linked — finishing attach for " + rsn + ". Click for account settings.";
+            }
+            return "Device linked. Log into OSRS to attach this character. Click for account settings.";
+        }
+        if (registering) {
+            return "Registering this client so Recent Flips can sync…";
         }
         if (lastError != null) {
-            return "Not linked (" + lastError + ").";
+            return "Not linked (" + lastError + "). Open settings to retry or enter a pairing code.";
         }
-        return "Not linked. Pair below to enable Recent Flips.";
+        return "Link this client to enable Recent Flips history. Click for account settings.";
+    }
+
+    /** Longer copy for Preferences → Account. */
+    public String statusMessage() {
+        if (isLinked()) {
+            String rsn = osrsLoginManager.getPlayerDisplayName();
+            String shortId = shortUserId();
+            String idBit = shortId != null ? " · account " + shortId : "";
+            if (rsn != null && isOsrsLinked(rsn)) {
+                return "Signed in for flip history as " + rsn + idBit
+                        + ". Pair another PC or attach a website login below.";
+            }
+            if (rsn != null) {
+                return "Device linked" + idBit + ". Attaching " + rsn
+                        + "… Recent Flips enable once the character link finishes.";
+            }
+            return "Device linked" + idBit
+                    + ". Log into OSRS to attach this character and enable Recent Flips.";
+        }
+        if (registering) {
+            return "Registering this client… Linking enables Recent Flips history (same role as signing in).";
+        }
+        if (lastError != null) {
+            return "Not linked yet (" + lastError + "). Use a pairing code below, or wait for auto-register.";
+        }
+        return "Not linked yet. This client will auto-register, or enter a pairing code from another device / the website.";
+
     }
 
     public void addStatusListener(Runnable listener) {
@@ -155,6 +220,30 @@ public class FlipHistorySyncService {
 
     public String websiteUrl() {
         return "https://runeassist.com/app/";
+    }
+
+    /** Dashboard account page (website → plugin pairing lives here). */
+    public String websiteAccountsUrl() {
+        return websiteUrl() + "#/accounts";
+    }
+
+    /** Open pairing panel on the website (requires an existing website session). */
+    public String websitePairUrl() {
+        return websiteUrl() + "#/pair";
+    }
+
+    /** Login page with plugin-issued pairing code prefilled (attach email to this device's account). */
+    public String websiteLoginWithCodeUrl(String code) {
+        if (code == null || code.isEmpty()) {
+            return websiteUrl() + "#/login";
+        }
+        String encoded;
+        try {
+            encoded = java.net.URLEncoder.encode(code, StandardCharsets.UTF_8.name());
+        } catch (java.io.UnsupportedEncodingException ex) {
+            encoded = code;
+        }
+        return websiteUrl() + "#/login?code=" + encoded;
     }
 
     public void onLogin(String displayName) {
