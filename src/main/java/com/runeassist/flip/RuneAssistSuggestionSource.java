@@ -453,29 +453,38 @@ public class RuneAssistSuggestionSource
             Object idObj = flip.get("id");
             if (idObj instanceof Number) marketById.putIfAbsent(((Number) idObj).intValue(), flip);
         }
+
+        // Gather every id we want health for, then ask once. This used to be a call per item,
+        // which was fine when the scoring was local and free; it is now a request each.
+        java.util.LinkedHashSet<Integer> wanted = new java.util.LinkedHashSet<>();
         if (offers != null) for (long[] o : offers)
         {
             if (o == null || o.length < 6 || o[5] != 1L) continue;
             int id = (int) o[0];
-            if (id <= 0) continue;
-            mergeMarketHealth(combined, marketById, id, timeframe, risk, membersItemsAllowed);
+            if (id > 0) wanted.add(id);
         }
         if (held != null) for (Integer id : held.keySet())
         {
-            if (id == null || id <= 0) continue;
-            if (marketById.containsKey(id)) continue;
-            mergeMarketHealth(combined, marketById, id, timeframe, risk, membersItemsAllowed);
+            if (id != null && id > 0 && !marketById.containsKey(id)) wanted.add(id);
+        }
+        if (wanted.isEmpty()) return;
+
+        Map<Integer, Map<String, Object>> health;
+        try { health = flipScorer.evaluateItems(wanted, timeframe, risk, membersItemsAllowed); }
+        catch (Exception e) { return; }
+
+        for (Integer id : wanted)
+        {
+            Map<String, Object> eval = health.get(id);
+            if (eval == null) continue;
+            mergeMarketHealth(combined, marketById, id, eval);
         }
     }
 
     private void mergeMarketHealth(List<Map<String, Object>> combined,
                                    Map<Integer, Map<String, Object>> marketById, int id,
-                                   int timeframe, RiskLevel risk, boolean membersItemsAllowed)
+                                   Map<String, Object> eval)
     {
-        Map<String, Object> eval;
-        try { eval = flipScorer.evaluateItem(id, timeframe, risk, membersItemsAllowed); }
-        catch (Exception e) { eval = null; }
-        if (eval == null) return;
         Map<String, Object> existing = marketById.get(id);
         if (existing != null)
         {
