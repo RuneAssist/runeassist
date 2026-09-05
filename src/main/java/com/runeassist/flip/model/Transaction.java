@@ -1,6 +1,5 @@
 package com.runeassist.flip.model;
 
-import com.runeassist.flip.util.ProtoUtils;
 import lombok.*;
 
 import java.time.Instant;
@@ -35,20 +34,7 @@ public class Transaction {
                 this.amountSpent == other.amountSpent;
     }
 
-    public byte[] encodeProto() {
-        return ProtoUtils.encodeMessage(out -> {
-            out.writeByteArray(1, ProtoUtils.uuidToBytes(id));
-            out.writeInt32(4, Math.toIntExact(timestamp.getEpochSecond()));
-            out.writeInt32(5, itemId);
-            out.writeInt32(6, type.equals(OfferStatus.BUY) ? quantity : -quantity);
-            out.writeBool(9, copilotPriceUsed);
-            out.writeBool(10, wasCopilotSuggestion);
-            out.writeInt64(11, price);
-            out.writeInt64(12, amountSpent);
-        });
-    }
-
-    @Override
+        @Override
     public String toString() {
         return String.format("%s %d %d on slot %d", type, quantity, itemId, boxId);
     }

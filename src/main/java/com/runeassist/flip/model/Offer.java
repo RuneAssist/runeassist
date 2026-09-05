@@ -1,6 +1,5 @@
 package com.runeassist.flip.model;
 
-import com.runeassist.flip.util.ProtoUtils;
 import com.google.gson.annotations.SerializedName;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
@@ -74,23 +73,4 @@ public class Offer {
     }
 
 
-    byte[] encodeProto() {
-        try {
-            return ProtoUtils.encodeMessage(out -> {
-                out.writeInt32(1, boxId);
-                out.writeInt32(2, itemId);
-                out.writeInt64(3, price);
-                out.writeInt64(4, amountTotal);
-                out.writeInt64(5, amountTraded);
-                out.writeInt32(6, status == null ? 0 : status.protoInt());
-                out.writeBool(7, active);
-                out.writeInt64(8, amountSpent);
-                out.writeBool(9, copilotPriceUsed);
-            });
-        } catch (RuntimeException e) {
-            log.warn("failed to encode offer proto, boxId={}, itemId={}", boxId, itemId, e);
-            return new byte[0];
-        }
     }
-
-}
