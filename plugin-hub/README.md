@@ -11,9 +11,9 @@ File name in plugin-hub: `plugins/runeassist-flipping`
 Copy `plugin-hub/plugins/runeassist-flipping` from this repo. Before opening the Hub PR:
 
 1. Merge this plugin to `https://github.com/RuneAssist/runeassist` `main` (or another public commit you want Hub to build).
-2. Ensure `commit=` is the full 40-character SHA of the plugin tree Hub should build (`git rev-parse origin/main` after feature merges). The draft currently pins `957fb6a388c8cb4047354950a7bcf53b3aabeef0` (post FC-parity / portfolio / dump-alert tip). Re-bump after further `src/` changes.
+2. Ensure `commit=` is the full 40-character SHA of the plugin tree Hub should build (`git rev-parse origin/main` after feature merges). The draft currently pins `23d4ca8b441a134f9172d16c76beb3b3e3e13b33` (post FC-parity / portfolio / dump-alert tip). Re-bump after further `src/` changes.
 3. Keep `repository=` as the public HTTPS URL ending in `.git`.
-4. Keep `warning=` exactly as written. Telemetry is opt-in in the client, but `/v1/suggestion` is **not** — it sends coin stack (`capital`), held stock with cost basis, risk/timeframe settings and buy-limit usage with no gate. That is why the warning lists coin stack and held stock alongside GE data and IP.
+4. Keep `warning=` exactly as written. `/v1/suggestion` sends coin stack (`capital`), held stock with cost basis, risk/timeframe settings and buy-limit usage with no gate (local telemetry was removed). That is why the warning lists coin stack and held stock alongside GE data and IP.
 5. `build=standard` lives in this repo’s `runelite-plugin.properties`, not in the Hub file. Do not add a custom `build.gradle` dependency unless you switch to `build=gradle` and go through Hub dependency verification.
 
 **Hub review size (approx):** RuneLite’s bot budget is **200k tokens including their prompt**. This repo’s historical estimate is `utf8_bytes(src/main/java/**/*.java) / 5` ≈ **192k** at the pinned tip (~7.8k under 200k for source alone). `cl100k_base` on the same Java is ≈ **200k** (code-only), so keep shrinking if the bot complains. Tests/`src/test` are excluded from these counts.
@@ -22,7 +22,7 @@ Expected Hub file:
 
 ```
 repository=https://github.com/RuneAssist/runeassist.git
-commit=957fb6a388c8cb4047354950a7bcf53b3aabeef0
+commit=23d4ca8b441a134f9172d16c76beb3b3e3e13b33
 warning=This plugin submits your coin stack size, held Grand Exchange stock with cost basis, grand exchange offers, grand exchange transactions, and IP address to a 3rd party server not controlled or verified by the RuneLite Developers.
 authors=RuneAssist
 ```
