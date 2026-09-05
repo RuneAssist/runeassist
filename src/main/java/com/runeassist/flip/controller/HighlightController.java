@@ -145,13 +145,7 @@ public class HighlightController {
         }
     }
 
-    /**
-     * Bob Barter (the GE's decanting NPC, SW corner) is reached via a right-click world
-     * interaction, not a widget -- so the only automatable help is: get any open GE/bank
-     * interface out of the way (same close-button highlight already used elsewhere), then
-     * outline Bob himself once he's visible. No further automation is possible -- decanting
-     * itself is his NPC dialogue, which RuneLite plugins must not script.
-     */
+    /** Bob Barter (the GE's decanting NPC, SW corner) is reached via a right-click world */
     private void highlightDecant(Suggestion suggestion) {
         if (grandExchange.isOpen()) {
             highlightGrandExchangeCloseButton(suggestion);

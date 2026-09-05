@@ -31,7 +31,6 @@ public class GrandExchangeOfferEventHandler {
     private final GrandExchangeUncollectedManager grandExchangeUncollectedManager;
     private final SuggestionManager suggestionManager;
     private final AccountStatusManager accountStatusManager;
-    private final LocalFlipLedger localFlipLedger;
 
     // state
     private final Queue<Transaction> transactionsToProcess = new ConcurrentLinkedQueue<>();
@@ -80,13 +79,6 @@ public class GrandExchangeOfferEventHandler {
         }
         updateUncollected(accountHash, slot, o, prev, consistent);
         offerPersistence.saveOffer(accountHash, slot, o);
-        if (o.getState() == GrandExchangeOfferState.CANCELLED_BUY
-                || o.getState() == GrandExchangeOfferState.CANCELLED_SELL) {
-            String displayName = osrsLoginManager.getPlayerDisplayName();
-            if (displayName != null) {
-                localFlipLedger.recordCancelled(displayName, o);
-            }
-        }
 
         // Own a freshly listed or modified offer for ~10 min (leftover qty after
         // cancel-relist looks like sold==0 and must not abort the same tick).
@@ -168,13 +160,7 @@ public class GrandExchangeOfferEventHandler {
         return inferFill(slot, offer, prev, consistent, login);
     }
 
-    /**
-     * Infer a fill from consecutive offer snapshots. Instant same-tick sells often
-     * arrive as EMPTY→SOLD (or SELLING→SOLD) with {@code quantitySold} set but
-     * {@code spent} still 0 (GE tax item-sink / client lag). Require a quantity
-     * increase and fall back to {@code price * qty} when spent did not move —
-     * same fallback {@link LocalFlipLedger#seedFromSavedOffers} already uses.
-     */
+    /** Infer a fill from consecutive offer snapshots; fall back to price*qty when spent lags. */
     static Transaction inferFill(int slot, SavedOffer offer, SavedOffer prev, boolean consistent, boolean login) {
         boolean newOffer = isNewOffer(prev, offer);
         int prevSold = (newOffer || prev == null) ? 0 : prev.getQuantitySold();

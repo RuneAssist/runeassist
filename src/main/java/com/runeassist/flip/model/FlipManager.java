@@ -14,14 +14,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-/**
- * This class is essentially a cache of user flips that facilitates efficient access to the flips and statistics for
- * any time range and rs account(s) combination. Since after several years a (very) active user could have hundreds of
- * thousands of flips, it would be too slow to filter and re-calculate flips/statistics from scratch every time.
- * A bucketed aggregation strategy is used where we keep pre-computed weekly buckets of statistics and flips. For any
- * time range we can efficiently combine the weekly buckets and only have to re-calculate statistics for the partial
- * weeks on the boundaries of the time range. Have tested the UI experience with >100k flips.
- */
+    /** This class is essentially a cache of user flips that facilitates efficient access to the flips and statistics for */
 @Slf4j
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
@@ -200,12 +193,7 @@ public class FlipManager {
         }
     }
 
-    /**
-     * Open and closed flips within the interval, merged and sorted by most-recent-activity
-     * (last buy or sell touch), not "every open position first, then closed ones." A flip
-     * that just closed -- especially a loss worth noticing -- now surfaces immediately
-     * instead of being buried below whatever's still open.
-     */
+    /** Open and closed flips within the interval, merged and sorted by most-recent-activity */
     public synchronized List<FlipV2> getPageFlips(int page, int pageSize, int intervalStartTime, Integer accountId) {
         if (Objects.equals(accountId,-1)) {
             return new ArrayList<>();

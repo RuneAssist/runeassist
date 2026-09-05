@@ -22,10 +22,7 @@ public class VisualizeFlipResponse {
     // set, with everything else empty, when the item has no usable price data
     public String message;
 
-    /**
-     * Overlay local buy/sell lots on an Ares (or other) price series. When the ledger
-     * has no per-lot rows, FlipV2 aggregates become a single buy and/or sell marker.
-     */
+    /** Overlay buy/sell markers on a price series; FlipV2 aggregates fill gaps when lot rows are empty. */
     public static VisualizeFlipResponse fromLocalLots(Data graph, FlipV2 flip, List<AckedTransaction> txs) {
         VisualizeFlipResponse r = new VisualizeFlipResponse();
         r.graphData = graph;

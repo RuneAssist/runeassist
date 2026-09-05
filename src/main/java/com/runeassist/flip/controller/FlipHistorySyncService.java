@@ -5,11 +5,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.runeassist.flip.HeldCostTracker;
-import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.FlipManager;
 import com.runeassist.flip.model.FlipStatus;
 import com.runeassist.flip.model.FlipV2;
-import com.runeassist.flip.model.LocalFlipLedger;
 import com.runeassist.flip.model.OfferStatus;
 import com.runeassist.flip.model.OsrsLoginManager;
 import com.runeassist.flip.model.SuggestionManager;
@@ -41,15 +39,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Server-owned flip history (FC-shaped). GE fills are persisted to an unacked
- * JSONL queue until {@code POST /v1/account/transactions} returns {@code ackedIds};
- * after device register / OSRS account link, uploads run and
- * {@code /v1/account/client-flips-delta} fills {@link FlipManager}. There is no
- * supported local-only or session-only history mode — Recent Flips come from
- * the server once this client is linked. {@link LocalFlipLedger} still matches
- * the live session for instant UI; stable flip ids keep both sides mergeable.
- */
+    /** Server-owned flip history. GE fills persist to an unacked JSONL queue until */
 @Slf4j
 @Singleton
 public class FlipHistorySyncService {
@@ -63,11 +53,12 @@ public class FlipHistorySyncService {
     private static final int FLUSH_SEC = 45;
     private static final int BATCH = 200;
 
+    /** Matches FlipManager default pluginUserId. */
+    public static final int PLUGIN_USER_ID = 0;
+
     private final OkHttpClient http;
     private final Gson gson;
     private final ConfigManager configManager;
-    private final RuneAssistConfig config;
-    private final LocalFlipLedger localFlipLedger;
     private final FlipManager flipManager;
     private final OsrsLoginManager osrsLoginManager;
     private final HeldCostTracker heldCostTracker;
@@ -86,8 +77,6 @@ public class FlipHistorySyncService {
             OkHttpClient http,
             Gson gson,
             ConfigManager configManager,
-            RuneAssistConfig config,
-            LocalFlipLedger localFlipLedger,
             FlipManager flipManager,
             OsrsLoginManager osrsLoginManager,
             HeldCostTracker heldCostTracker,
@@ -96,8 +85,6 @@ public class FlipHistorySyncService {
         this.http = http;
         this.gson = gson;
         this.configManager = configManager;
-        this.config = config;
-        this.localFlipLedger = localFlipLedger;
         this.flipManager = flipManager;
         this.osrsLoginManager = osrsLoginManager;
         this.heldCostTracker = heldCostTracker;
@@ -137,15 +124,15 @@ public class FlipHistorySyncService {
     /** Short line for Preferences → Flip history. */
     public String statusMessage() {
         if (isLinked()) {
-            return "This client is linked. Recent Flips history is enabled for your RuneAssist account — pair another device or the website below.";
+            return "Linked — Recent Flips enabled.";
         }
         if (registering) {
-            return "Registering this client… Linking (like signing in) enables Recent Flips history. Buttons below still work.";
+            return "Registering this client…";
         }
         if (lastError != null) {
-            return "Not linked yet (" + lastError + "). Link this client below to enable Recent Flips history.";
+            return "Not linked (" + lastError + ").";
         }
-        return "Not linked yet. Link this client below to enable Recent Flips history across sessions.";
+        return "Not linked. Pair below to enable Recent Flips.";
     }
 
     public void addStatusListener(Runnable listener) {
@@ -190,7 +177,7 @@ public class FlipHistorySyncService {
                 }
             }
             if (!exists) {
-                unacked.add(LocalFlipLedger.copyTransaction(transaction));
+                unacked.add(copyTransaction(transaction));
                 Persistance.storeUnackedTransactions(unacked, displayName);
             }
         }
@@ -211,7 +198,7 @@ public class FlipHistorySyncService {
         synchronized (this) {
             List<Transaction> copy = new ArrayList<>();
             for (Transaction t : unackedList(displayName)) {
-                copy.add(LocalFlipLedger.copyTransaction(t));
+                copy.add(copyTransaction(t));
             }
             return copy;
         }
@@ -265,7 +252,6 @@ public class FlipHistorySyncService {
         if (osrsAccountId == null) {
             return;
         }
-        backfill(displayName, osrsAccountId);
         flushDisplay(displayName);
         pullFlipsDelta(displayName, osrsAccountId);
     }
@@ -283,7 +269,7 @@ public class FlipHistorySyncService {
         if (body.has("flips")) {
             JsonArray arr = body.getAsJsonArray("flips");
             List<FlipV2> flips = new ArrayList<>();
-            int accountId = LocalFlipLedger.accountIdFor(displayName);
+            int accountId = accountIdFor(displayName);
             for (JsonElement el : arr) {
                 if (el == null || !el.isJsonObject()) {
                     continue;
@@ -294,8 +280,8 @@ public class FlipHistorySyncService {
                 }
             }
             if (!flips.isEmpty()) {
-                flipManager.setPluginUserId(LocalFlipLedger.LOCAL_USER_ID);
-                flipManager.mergeFlips(flips, LocalFlipLedger.LOCAL_USER_ID);
+                flipManager.setPluginUserId(PLUGIN_USER_ID);
+                flipManager.mergeFlips(flips, PLUGIN_USER_ID);
                 log.info("flip history pulled {} flips for {}", flips.size(), displayName);
             }
         }
@@ -437,7 +423,6 @@ public class FlipHistorySyncService {
         if (displayName == null || flipId == null || !isLinked()) {
             return false;
         }
-        localFlipLedger.deleteFlip(displayName, flipId);
         executor.execute(() -> {
             try {
                 mutateFlip(displayName, "/v1/account/delete-flip", flipId, null);
@@ -544,7 +529,7 @@ public class FlipHistorySyncService {
         if (body == null || !body.has("flips") || !body.get("flips").isJsonArray()) {
             return;
         }
-        int accountId = LocalFlipLedger.accountIdFor(displayName);
+        int accountId = accountIdFor(displayName);
         List<FlipV2> flips = new ArrayList<>();
         for (JsonElement el : body.getAsJsonArray("flips")) {
             if (el == null || !el.isJsonObject()) {
@@ -556,28 +541,10 @@ public class FlipHistorySyncService {
             }
         }
         if (!flips.isEmpty()) {
-            flipManager.setPluginUserId(LocalFlipLedger.LOCAL_USER_ID);
-            flipManager.mergeFlips(flips, LocalFlipLedger.LOCAL_USER_ID);
+            flipManager.setPluginUserId(PLUGIN_USER_ID);
+            flipManager.mergeFlips(flips, PLUGIN_USER_ID);
         }
         applyHeldFromBody(displayName, body);
-    }
-
-    private void backfill(String displayName, String osrsAccountId) {
-        String doneKey = backfillKey(displayName);
-        if ("1".equals(configManager.getConfiguration(CONFIG_GROUP, doneKey))) {
-            return;
-        }
-        List<Transaction> all = localFlipLedger.listSourceTransactions(displayName);
-        for (int i = 0; i < all.size(); i += BATCH) {
-            int end = Math.min(all.size(), i + BATCH);
-            List<UUID> acked = postTransactions(osrsAccountId, all.subList(i, end));
-            if (acked == null) {
-                return;
-            }
-            // Session source txs may also sit in the unacked JSONL — clear overlaps.
-            removeAcked(displayName, acked);
-        }
-        configManager.setConfiguration(CONFIG_GROUP, doneKey, "1");
     }
 
     private void flush() {
@@ -616,7 +583,7 @@ public class FlipHistorySyncService {
                 int end = Math.min(BATCH, unacked.size());
                 batch = new ArrayList<>(end);
                 for (int i = 0; i < end; i++) {
-                    batch.add(LocalFlipLedger.copyTransaction(unacked.get(i)));
+                    batch.add(copyTransaction(unacked.get(i)));
                 }
             }
             List<UUID> acked = postTransactions(osrsAccountId, batch);
@@ -763,22 +730,34 @@ public class FlipHistorySyncService {
         return "cloudFlipsCursor." + Persistance.hashDisplayName(displayName);
     }
 
-    private String backfillKey(String displayName) {
-        return "cloudBackfill." + Persistance.hashDisplayName(displayName);
+    private String origin() {
+        return DEFAULT_ORIGIN;
     }
 
-    private String origin() {
-        String endpoint = config.telemetryEndpoint();
-        if (endpoint == null || endpoint.trim().isEmpty()) {
-            return DEFAULT_ORIGIN;
+    public static int accountIdFor(String displayName) {
+        int h = Persistance.hashDisplayName(displayName == null ? "" : displayName).hashCode();
+        if (h == Integer.MIN_VALUE || h == 0) {
+            return 1;
         }
-        try {
-            java.net.URL u = new java.net.URL(endpoint.trim());
-            String port = u.getPort() > 0 ? (":" + u.getPort()) : "";
-            return u.getProtocol() + "://" + u.getHost() + port;
-        } catch (Exception e) {
-            return DEFAULT_ORIGIN;
+        return Math.abs(h);
+    }
+
+    public static Transaction copyTransaction(Transaction src) {
+        if (src == null) {
+            return null;
         }
+        Transaction t = new Transaction();
+        t.setId(src.getId());
+        t.setType(src.getType());
+        t.setItemId(src.getItemId());
+        t.setPrice(src.getPrice());
+        t.setQuantity(src.getQuantity());
+        t.setBoxId(src.getBoxId());
+        t.setAmountSpent(src.getAmountSpent());
+        t.setTimestamp(src.getTimestamp());
+        t.setLogin(src.isLogin());
+        t.setConsistent(src.isConsistent());
+        return t;
     }
 
     private JsonObject get(String path, boolean authed) {
@@ -877,7 +856,7 @@ public class FlipHistorySyncService {
             f.setDeleted(o.has("deleted") && o.get("deleted").getAsBoolean());
             f.setPortfolioId(o.has("portfolioId") ? o.get("portfolioId").getAsInt() : 1);
             f.setSeqNo(o.has("seqNo") ? o.get("seqNo").getAsLong() : 1L);
-            f.setUserId(LocalFlipLedger.LOCAL_USER_ID);
+            f.setUserId(PLUGIN_USER_ID);
             return f;
         } catch (Exception e) {
             return null;

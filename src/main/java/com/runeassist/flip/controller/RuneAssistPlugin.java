@@ -35,11 +35,9 @@ import java.util.concurrent.*;
 
 @Slf4j
 // Self-wiring flipping plugin. Suggestions come from RuneAssistSuggestionSource
-// (Ares /v1/suggestion compose + held-cost tracking).
-// No Flipping Copilot account or servers.
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
-		description = "Grand Exchange flipping assistant with server compose suggestions, held-cost tracking, and Ares market data. Anonymous contribution is opt-in (Configuration -> Privacy).",
+		description = "Grand Exchange flipping assistant with server compose suggestions, held-cost tracking, and Ares market data.",
 		tags = {"runeassist", "flipping", "ge", "grand exchange", "merch", "money making", "profit"}
 )
 // No @PluginDependency(BankTagsPlugin): sideloaded installs refuse to load with it.
@@ -119,8 +117,6 @@ public class RuneAssistPlugin extends Plugin {
 	private BankStateRS bankStateRS;
 
 	@Inject
-	private GeHistoryStateRS geHistoryStateRS;
-	@Inject
 	private PatchNotesController patchNotesController;
 	@Inject
 	private PortfolioBankTagController portfolioBankTagController;
@@ -128,12 +124,6 @@ public class RuneAssistPlugin extends Plugin {
 	private PlayerLocationController playerLocationController;
 	@Inject
 	private com.runeassist.flip.HeldCostTracker heldCostTracker;
-	@Inject
-	private com.runeassist.flip.TelemetryService telemetry;
-	@Inject
-	private com.runeassist.flip.GeHistoryDump geHistoryDump;
-	@Inject
-	private com.runeassist.flip.GeHistoryHeldBackfill geHistoryHeldBackfill;
 	@Inject
 	private FlipHistorySyncService flipHistorySyncService;
 	/** Constructed so Guice registers dump-alert stream listeners. */
@@ -185,9 +175,6 @@ public class RuneAssistPlugin extends Plugin {
 		statsPanel = mainPanel.runeAssistPanel.statsPanel;
 
 		// On the client thread, as every other refresh site already is: the status strip reads
-		// the inventory through AccountStatusManager, and client.getItemContainer asserts it is
-		// called from there. startUp runs on the Swing EDT, so refreshing straight from here
-		// raised an AssertionError that aborted plugin startup outright.
 		clientThread.invokeLater(mainPanel::refresh);
 		SwingUtilities.invokeLater(() -> patchNotesController.maybeShowOnStartup(mainPanel, hadExistingInstallation));
 
@@ -195,7 +182,6 @@ public class RuneAssistPlugin extends Plugin {
 			bindOsrsSession(osrsLoginManager.getPlayerDisplayName());
 		}
 		flipsDialogController.initDialog(SwingUtilities.getWindowAncestor(mainPanel));
-		telemetry.onUploadSettingsChanged();
 		flipHistorySyncService.start();
 		executorService.scheduleAtFixedRate(() ->
 			clientThread.invoke(() -> {
@@ -231,7 +217,6 @@ public class RuneAssistPlugin extends Plugin {
 		}
 		keybindHandler.unregister();
 		dumpsStreamController.ensureUnsubscribed();
-		telemetry.shutdown();
 		executorService.shutdownNow();
 	}
 
@@ -250,8 +235,6 @@ public class RuneAssistPlugin extends Plugin {
 			net.runelite.api.Player p = client.getLocalPlayer();
 			String rsn = p != null ? p.getName() : "anon";
 			heldCostTracker.onOffer(rsn, event.getSlot(), o.getState(), o.getItemId(),
-				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
-			telemetry.logGeOffer(rsn, event.getSlot(), o.getState().name(), o.getItemId(),
 				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
 		}
 		clientThread.invokeLater(() -> highlightController.redraw());
@@ -283,19 +266,17 @@ public class RuneAssistPlugin extends Plugin {
 		return bank != null && !bank.isHidden();
 	}
 
-	/** Wire session clock + local flip stats to the logged-in OSRS account. */
+	/** Wire session clock + flip stats to the logged-in OSRS account. */
 	private void bindOsrsSession(String name) {
 		if (name == null || name.isEmpty()) {
 			flipManager.setIntervalAccount(null);
 			return;
 		}
 		sessionManager.startOrResume();
-		transactionManager.hydrateLocal(name);
-		transactionManager.seedLiveOffers(name, client.getGrandExchangeOffers());
 		flipHistorySyncService.onLogin(name);
-		int accountId = LocalFlipLedger.accountIdFor(name);
+		int accountId = FlipHistorySyncService.accountIdFor(name);
 		accountLoginRS.addAccountIfMissing(accountId, name);
-		flipManager.setPluginUserId(LocalFlipLedger.LOCAL_USER_ID);
+		flipManager.setPluginUserId(FlipHistorySyncService.PLUGIN_USER_ID);
 		flipManager.setIntervalAccount(accountId);
 		if (statsPanel != null) {
 			statsPanel.resetIntervalDropdownToSession();
@@ -312,9 +293,6 @@ public class RuneAssistPlugin extends Plugin {
 	@Subscribe
 	public void onGameTick(GameTick event) {
 		bankStateRS.onGameTick();
-		geHistoryStateRS.onGameTick(client);
-		geHistoryDump.onGameTick();
-		geHistoryHeldBackfill.maybeApply(geHistoryStateRS.get());
 		grandExchangeOpenRS.set(grandExchange.isOpen());
 
 		suggestionController.onGameTick();
@@ -352,11 +330,6 @@ public class RuneAssistPlugin extends Plugin {
 	@Subscribe
 	public void onWidgetLoaded(WidgetLoaded event) {
 		gameUiChangesHandler.onWidgetLoaded(event);
-		if (event.getGroupId() == GeHistoryStateRS.GE_HISTORY_GROUP) {
-			geHistoryDump.onHistoryWidgetLoaded();
-			geHistoryStateRS.onGameTick(client);
-			geHistoryHeldBackfill.maybeApply(geHistoryStateRS.get());
-		}
 	}
 
 	@Subscribe
@@ -397,10 +370,7 @@ public class RuneAssistPlugin extends Plugin {
 				osrsLoginRS.set(osrsLoginRS.get().nextState(client));
 				break;
 			case LOGGED_IN:
-				geHistoryDump.onLogin();
-				// we want to update the flips panel on login but unfortunately the display name
-				// is not available immediately so schedule what we need to do here for in the future
-				// todo: move to just using the accountHash which is available immediately to simply things
+				// Display name is not available immediately; defer session bind.
 				clientThread.invokeLater(() -> {
 					if (client.getGameState() != GameState.LOGGED_IN) {
 						return true;
@@ -464,11 +434,6 @@ public class RuneAssistPlugin extends Plugin {
 					slotProfitColorizer.updateAllSlots();
 					highlightController.redraw();
 				});
-			}
-			if ("shareTelemetry".equals(event.getKey())
-					|| "telemetryEndpoint".equals(event.getKey())
-					|| "telemetryToken".equals(event.getKey())) {
-				telemetry.onUploadSettingsChanged();
 			}
 			if (event.getKey().equals("portfolioBankTag")) {
 				portfolioBankTagController.onConfigChanged();

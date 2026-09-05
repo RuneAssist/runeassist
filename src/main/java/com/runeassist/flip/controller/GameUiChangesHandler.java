@@ -42,7 +42,6 @@ public class GameUiChangesHandler {
     private final HeldItemSyncStateRS heldItemSyncStateRS;
     private final RuneAssistConfig config;
     private final AccountStatusManager accountStatusManager;
-    private final com.runeassist.flip.TelemetryService telemetry;
     private final net.runelite.client.plugins.PluginManager pluginManager;
     // state
     boolean quantityOrPriceChatboxOpen;
@@ -191,9 +190,6 @@ public class GameUiChangesHandler {
             Suggestion suggestion = suggestionManager.getSuggestion();
             if(suggestion != null) {
                 suggestion.actionedTick = client.getTickCount();
-                Player p = client.getLocalPlayer();
-                String rsn = p != null ? p.getName() : null;
-                telemetry.logSuggestionDecision(rsn, suggestion, "acted", suggestion.getPickSource());
             }
         }
         if (BANK_TAG_TAB_VIEW_OPTION.equals(event.getMenuOption())) {
@@ -201,12 +197,7 @@ public class GameUiChangesHandler {
         }
     }
 
-    /**
-     * True when the open GE slot is this MODIFY: owned/clicked slot, editor item,
-     * or a live offer of the same item. A random empty slot must not re-arm the lock.
-     * Matching only {@link Suggestion#getBoxId()} + filling offer fails after
-     * cancel-then-relist (stale boxId, slot already EMPTY).
-     */
+    /** True when the open GE slot is this MODIFY: owned/clicked slot, editor item, */
     private boolean slotIsForModify(int open, Suggestion suggestion) {
         if (open < 0) {
             return false;

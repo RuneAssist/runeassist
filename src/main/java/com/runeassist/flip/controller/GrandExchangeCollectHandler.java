@@ -25,7 +25,6 @@ public class GrandExchangeCollectHandler {
     private final Client client;
     private final HeldItemSyncStateRS heldItemSyncStateRS;
     private final AccountStatusManager accountStatusManager;
-    private final com.runeassist.flip.TelemetryService telemetry;
 
     @Setter
     private SuggestionPanel suggestionPanel;
@@ -38,8 +37,6 @@ public class GrandExchangeCollectHandler {
             Suggestion suggestion = suggestionManager.getSuggestion();
             if (suggestion != null && suggestion.isAbortSuggestion() && suggestion.actionedTick == -1) {
                 suggestion.actionedTick = client.getTickCount();
-                telemetry.logSuggestionDecision(osrsLoginManager.getLastDisplayName(), suggestion,
-                    "acted", suggestion.getPickSource());
             }
         }
         if (widget != null) {

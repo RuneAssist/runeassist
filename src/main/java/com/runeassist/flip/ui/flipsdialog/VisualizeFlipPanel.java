@@ -4,9 +4,7 @@ import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.manager.PriceGraphConfigManager;
-import com.runeassist.flip.model.AckedTransaction;
 import com.runeassist.flip.model.FlipV2;
-import com.runeassist.flip.model.LocalFlipLedger;
 import com.runeassist.flip.model.VisualizeFlipResponse;
 import com.runeassist.flip.ui.graph.*;
 import com.runeassist.flip.ui.graph.model.Data;
@@ -15,7 +13,7 @@ import net.runelite.client.ui.ColorScheme;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.List;
+import java.util.Collections;
 import java.util.function.Consumer;
 
 @Slf4j
@@ -23,7 +21,6 @@ public class VisualizeFlipPanel extends JPanel {
 
     private final ItemController itemController;
     private final ApiRequestHandler apiRequestHandler;
-    private final LocalFlipLedger localFlipLedger;
 
     private final JLabel errorLabel = new JLabel();
     private final GraphPanel graphPanel;
@@ -35,11 +32,9 @@ public class VisualizeFlipPanel extends JPanel {
     public VisualizeFlipPanel(ItemController itemController,
                               PriceGraphConfigManager configManager,
                               RuneAssistConfig pluginConfig,
-                              ApiRequestHandler apiRequestHandler,
-                              LocalFlipLedger localFlipLedger) {
+                              ApiRequestHandler apiRequestHandler) {
         this.itemController = itemController;
         this.apiRequestHandler = apiRequestHandler;
-        this.localFlipLedger = localFlipLedger;
 
         setLayout(contentCardLayout);
         setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -70,8 +65,6 @@ public class VisualizeFlipPanel extends JPanel {
         Consumer<String> onFailure = (String errorMessage) -> {
             SwingUtilities.invokeLater(() -> showErrorCard(errorMessage));
         };
-        localFlipLedger.ensureHydrated(flip.getAccountId());
-        List<AckedTransaction> lots = localFlipLedger.transactionsForFlip(flip.getId());
         apiRequestHandler.asyncGetRuneAssistGraph(flip.getItemId(),
             (Data d) -> {
                 if (d == null || !d.hasPriceSeries()) {
@@ -79,7 +72,8 @@ public class VisualizeFlipPanel extends JPanel {
                     return;
                 }
                 d.clearPredictionData();
-                VisualizeFlipResponse overlay = VisualizeFlipResponse.fromLocalLots(d, flip, lots);
+                // FlipV2 aggregates supply buy/sell markers when per-lot ledger rows are absent.
+                VisualizeFlipResponse overlay = VisualizeFlipResponse.fromLocalLots(d, flip, Collections.emptyList());
                 SwingUtilities.invokeLater(() -> showGraphCard(new DataManager(overlay.getGraphData(), overlay), flip));
             },
             (Throwable e) -> {

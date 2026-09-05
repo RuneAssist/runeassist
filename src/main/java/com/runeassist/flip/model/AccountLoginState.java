@@ -14,11 +14,7 @@ public class AccountLoginState {
     public Map<String,Integer> displayNameToAccountId = new HashMap<>();
     public Map<Integer, String> accountIdToDisplayName = new HashMap<>();
 
-    /**
-     * There is no remote user: accounts are registered locally from GE fills, and every local
-     * flip is written under {@code LocalFlipLedger.LOCAL_USER_ID}. Kept because flip records
-     * still carry a user id.
-     */
+    /** Accounts are registered locally from GE fills; flip records still carry a user id field. */
     public int getUserId() {
         return -1;
     }

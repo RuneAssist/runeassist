@@ -6,23 +6,15 @@ import com.runeassist.flip.rs.AccountSuggestionPreferencesRS;
 import com.runeassist.flip.model.SuggestionManager;
 import com.runeassist.flip.ui.components.ItemSearchMultiSelect;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.LinkBrowser;
 
-import javax.imageio.ImageIO;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -71,13 +63,9 @@ public class PreferencesPanel extends JPanel {
 
     private final SuggestionPreferencesManager preferencesManager;
     private final AccountSuggestionPreferencesRS accountPreferences;
-    private final BugReportClient bugReportClient;
     private final FlipHistorySyncService flipHistorySyncService;
     @SuppressWarnings("unused") // Guice: keep stream controller alive with prefs UI
     private final DumpsStreamController dumpsStreamController;
-    private final net.runelite.api.Client client;
-    private final ClientThread clientThread;
-    private final DrawManager drawManager;
     private final ItemController itemController;
     private final ScheduledExecutorService executorService;
     private final PreferencesToggleButton sellOnlyModeToggleButton;
@@ -112,22 +100,14 @@ public class PreferencesPanel extends JPanel {
             SuggestionPreferencesManager preferencesManager,
             ItemController itemController,
             AccountSuggestionPreferencesRS accountPreferences,
-            BugReportClient bugReportClient,
             FlipHistorySyncService flipHistorySyncService,
             DumpsStreamController dumpsStreamController,
-            net.runelite.api.Client client,
-            ClientThread clientThread,
-            DrawManager drawManager,
             @Named("runeAssistExecutor") ScheduledExecutorService executorService) {
         super();
         this.preferencesManager = preferencesManager;
         this.accountPreferences = accountPreferences;
-        this.bugReportClient = bugReportClient;
         this.flipHistorySyncService = flipHistorySyncService;
         this.dumpsStreamController = dumpsStreamController;
-        this.client = client;
-        this.clientThread = clientThread;
-        this.drawManager = drawManager;
         this.itemController = itemController;
         this.executorService = executorService;
 
@@ -337,16 +317,10 @@ public class PreferencesPanel extends JPanel {
         preferencesContent.add(formRow("Reserved slots", reservedSlotsDropdown));
         addVerticalGap(preferencesContent, 10);
 
-        JLabel historyTitle = new JLabel("Flip history");
+        JLabel historyTitle = new JLabel("Account & history");
         historyTitle.setForeground(Color.WHITE);
         historyTitle.setFont(historyTitle.getFont().deriveFont(Font.BOLD));
         preferencesContent.add(historyTitle);
-        addVerticalGap(preferencesContent, 4);
-
-        JLabel historyIntro = RuneAssistColors.caption(
-                "Link this client (device register + OSRS account) to enable Recent Flips history — like signing in. History is stored on the server; there is no separate cloud-sync setting.");
-        historyIntro.setAlignmentX(Component.LEFT_ALIGNMENT);
-        preferencesContent.add(historyIntro);
         addVerticalGap(preferencesContent, 4);
 
         historyStatusLabel = new JLabel();
@@ -358,28 +332,20 @@ public class PreferencesPanel extends JPanel {
 
         pairingCodeField = new JTextField();
         pairingCodeField.setEditable(false);
-        pairingCodeField.setFont(new Font(Font.MONOSPACED, Font.BOLD, 16));
+        pairingCodeField.setFont(new Font(Font.MONOSPACED, Font.BOLD, 14));
         pairingCodeField.setHorizontalAlignment(SwingConstants.CENTER);
         pairingCodeField.setBackground(ColorScheme.DARK_GRAY_COLOR);
         pairingCodeField.setForeground(Color.WHITE);
         pairingCodeField.setCaretColor(Color.WHITE);
-        pairingCodeField.setToolTipText("Select and copy, or use Copy");
 
         copyCodeButton = new JButton("Copy");
-        copyCodeButton.setToolTipText("Copy pairing code");
         RuneAssistColors.stylePrimaryButton(copyCodeButton);
         copyCodeButton.addActionListener(e -> copyPairingCode());
 
         openLinkButton = new JButton("Open");
-        openLinkButton.setToolTipText("Open the dashboard with this code filled in");
         RuneAssistColors.stylePrimaryButton(openLinkButton);
         openLinkButton.addActionListener(e -> openPairingInBrowser());
         openLinkButton.setVisible(false);
-
-        JLabel codeLabel = new JLabel("Pairing code");
-        codeLabel.setForeground(RuneAssistColors.ACCENT);
-        codeLabel.setFont(codeLabel.getFont().deriveFont(Font.BOLD, 11f));
-        codeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         pairingCodeHint = RuneAssistColors.caption("Expires in 10 minutes.");
         pairingCodeHint.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -395,69 +361,35 @@ public class PreferencesPanel extends JPanel {
 
         pairingCodePanel = verticalPanel(ColorScheme.DARKER_GRAY_COLOR);
         pairingCodePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        pairingCodePanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(RuneAssistColors.ACCENT),
-                BorderFactory.createEmptyBorder(6, 8, 6, 8)));
-        pairingCodePanel.add(codeLabel);
-        addVerticalGap(pairingCodePanel, 4);
+        pairingCodePanel.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
         pairingCodePanel.add(codeRow);
-        addVerticalGap(pairingCodePanel, 4);
+        addVerticalGap(pairingCodePanel, 2);
         pairingCodePanel.add(pairingCodeHint);
         pairingCodePanel.setVisible(false);
         preferencesContent.add(pairingCodePanel);
-        addVerticalGap(preferencesContent, 6);
+        addVerticalGap(preferencesContent, 4);
 
-        linkDeviceBtn = pairingActionButton("Link another device",
-                "Show a pairing code to enter on a second PC");
-        linkDeviceBtn.addActionListener(e -> startPairing("Link another device",
-                "Enter this code on the other PC (Preferences → Enter pairing code).", false));
+        JButton openWebsiteBtn = pairingActionButton("Open website",
+                "Graphs, history, pairing, and support on the dashboard");
+        RuneAssistColors.stylePrimaryButton(openWebsiteBtn);
+        openWebsiteBtn.addActionListener(e -> LinkBrowser.browse(flipHistorySyncService.websiteUrl()));
+        preferencesContent.add(openWebsiteBtn);
+        addVerticalGap(preferencesContent, 4);
+
+        linkDeviceBtn = pairingActionButton("Get pairing code", "Code for another PC or the website");
+        linkDeviceBtn.addActionListener(e -> startPairing("Get pairing code",
+                "Enter this code on the other device or website.", true));
         preferencesContent.add(linkDeviceBtn);
         addVerticalGap(preferencesContent, 4);
 
         redeemBtn = pairingActionButton("Enter pairing code",
-                "Redeem a code from another device or from the website");
+                "Redeem a code from another device or the website");
         redeemBtn.addActionListener(e -> redeemPairing());
         preferencesContent.add(redeemBtn);
-        addVerticalGap(preferencesContent, 4);
 
-        linkWebBtn = pairingActionButton("Link a website login",
-                "Show a pairing code to attach an email on the dashboard");
-        linkWebBtn.addActionListener(e -> startPairing("Link a website login",
-                "On the dashboard choose Pair plugin and enter this code plus your email.", true));
-        preferencesContent.add(linkWebBtn);
-        addVerticalGap(preferencesContent, 10);
-
-        JLabel supportTitle = new JLabel("Support");
-        supportTitle.setForeground(Color.WHITE);
-        supportTitle.setFont(supportTitle.getFont().deriveFont(Font.BOLD));
-        preferencesContent.add(supportTitle);
-        addVerticalGap(preferencesContent, 4);
-
-        JLabel openDashboardLink = RuneAssistColors.caption("Open dashboard");
-        openDashboardLink.setForeground(RuneAssistColors.ACCENT);
-        openDashboardLink.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        openDashboardLink.setAlignmentX(Component.LEFT_ALIGNMENT);
-        openDashboardLink.setToolTipText(flipHistorySyncService.websiteUrl());
-        openDashboardLink.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                LinkBrowser.browse(flipHistorySyncService.websiteUrl());
-            }
-        });
-        preferencesContent.add(openDashboardLink);
-        addVerticalGap(preferencesContent, 4);
-
-        JLabel reportBugLink = RuneAssistColors.caption("Report a bug");
-        reportBugLink.setForeground(RuneAssistColors.ACCENT);
-        reportBugLink.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        reportBugLink.setAlignmentX(Component.LEFT_ALIGNMENT);
-        reportBugLink.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                captureScreenshotThenPrompt();
-            }
-        });
-        preferencesContent.add(reportBugLink);
+        // Kept for setPairingBusy; website CTA covers dashboard pairing.
+        linkWebBtn = pairingActionButton("Link website", "");
+        linkWebBtn.setVisible(false);
 
         for (Component c : preferencesContent.getComponents()) {
             if (c instanceof JComponent && !(c instanceof Box.Filler)) {
@@ -636,123 +568,6 @@ public class PreferencesPanel extends JPanel {
         int height = Math.max(component.getPreferredSize().height, 16);
         component.setMaximumSize(new Dimension(Integer.MAX_VALUE, height));
     }
-
-    private static final int SCREENSHOT_MAX_WIDTH = 1280;
-
-    /** Grabs the next rendered frame before showing the report dialog, so there's something to
-     * attach/preview immediately rather than the player having to take and find a screenshot
-     * themselves. Only reachable from the "Report a bug" link, which is itself only reachable
-     * while logged into the game (see the "preferences"/"login" CardLayout switch in the
-     * constructor) -- so a frame should always be available to capture. */
-    private void captureScreenshotThenPrompt() {
-        drawManager.requestNextFrameListener(image -> {
-            byte[] png = null;
-            try {
-                BufferedImage captured = new BufferedImage(
-                        image.getWidth(null), image.getHeight(null), BufferedImage.TYPE_INT_ARGB);
-                Graphics g = captured.getGraphics();
-                g.drawImage(image, 0, 0, null);
-                g.dispose();
-                png = encodePng(scaleDown(captured, SCREENSHOT_MAX_WIDTH));
-            } catch (Exception e) {
-                log.warn("bug report screenshot capture failed", e);
-            }
-            byte[] finalPng = png;
-            SwingUtilities.invokeLater(() -> promptAndSubmitBugReport(finalPng));
-        });
-    }
-
-    private static BufferedImage scaleDown(BufferedImage src, int maxWidth) {
-        if (src.getWidth() <= maxWidth) {
-            return src;
-        }
-        int newHeight = Math.round(src.getHeight() * (maxWidth / (float) src.getWidth()));
-        BufferedImage scaled = new BufferedImage(maxWidth, newHeight, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2 = scaled.createGraphics();
-        g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g2.drawImage(src, 0, 0, maxWidth, newHeight, null);
-        g2.dispose();
-        return scaled;
-    }
-
-    private static byte[] encodePng(BufferedImage image) {
-        try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ImageIO.write(image, "png", baos);
-            return baos.toByteArray();
-        } catch (IOException e) {
-            log.warn("bug report screenshot encode failed", e);
-            return null;
-        }
-    }
-
-    private static final String BUG_REPORT_HOST = "runeassist.ares-server.co.uk";
-
-    /**
-     * Consent for the bug-report network call lives in this dialog's OK button — see
-     * {@link BugReportClient#reportBug}. Screenshot defaults OFF.
-     */
-    private void promptAndSubmitBugReport(byte[] screenshotPng) {
-        JTextArea textArea = new JTextArea(6, 30);
-        textArea.setLineWrap(true);
-        textArea.setWrapStyleWord(true);
-
-        JPanel content = new JPanel();
-        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
-        content.add(new JScrollPane(textArea));
-
-        JLabel disclosure = new JLabel("<html><body style='width:260px'>Sends this text, your RSN and the "
-                + "screenshot to " + BUG_REPORT_HOST + " (RuneAssist's server).</body></html>");
-        disclosure.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        disclosure.setAlignmentX(Component.LEFT_ALIGNMENT);
-        content.add(Box.createVerticalStrut(6));
-        content.add(disclosure);
-
-        JCheckBox includeScreenshot = new JCheckBox("Include screenshot", false);
-        if (screenshotPng != null) {
-            try {
-                BufferedImage preview = ImageIO.read(new ByteArrayInputStream(screenshotPng));
-                Image thumb = preview.getScaledInstance(220, -1, Image.SCALE_SMOOTH);
-                JLabel thumbLabel = new JLabel(new ImageIcon(thumb));
-                content.add(Box.createVerticalStrut(6));
-                content.add(includeScreenshot);
-                content.add(thumbLabel);
-            } catch (IOException e) {
-                log.warn("bug report screenshot preview failed", e);
-            }
-        }
-
-        int result = JOptionPane.showConfirmDialog(
-                SwingUtilities.getWindowAncestor(this),
-                content,
-                "Report a bug — what happened?",
-                JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.PLAIN_MESSAGE);
-        if (result != JOptionPane.OK_OPTION) {
-            return;
-        }
-        String message = textArea.getText() == null ? "" : textArea.getText().trim();
-        if (message.isEmpty()) {
-            return;
-        }
-        byte[] attach = (screenshotPng != null && includeScreenshot.isSelected()) ? screenshotPng : null;
-        clientThread.invoke(() -> {
-            net.runelite.api.Player localPlayer = client.getLocalPlayer();
-            String displayName = localPlayer != null ? localPlayer.getName() : null;
-            submitBugReport(displayName, message, attach);
-        });
-    }
-
-    private void submitBugReport(String displayName, String message, byte[] attach) {
-        bugReportClient.reportBug(displayName, message, attach, ok -> {
-            JOptionPane.showMessageDialog(
-                    SwingUtilities.getWindowAncestor(this),
-                    ok ? "Thanks — logged." : "Couldn't submit right now (check your connection and try again).",
-                    "Report a bug",
-                    ok ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
-        });
-    }
-
 
     public void refresh() {
         if (!ensureEdt(this::refresh)) return;
