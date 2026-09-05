@@ -1,6 +1,5 @@
 package com.runeassist.flip.ui.flipsdialog;
 
-import com.runeassist.flip.controller.CloudSyncService;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.*;
 import com.runeassist.flip.rs.*;
@@ -45,7 +44,6 @@ public class MissedFlipsPanel extends JPanel {
     private final GeHistoryStateRS geHistoryStateRS;
     private final LocalFlipLedger localFlipLedger;
     private final OfferManager offerManager;
-    private final CloudSyncService cloudSyncService;
 
     private final Spinner spinner;
     private final JPanel spinnerOverlay;
@@ -66,8 +64,7 @@ public class MissedFlipsPanel extends JPanel {
                             ExecutorService executorService,
                             GeHistoryStateRS geHistoryStateRS,
                             LocalFlipLedger localFlipLedger,
-                            OfferManager offerManager,
-                            CloudSyncService cloudSyncService) {
+                            OfferManager offerManager) {
         this.osrsLoginRS = osrsLoginRS;
         this.flipsManager = flipsManager;
         this.itemController = itemController;
@@ -76,7 +73,6 @@ public class MissedFlipsPanel extends JPanel {
         this.geHistoryStateRS = geHistoryStateRS;
         this.localFlipLedger = localFlipLedger;
         this.offerManager = offerManager;
-        this.cloudSyncService = cloudSyncService;
 
         setLayout(new BorderLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -370,23 +366,9 @@ public class MissedFlipsPanel extends JPanel {
                     return;
                 }
                 tablePanel.setSpinnerVisible(true);
-                if (cloudSyncService != null) {
-                    cloudSyncService.dismissOpenPosition(displayName, flip, ok -> {
-                        tablePanel.setSpinnerVisible(false);
-                        refresh();
-                        if (!Boolean.TRUE.equals(ok)) {
-                            JOptionPane.showMessageDialog(
-                                    MissedFlipsPanel.this,
-                                    "Could not remove this position from the portfolio.",
-                                    "Remove failed",
-                                    JOptionPane.ERROR_MESSAGE);
-                        }
-                    });
-                } else {
-                    localFlipLedger.dismissOpenFlip(displayName, flip.getId());
-                    tablePanel.setSpinnerVisible(false);
-                    refresh();
-                }
+                localFlipLedger.dismissOpenFlip(displayName, flip.getId());
+                tablePanel.setSpinnerVisible(false);
+                refresh();
             });
             menu.add(remove);
             menu.show(e.getComponent(), e.getX(), e.getY());
