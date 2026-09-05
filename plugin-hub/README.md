@@ -13,7 +13,7 @@ Copy `plugin-hub/plugins/runeassist-flipping` from this repo. Before opening the
 1. Merge this plugin to `https://github.com/RuneAssist/runeassist` `main` (or another public commit you want Hub to build).
 2. Replace `commit=PASTE_40_CHAR_COMMIT_SHA` with the full 40-character SHA of that commit (`git rev-parse HEAD` on `main` after merge).
 3. Keep `repository=` as the public HTTPS URL ending in `.git`.
-4. Keep `warning=` exactly as written (same tone as Hub plugin `flipping-copilot`). Telemetry and cloud sync are opt-in in the client, but `/v1/flips` is **not** — `FlipScorer.topFlips` calls Ares on every suggestion cycle with no gate, sending the coin stack (`capital`), risk/timeframe settings and buy-limit usage. That is why the warning lists coin stack size alongside GE data and IP.
+4. Keep `warning=` exactly as written (same tone as Hub plugin `flipping-copilot`). Telemetry is opt-in in the client, but `/v1/suggestion` (and `/v1/flips` fallback) are **not** — they send coin stack (`capital`), held stock with cost basis, risk/timeframe settings and buy-limit usage with no gate. That is why the warning lists coin stack and held stock alongside GE data and IP.
 5. `build=standard` lives in this repo’s `runelite-plugin.properties`, not in the Hub file. Do not add a custom `build.gradle` dependency unless you switch to `build=gradle` and go through Hub dependency verification.
 
 Expected Hub file:
@@ -21,7 +21,7 @@ Expected Hub file:
 ```
 repository=https://github.com/RuneAssist/runeassist.git
 commit=<40-char sha>
-warning=This plugin submits your coin stack size, grand exchange offers, grand exchange transactions, and IP address to a 3rd party server not controlled or verified by the RuneLite Developers.
+warning=This plugin submits your coin stack size, held Grand Exchange stock with cost basis, grand exchange offers, grand exchange transactions, and IP address to a 3rd party server not controlled or verified by the RuneLite Developers.
 authors=RuneAssist
 ```
 
@@ -44,9 +44,9 @@ Follow https://github.com/runelite/plugin-hub#submitting-a-plugin :
    git push -u origin runeassist-flipping
    ```
 5. Open a pull request against `runelite/plugin-hub` `master` (**Compare across forks**). Description sketch:
-   - RuneAssist Flipping is a Grand Exchange assistant: local suggestion engine, held-cost tracking, Ares `/v1/flips` market data.
+   - RuneAssist Flipping is a Grand Exchange assistant: server compose (`/v1/suggestion`) with local engine fallback, held-cost tracking, Ares `/v1/flips` market ranking.
    - Adapted from Flipping Copilot under BSD-2 (`LICENSE` / `THIRD_PARTY_LICENSES.md` in the plugin repo).
-   - Telemetry and cloud history sync default **off**; Hub `warning=` covers GE data + IP to a third party.
+   - Telemetry defaults **off**; Hub `warning=` covers coin stack, held stock, GE data + IP to a third party.
    - `build=standard` in `runelite-plugin.properties`.
 6. Watch Hub CI (`.github/workflows/build.yml` and RuneLite Plugin Hub Checks). Fix plugin-repo issues, push a new plugin commit, then update `commit=` on the Hub PR. Keep a single Hub PR.
 

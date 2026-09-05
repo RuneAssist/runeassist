@@ -15,13 +15,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Pure on-device composition: turns Ares-ranked candidates plus live GE / held
+ * Fallback on-device composition: turns Ares-ranked candidates plus live GE / held
  * state into one {@link Suggestion} (ABORT / MODIFY / SELL / BUY / WAIT).
  *
- * <p>Market ranking is server-side ({@code POST /v1/flips}). This class stays
- * client-side because composition needs live offer prices, fill progress, and
- * held cost basis — there is no Ares endpoint that accepts that snapshot and
- * returns a typed suggestion. Pure function: no {@code Client}, no I/O.
+ * <p>Market ranking is server-side ({@code POST /v1/flips}). Prefer
+ * {@code POST /v1/suggestion} via {@link AresMarketClient#composeSuggestion}; this
+ * class remains until that endpoint is deployed and mandatory. Pure function: no
+ * {@code Client}, no I/O.
  */
 public final class LocalSuggestionEngine {
 
