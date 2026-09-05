@@ -32,8 +32,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * Thin Ares HTTP client for market data and suggestion composition. Flip <em>ranking</em>
  * is server-side ({@code POST /v1/flips}, {@code GET /v1/decants}, {@code GET /v1/market/health}).
- * Typed suggestions come from {@code POST /v1/suggestion}. Quote/limit/held-decant helpers
- * stay here for live inventory / per-tick latency.
+ * Typed suggestions come from {@code POST /v1/suggestion}. Quote/limit helpers stay here for
+ * live inventory / per-tick latency (portfolio unrealized, buy-limit stamps).
  */
 @Slf4j
 @Singleton
