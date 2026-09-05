@@ -26,7 +26,7 @@ import java.util.stream.Stream;
 public class SuggestionPreferencesManager {
 
     private static final int DEFAULT_TIMEFRAME = 5;
-    private static final long DEFAULT_DUMP_MIN_PROFIT = 100_000;
+    public static final long DEFAULT_DUMP_MIN_PROFIT = 100_000;
     /** Default total projected-GP floor on BUY. Auto (off) is stored as {@code 0}. */
     public static final long DEFAULT_MIN_PREDICTED_PROFIT = 20_000L;
 

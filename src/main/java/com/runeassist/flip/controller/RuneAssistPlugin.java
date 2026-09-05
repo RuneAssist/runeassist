@@ -135,6 +135,9 @@ public class RuneAssistPlugin extends Plugin {
 	private com.runeassist.flip.GeHistoryHeldBackfill geHistoryHeldBackfill;
 	@Inject
 	private FlipHistorySyncService flipHistorySyncService;
+	/** Constructed so Guice registers dump-alert stream listeners. */
+	@Inject
+	private DumpsStreamController dumpsStreamController;
 
 	// We use our own ThreadPool since the default ScheduledExecutorService only has a single thread and we don't want to block it
 	@Provides
@@ -226,6 +229,7 @@ public class RuneAssistPlugin extends Plugin {
 			webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, false);
 		}
 		keybindHandler.unregister();
+		dumpsStreamController.ensureUnsubscribed();
 		telemetry.shutdown();
 		executorService.shutdownNow();
 	}
