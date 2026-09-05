@@ -1,5 +1,6 @@
 package com.runeassist.flip.model;
 
+import com.runeassist.flip.controller.FlipHistorySyncService;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -14,7 +15,7 @@ public class FlipManagerMissedFlipsTest {
     @Test
     public void missedFlipsTrackedSeparatelyFromPortfolio() {
         FlipManager fm = new FlipManager(null);
-        fm.setPluginUserId(LocalFlipLedger.LOCAL_USER_ID);
+        fm.setPluginUserId(FlipHistorySyncService.PLUGIN_USER_ID);
         FlipV2 ghost = new FlipV2();
         ghost.setId(UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         ghost.setAccountId(7);
@@ -27,10 +28,10 @@ public class FlipManagerMissedFlipsTest {
         ghost.setDeleted(false);
         ghost.setSeqNo(1);
         ghost.setUpdatedTime(100);
-        ghost.setUserId(LocalFlipLedger.LOCAL_USER_ID);
+        ghost.setUserId(FlipHistorySyncService.PLUGIN_USER_ID);
         List<FlipV2> batch = new ArrayList<>();
         batch.add(ghost);
-        fm.mergeFlips(batch, LocalFlipLedger.LOCAL_USER_ID);
+        fm.mergeFlips(batch, FlipHistorySyncService.PLUGIN_USER_ID);
         List<FlipV2> missed = fm.getMissedFlipsForAccount(7);
         assertEquals(1, missed.size());
         assertTrue(fm.isGhostFlip(7, ghost.getId()));
