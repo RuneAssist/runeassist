@@ -6,27 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Pure scoring arithmetic shared with flip-scorer.mjs; the ranking loop itself needs wiki data. */
+/** Local arithmetic that stays client-side: decant maths and market drift.
+ *  Flip ranking is server-side only, so its scoring is not duplicated or tested here. */
 public class FlipScorerTest {
-
-    @Test
-    public void fillEstimateCoversBothLegsAtOurLiquidityShare() {
-        // 1000 units against 2000/hr per side: the old qty / volume gave 0.5h; two passive
-        // legs at half the bottleneck side's volume is 2h.
-        assertEquals(2.0, FlipScorer.expectedFillHours(1000, 2000), 1e-9);
-        assertEquals(0.0, FlipScorer.expectedFillHours(0, 2000), 1e-9);
-        assertTrue(FlipScorer.expectedFillHours(10, 0) > 0);
-    }
-
-    @Test
-    public void expectedMarginShavesOneRepriceOfSlippage() {
-        // Frost dragon bones shape: 6675 -> 6933, tax 138, post-tax 120.
-        long postTax = 6933 - 6675 - 138;
-        long shaved = (long) Math.floor(6675 * FlipScorer.SLIPPAGE_PCT / 100.0);
-        assertEquals(postTax - shaved, FlipScorer.expectedMargin(6675, postTax));
-        // Dark crab shape: 1gp post-tax goes negative once slippage is charged.
-        assertTrue(FlipScorer.expectedMargin(1292, 1) < 0);
-    }
 
     @Test
     public void decantingHeldStockBeatsSellingItAsIs() {
@@ -53,31 +35,6 @@ public class FlipScorerTest {
             FlipScorer.decantGainOverRawSell(5, 3, 4, 2403, 48, 3300, 66));
         assertEquals(0, FlipScorer.decantGainOverRawSell(0, 3, 4, 2403, 48, 3300, 66));
         assertEquals(0, FlipScorer.decantGainOverRawSell(208, 3, 0, 2403, 48, 3300, 66));
-    }
-
-    @Test
-    public void slotIdleRiskPenalisesFlipsThatCannotFillTheSlot() {
-        long budget = 53_750_000L; // 430m across 8 slots
-        // A cheap bulk item: 2,000 limit x 10k = 20m, only ~37% of the slot -> penalised.
-        double bulk = FlipScorer.slotIdleRisk(20_000_000L, budget);
-        // An expensive item clears the whole budget in a few units -> no penalty.
-        double rich = FlipScorer.slotIdleRisk(budget, budget);
-        assertEquals(0.0, rich, 1e-9);
-        assertTrue(bulk > rich);
-        assertEquals((1.0 - 20_000_000.0 / budget) * FlipScorer.SLOT_IDLE_RISK_WEIGHT, bulk, 1e-9);
-        // Worst observed shape: an item able to absorb only ~3% of the slot.
-        assertTrue(FlipScorer.slotIdleRisk(1_800_000L, budget) > bulk);
-    }
-
-    @Test
-    public void slotIdleRiskIsNeutralWhenBudgetIsUnknownOrOversubscribed() {
-        // Unknown/zero capital must not penalise anything.
-        assertEquals(0.0, FlipScorer.slotIdleRisk(5_000_000L, 0), 1e-9);
-        assertEquals(0.0, FlipScorer.slotIdleRisk(0, 53_750_000L), 1e-9);
-        // Deploying more than the budget is clamped, never negative.
-        assertEquals(0.0, FlipScorer.slotIdleRisk(999_000_000L, 53_750_000L), 1e-9);
-        // Small account: a 5m stack over 8 slots is a 625k budget, which most items clear.
-        assertEquals(0.0, FlipScorer.slotIdleRisk(700_000L, 625_000L), 1e-9);
     }
 
     @Test

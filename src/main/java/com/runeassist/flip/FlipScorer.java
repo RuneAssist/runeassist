@@ -56,22 +56,8 @@ public class FlipScorer
     // it -- suggesting 100% of the visible order-book volume reads as "always max" and leaves
     // no room for other buyers/sellers.
     private static final double LIQUIDITY_FRACTION = 0.5;
-    // Expected margin give-back from repricing one leg toward the live market, as % of buy
-    // price. Telemetry shows buys repriced up ~3% and sells down ~2% on roughly a third of
-    // listings; the quoted 5m avgLow -> avgHigh spread is never fully captured by passive offers.
-    static final double SLIPPAGE_PCT = 0.5;
-    // A flip is two passive legs and we only take LIQUIDITY_FRACTION of the bottleneck side's
-    // volume. The old qty / volume estimate was 4-12x too short against realised fills.
-    private static final int FILL_LEGS = 2;
     // 5m average this far below the 1h average is a falling market.
     static final double FALLING_DRIFT_PCT = -0.5;
-    // How hard to penalise a flip that can only put a sliver of the slot's budget to work.
-    // GE buy limits are denominated in UNITS, not gp, so a cheap item's 4h limit caps the
-    // capital one slot can deploy far below an expensive item's -- and with only eight slots,
-    // a slot left 95% idle costs more than a slightly thinner margin does. Weighted in line
-    // with the other risk terms below, and self-cancelling on small accounts, where the budget
-    // is small enough that most items can fill it.
-    static final double SLOT_IDLE_RISK_WEIGHT = 0.3;
 
     private static final double TAX_RATE = 0.02;
     private static final long   TAX_CAP  = 5_000_000L;
@@ -173,129 +159,20 @@ public class FlipScorer
         lastFromAres = false;
         if (remote != null)
         {
-            log.info("Ares /v1/flips returned 0 candidates, using local scorer");
+            log.info("Ares /v1/flips returned 0 candidates");
         }
 
-        try { ensureLoaded(); }
-        catch (Exception e) { log.warn("flip scorer load failed: {}", e.getMessage()); return new ArrayList<>(); }
-
-        RiskProfile risk = RiskProfile.of(riskLevel);
-        int tfMin = Math.max(1, Math.min(24 * 60, timeframeMinutes));
-        int slots = Math.max(1, remainingSlots);
-        long nowSec = System.currentTimeMillis() / 1000L;
-        Set<Integer> exclude = new HashSet<>();
-        if (blockedIds != null) exclude.addAll(blockedIds);
-        if (skippedIds != null) exclude.addAll(skippedIds);
-
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (Map.Entry<Integer, Meta> me : meta.entrySet())
-        {
-            int id = me.getKey();
-            Meta m = me.getValue();
-            if (m.limit <= 0) continue; // unknown/zero GE buy limit — never invent a quantity
-            if (!membersItemsAllowed && m.members) continue;
-            if (exclude.contains(id)) continue;
-            if (isOddName(m.name)) continue;
-
-            long[] p = latest.get(id);
-            int[]  v1 = volume1h.get(id);
-            int[]  v5 = volume5m.get(id);
-            if (v1 == null) continue;
-
-            int highVol = v1[0], lowVol = v1[1], avgHigh = v1[2], avgLow = v1[3];
-            int vol = highVol + lowVol;
-            if (vol < risk.minVolume) continue;
-            if (Math.min(highVol, lowVol) < risk.minSideVolume) continue;
-
-            long[] prices = pickPrices(p, v1, v5, tfMin, nowSec);
-            if (prices == null) continue;
-            long buy = prices[0], sell = prices[1];
-            if (buy <= 0 || sell <= 0 || sell <= buy) continue;
-
-            long tax = taxAmount(id, sell);
-            long margin = sell - buy - tax;
-            if (margin < risk.minMargin) continue;
-            double marginPct = margin * 100.0 / buy;
-            if (marginPct > risk.maxMarginPct) continue; // wide last-trade / 1h gap = odd / trap
-
-            // Rank and floor on what a passive flip realistically keeps, not the full quoted spread.
-            long expectedMargin = expectedMargin(buy, margin);
-            double expectedMarginPct = expectedMargin * 100.0 / buy;
-            if (expectedMarginPct < risk.minMarginPct) continue;
-
-            Double drift = driftPct(v5, v1);
-            // Falling faster than the whole margin: the sell target is already gone.
-            if (drift != null && drift < -marginPct) continue;
-
-            double imbalance = vol > 0 ? Math.abs(highVol - lowVol) / (double) vol : 1;
-            if (imbalance > risk.maxImbalance) continue;
-
-            int perHour = Math.max(1, Math.min(highVol, lowVol));
-            int liqQty = liquidityQty(tfMin, perHour, v5);
-            long qtyCap = Math.min(m.limit, liqQty);
-            boolean remainingKnown = remainingBuyLimit != null && remainingBuyLimit.containsKey(id);
-            int remaining = m.limit;
-            if (remainingKnown)
-                remaining = remainingBuyLimit.get(id);
-            else if (usedBuyLimit != null && usedBuyLimit.containsKey(id))
-            {
-                remaining = m.limit - usedBuyLimit.get(id);
-                remainingKnown = true;
-            }
-            if (remaining <= 0) continue;
-            qtyCap = Math.min(qtyCap, remaining);
-            long budget = capital > 0 ? Math.min(capital, capital / slots) : 0;
-            if (budget > 0) qtyCap = Math.min(qtyCap, budget / buy);
-            if (qtyCap < 1) continue;
-            long projected = expectedMargin * qtyCap;
-            long effectiveMinProfit = Math.max(minPredictedProfit, MIN_PROJECTED_PROFIT);
-            if (projected < effectiveMinProfit) continue;
-            double fillHrs = expectedFillHours(qtyCap, perHour);
-
-            double spreadRisk  = marginPct > 15 ? 0.35 : 0;
-            double liqRisk     = vol < risk.minVolume * 4 ? 0.4 : 0;
-            boolean falling    = drift != null && drift < FALLING_DRIFT_PCT;
-            double fallingRisk = falling ? 0.25 : 0;
-            // Thin-margin flips are the ones a single reprice turns into a loss; bulk-quantity
-            // items used to out-rank fatter margins purely on qty.
-            double marginRisk  = expectedMarginPct < risk.minMarginPct * 2 ? 0.2 : 0;
-            // Capital this flip actually puts to work, against what the slot could have taken.
-            double slotRisk    = slotIdleRisk(qtyCap * buy, budget);
-            double riskScore   = Math.min(0.9, imbalance * 0.6 + spreadRisk + liqRisk + fallingRisk
-                + marginRisk + slotRisk);
-            double turnover    = 1.0 / Math.max(0.15, fillHrs);
-            long score         = Math.round(projected * turnover * (1 - riskScore));
-
-            List<String> flags = new ArrayList<>();
-            if (imbalance > 0.5) flags.add("one-sided");
-            if (spreadRisk > 0)  flags.add("wide-spread");
-            if (liqRisk > 0)     flags.add("thin");
-            if (slotRisk > SLOT_IDLE_RISK_WEIGHT / 2) flags.add("under-deploys");
-            if (falling)         flags.add("falling");
-            if (marginRisk > 0)  flags.add("thin-margin");
-
-            Map<String, Object> s = new LinkedHashMap<>();
-            s.put("id", id);
-            s.put("name", m.name);
-            s.put("buy_at", buy);
-            s.put("sell_at", sell);
-            s.put("margin_post_tax", margin);
-            s.put("margin_expected", expectedMargin);
-            s.put("margin_pct", Math.round(marginPct * 10) / 10.0);
-            s.put("suggested_qty", qtyCap);
-            s.put("ge_limit", m.limit);
-            s.put("members", m.members);
-            s.put("est_fill_hours", Math.round(fillHrs * 100) / 100.0);
-            s.put("projected_profit", projected);
-            s.put("flags", flags);
-            s.put("score", score);
-            if (drift != null) s.put("drift_pct", Math.round(drift * 10) / 10.0);
-            if (remainingKnown) s.put("limit_remaining", remaining);
-            rows.add(s);
-        }
-        rows.sort((a, b) -> Long.compare(((Number) b.get("score")).longValue(),
-                                         ((Number) a.get("score")).longValue()));
-        return rows.size() > 12 ? new ArrayList<>(rows.subList(0, 12)) : rows;
+        // Ranking is server-side only. This repository is public -- the Plugin Hub builds the
+        // plugin from it -- so the scoring model is not duplicated here. Keeping a second copy
+        // also meant two implementations that had to be held in lock-step and silently drifted
+        // apart when only one was changed. When Ares has no candidates the panel falls back to
+        // a WAIT (WAIT_ARES_DOWN when it is unreachable), which is honest about why there is
+        // nothing to suggest rather than substituting a different, weaker ranking.
+        //
+        // The wiki price/mapping cache below is still loaded and used locally, for GE limits,
+        // offer-screen quotes and decant detection -- those need live inventory and per-tick
+        // latency, so they cannot move server-side.
+        return new ArrayList<>();
     }
 
     // Potion dose variants are named literally "X potion(N)" in the wiki mapping — no separate
@@ -841,41 +718,8 @@ public class FlipScorer
         return Math.max(1, (int) Math.floor(perMinute * timeframeMinutes * LIQUIDITY_FRACTION));
     }
 
-    /**
-     * Penalty for a flip that leaves most of its GE slot's capital idle.
-     *
-     * <p>Buy limits are set in units, so what one slot can deploy is {@code limit x unit price}.
-     * A cheap bulk item with a 2,000 limit tops out around 20m however good its margin looks,
-     * while an expensive item clears a whole slot budget in a handful of units. With eight
-     * slots and capital to spare, the binding constraint is slots, not gp -- an idle slot earns
-     * nothing, so under-deployment is a real cost that margin quality cannot repay.
-     *
-     * <p>Borne out in play: across 883 completed flips, profit per flip rose monotonically with
-     * how much of a slot the item could absorb -- 87k where the 4h limit covered only ~3% of the
-     * budget, up to 360k where it covered all of it -- even though ROI fell the other way.
-     *
-     * <p>Returns 0 (no penalty) when budget is unknown or the flip fills the slot, so small
-     * accounts, where nearly every item can absorb the budget, are unaffected.
-     */
-    static double slotIdleRisk(long deployed, long budget)
-    {
-        if (budget <= 0 || deployed <= 0) return 0;
-        double fill = Math.min(1.0, (double) deployed / budget);
-        return (1.0 - fill) * SLOT_IDLE_RISK_WEIGHT;
-    }
 
-    /** Hours to buy then sell {@code qty} when we capture LIQUIDITY_FRACTION of the bottleneck side. */
-    static double expectedFillHours(long qty, int perHour)
-    {
-        double share = Math.max(1, perHour) * LIQUIDITY_FRACTION;
-        return (FILL_LEGS * Math.max(0L, qty)) / share;
-    }
 
-    /** Post-tax margin minus the expected reprice give-back on one leg. */
-    static long expectedMargin(long buy, long marginPostTax)
-    {
-        return marginPostTax - (long) Math.floor(buy * SLIPPAGE_PCT / 100.0);
-    }
 
     /** 5m high average relative to the 1h high average, in %. null when either is missing. */
     static Double driftPct(int[] v5, int[] v1)
