@@ -41,7 +41,8 @@ import java.util.concurrent.*;
 		description = "Grand Exchange flipping assistant with server compose suggestions, held-cost tracking, and Ares market data. Anonymous contribution is opt-in (Configuration -> Privacy).",
 		tags = {"runeassist", "flipping", "ge", "grand exchange", "merch", "money making", "profit"}
 )
-@PluginDependency(BankTagsPlugin.class)
+// No @PluginDependency(BankTagsPlugin): sideloaded installs refuse to load with it.
+// Bank Tags is resolved at runtime via BankTagsLookup when the portfolio tab is enabled.
 public class RuneAssistPlugin extends Plugin {
 
 	@Inject
@@ -430,6 +431,9 @@ public class RuneAssistPlugin extends Plugin {
 
 	@Subscribe
 	public void onPluginChanged(PluginChanged event) {
+		if (event.getPlugin() instanceof BankTagsPlugin) {
+			portfolioBankTagController.onBankTagsPluginChanged();
+		}
 		if (com.runeassist.flip.HubPluginConflict.isHubPlugin(event.getPlugin())) {
 			suggestionManager.setSuggestionNeeded(true);
 			if (mainPanel != null && mainPanel.runeAssistPanel != null) {
