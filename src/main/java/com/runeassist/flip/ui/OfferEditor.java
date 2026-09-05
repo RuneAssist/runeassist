@@ -101,9 +101,9 @@ public class OfferEditor {
         showPrice(price, null);
     }
 
-    private void showPrice(long price, String warning) {
+    public void showPrice(long price, String warning) {
         text.setText(setActionText("RuneAssist price: " + String.format("%,d", price) + " gp")
-                + (warning == null ? "" : ". " + warning));
+                + (warning == null || warning.isEmpty() ? "" : ". " + warning));
         text.setAction(0, "Set price");
         setHoverListeners(text);
         text.setOnOpListener((JavaScriptCallback) ev ->
