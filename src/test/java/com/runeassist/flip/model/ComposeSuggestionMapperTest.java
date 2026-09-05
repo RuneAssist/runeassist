@@ -53,6 +53,52 @@ public class ComposeSuggestionMapperTest
         assertTrue(s.isLimitKnown());
         assertEquals(Collections.singletonList("thin"), s.getFlags());
         assertEquals("ares", s.getPickSource());
+        assertNull(s.getGraphData());
+    }
+
+    @Test
+    public void mapsBundledGraphOntoSuggestion()
+    {
+        String json = "{"
+            + "\"ok\":true,"
+            + "\"source\":\"ares\","
+            + "\"suggestion\":{"
+            + "\"type\":\"buy\","
+            + "\"boxId\":0,"
+            + "\"itemId\":4151,"
+            + "\"price\":100,"
+            + "\"quantity\":1,"
+            + "\"name\":\"Abyssal whip\""
+            + "},"
+            + "\"graph\":{"
+            + "\"itemId\":4151,"
+            + "\"buyPrice\":90,"
+            + "\"sellPrice\":110,"
+            + "\"lowLatestTimes\":[1,2],"
+            + "\"lowLatestPrices\":[90,91]"
+            + "}"
+            + "}";
+        ComposeSuggestionResponse parsed = gson.fromJson(json, ComposeSuggestionResponse.class);
+        Suggestion s = ComposeSuggestionMapper.toSuggestion(parsed);
+        assertNotNull(s);
+        assertNotNull(s.getGraphData());
+        assertEquals(4151, s.getGraphData().itemId);
+        assertEquals(90L, s.getGraphData().buyPrice);
+        assertEquals(110L, s.getGraphData().sellPrice);
+        assertNotNull(s.getGraphData().lowLatestTimes);
+        assertEquals(2, s.getGraphData().lowLatestTimes.length);
+    }
+
+    @Test
+    public void requestSerializesIncludeGraph()
+    {
+        ComposeSuggestionRequest req = new ComposeSuggestionRequest();
+        req.setCapital(1_000_000L);
+        req.setIncludeGraph(false);
+        String json = gson.toJson(req);
+        assertTrue(json.contains("\"includeGraph\":false"));
+        ComposeSuggestionRequest roundTrip = gson.fromJson(json, ComposeSuggestionRequest.class);
+        assertFalse(roundTrip.isIncludeGraph());
     }
 
     @Test

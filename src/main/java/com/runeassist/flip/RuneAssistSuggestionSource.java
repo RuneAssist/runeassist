@@ -52,6 +52,15 @@ public class RuneAssistSuggestionSource
     /** Compute the next suggestion and hand it to {@code consumer} on the client thread. */
     public void getSuggestionAsync(Consumer<Suggestion> consumer)
     {
+        getSuggestionAsync(consumer, true);
+    }
+
+    /**
+     * @param includeGraph when true, ask Ares to bundle {@code /v1/graph}-shaped data on
+     *                     the compose response (skipped in low-data mode).
+     */
+    public void getSuggestionAsync(Consumer<Suggestion> consumer, boolean includeGraph)
+    {
         // HeldCostTracker is scoped per account (display name) -- a RuneLite profile is not
         // the same thing as an OSRS account, and this must not mix two accounts' cost basis.
         final net.runelite.api.Player localPlayer = client.getLocalPlayer();
@@ -106,7 +115,7 @@ public class RuneAssistSuggestionSource
             ComposeSuggestionRequest composeReq = buildComposeRequest(
                 coins, timeframe, risk, f2pOnly, maxSlots, remainingSlots, minProfit,
                 remainingHint, usedLimit, blocked, skipped, skipOffers, protectAbort,
-                offersBySlot, held, ownedModifySnap);
+                offersBySlot, held, ownedModifySnap, includeGraph);
             try
             {
                 suggestion = market.composeSuggestion(composeReq);
@@ -401,7 +410,7 @@ public class RuneAssistSuggestionSource
             Map<Integer, Integer> remainingHint, Map<Integer, Integer> usedLimit,
             Set<Integer> blocked, Set<Integer> skipped, Set<Integer> skipOffers,
             Set<Integer> protectAbort, long[][] offersBySlot, Map<Integer, long[]> held,
-            OwnedModifySnapshot ownedModifySnap)
+            OwnedModifySnapshot ownedModifySnap, boolean includeGraph)
     {
         ComposeSuggestionRequest req = new ComposeSuggestionRequest();
         req.setCapital(coins > 0 ? coins : 0L);
@@ -412,6 +421,7 @@ public class RuneAssistSuggestionSource
         req.setMaxSlots(maxSlots);
         req.setRemainingSlots(Math.max(0, remainingSlots));
         req.setMinPredictedProfit(minProfit);
+        req.setIncludeGraph(includeGraph);
         req.setRemainingBuyLimit(stringifyKeys(remainingHint));
         req.setUsedBuyLimit(stringifyKeys(usedLimit));
         if (blocked != null) req.setBlockedIds(new ArrayList<>(blocked));
