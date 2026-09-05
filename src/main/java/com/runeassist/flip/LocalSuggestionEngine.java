@@ -15,12 +15,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Pure selection logic that turns our market scorer output plus current account
- * state into a single Flipping Copilot {@link Suggestion}.
+ * Pure on-device composition: turns Ares-ranked candidates plus live GE / held
+ * state into one {@link Suggestion} (ABORT / MODIFY / SELL / BUY / WAIT).
  *
- * <p>This is a pure function: no {@code Client}, no I/O, fully deterministic.
- * It replaces FC's server as the source of the {@code Suggestion} object that
- * drives FC's GE UI/overlays.</p>
+ * <p>Market ranking is server-side ({@code POST /v1/flips}). This class stays
+ * client-side because composition needs live offer prices, fill progress, and
+ * held cost basis — there is no Ares endpoint that accepts that snapshot and
+ * returns a typed suggestion. Pure function: no {@code Client}, no I/O.
  */
 public final class LocalSuggestionEngine {
 
@@ -65,9 +66,9 @@ public final class LocalSuggestionEngine {
     static final String WAIT_NOT_ENOUGH_COINS =
         "Not enough coins for the next flip.";
     static final String WAIT_NO_CANDIDATES =
-        "Market scorer returned no flips.";
+        "Ares returned no flip candidates.";
     static final String WAIT_ARES_DOWN =
-        "Ares is down — local scorer found no flips.";
+        "Ares is unreachable — no flip candidates.";
     static final String WAIT_GENERIC =
         "No actionable flip right now.";
 
@@ -111,31 +112,10 @@ public final class LocalSuggestionEngine {
     }
 
     /**
-     * Choose the next suggestion.
+     * Choose the next suggestion from Ares-ranked rows plus live GE / held state.
      *
-     * @param scoredFlips  our market flips, best first (each a Map of the documented keys)
-     * @param offersBySlot length 8; each entry null (empty slot) or
-     *                     {itemId, buyIs1, price, sold, total, fillingIs1, lastProgressMs?}
-     * @param held         itemId -> {qty, avgBuy} currently held
-     * @param coins        available coins
-     * @param maxSlots     maximum GE slots we may use
      * @return the first applicable Suggestion by priority (MODIFY/ABORT, SELL, BUY, WAIT)
      */
-    public static Suggestion next(
-            List<Map<String, Object>> scoredFlips,
-            long[][] offersBySlot,
-            Map<Integer, long[]> held,
-            long coins,
-            int maxSlots) {
-        Input in = new Input();
-        in.scoredFlips = scoredFlips;
-        in.offersBySlot = offersBySlot;
-        in.held = held;
-        in.coins = coins;
-        in.maxSlots = maxSlots;
-        return next(in);
-    }
-
     public static Suggestion next(Input in) {
         List<Map<String, Object>> scoredFlips = in.scoredFlips;
         long[][] offersBySlot = in.offersBySlot;

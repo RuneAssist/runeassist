@@ -33,11 +33,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 /**
- * Self-contained source of the next flip {@link Suggestion} for RuneAssist Flipping.
- * Account state stays local; market picking comes from Ares {@code /v1/flips} via
- * {@link FlipScorer} (wiki fallback if Ares is down). Reads GE offers + coins on the
- * client thread, scores off-thread, picks the action with {@link LocalSuggestionEngine},
- * and delivers the Suggestion back on the client thread.
+ * Source of the next flip {@link Suggestion}. Market ranking comes from Ares
+ * ({@link AresMarketClient#topFlips}); live GE / held composition stays on-device via
+ * {@link LocalSuggestionEngine}. Snapshots offers + coins on the client thread, fetches
+ * ranked candidates off-thread, then delivers the Suggestion back on the client thread.
  */
 @Slf4j
 @Singleton
@@ -45,7 +44,7 @@ public class RuneAssistSuggestionSource
 {
     @Inject private Client client;
     @Inject private ClientThread clientThread;
-    @Inject private FlipScorer flipScorer;
+    @Inject private AresMarketClient market;
     @Inject private HeldCostTracker heldCostTracker;
     @Inject private SuggestionPreferencesManager preferences;
     @Inject private AccountStatusManager accountStatusManager;
@@ -125,20 +124,20 @@ public class RuneAssistSuggestionSource
             Map<Integer, Integer> remainingHint = new HashMap<>();
             for (Map.Entry<Integer, Integer> e : usedLimit.entrySet())
             {
-                int ge = flipScorer.geLimit(e.getKey());
+                int ge = market.geLimit(e.getKey());
                 if (ge > 0) remainingHint.put(e.getKey(), Math.max(0, ge - e.getValue()));
             }
 
             List<Map<String, Object>> buys;
             try
             {
-                buys = flipScorer.topFlips(coins > 0 ? coins : 0L, timeframe, risk,
+                buys = market.topFlips(coins > 0 ? coins : 0L, timeframe, risk,
                     !f2pOnly, remainingSlots, remainingHint, usedLimit, blocked, skipped,
                     minProfit);
             }
             catch (Exception e)
             {
-                log.warn("topFlips failed; falling back to sell-only suggestions", e);
+                log.warn("topFlips failed; continuing with sell-only rows", e);
                 buys = java.util.Collections.emptyList();
             }
 
@@ -198,7 +197,7 @@ public class RuneAssistSuggestionSource
             }
             if (suggestion != null)
             {
-                suggestion.setPickSource(flipScorer.lastFromAres() ? "ares" : "local");
+                suggestion.setPickSource(market.lastFromAres() ? "ares" : "none");
             }
             if (suggestion != null && suggestion.getItemId() > 0)
             {
@@ -240,7 +239,7 @@ public class RuneAssistSuggestionSource
                     String waitMsg;
                     if (slotsFull) {
                         waitMsg = LocalSuggestionEngine.WAIT_SLOTS_FULL;
-                    } else if (flipScorer.lastAresUnreachable()) {
+                    } else if (market.lastAresUnreachable()) {
                         waitMsg = LocalSuggestionEngine.WAIT_ARES_DOWN;
                     } else {
                         waitMsg = LocalSuggestionEngine.WAIT_NO_CANDIDATES;
@@ -251,7 +250,7 @@ public class RuneAssistSuggestionSource
                     if (suggestion.getMessage() == null || suggestion.getMessage().isEmpty()) {
                         suggestion.setMessage(LocalSuggestionEngine.WAIT_NO_MARGIN);
                     }
-                    if (flipScorer.lastAresUnreachable()
+                    if (market.lastAresUnreachable()
                             && LocalSuggestionEngine.WAIT_NO_CANDIDATES.equals(suggestion.getMessage())) {
                         suggestion.setMessage(LocalSuggestionEngine.WAIT_ARES_DOWN);
                     }
@@ -264,7 +263,7 @@ public class RuneAssistSuggestionSource
                 suggestion.setTimeIssued(Instant.now());
                 if (suggestion.getPickSource() == null || suggestion.getPickSource().isEmpty())
                 {
-                    suggestion.setPickSource(flipScorer.lastFromAres() ? "ares" : "local");
+                    suggestion.setPickSource(market.lastFromAres() ? "ares" : "none");
                 }
                 try { stampLimitFields(displayName, suggestion, offersBySlot); }
                 catch (Exception e) { log.warn("limit stamp failed", e); }
@@ -281,10 +280,10 @@ public class RuneAssistSuggestionSource
     }
 
     /**
-     * Stamp wiki GE limit + remaining 4h buy-limit onto a built suggestion for the card.
+     * Stamp GE limit + remaining 4h buy-limit onto a built suggestion for the card.
      * Remaining is live fills in HeldCostTracker only (GE history has no timestamps).
-     * Unknown when wiki cap is missing, remaining is -1, or we have no live-fill data
-     * unless pending buy offers already exhaust the wiki cap.
+     * Unknown when the Ares limit map has no cap, remaining is -1, or we have no
+     * live-fill data unless pending buy offers already exhaust the cap.
      */
     private void stampLimitFields(String displayName, Suggestion suggestion, long[][] offers)
     {
@@ -300,7 +299,7 @@ public class RuneAssistSuggestionSource
         int ge = suggestion.getGeLimit();
         if (ge <= 0)
         {
-            try { ge = flipScorer.geLimit(itemId); }
+            try { ge = market.geLimit(itemId); }
             catch (Exception e) { ge = 0; }
         }
         int remaining = heldCostTracker.remainingLimitOrUnknown(displayName, itemId, ge);
@@ -339,6 +338,9 @@ public class RuneAssistSuggestionSource
         Map<Integer, long[]> merged = mergeHeldWithOfferFills(held, offers);
         List<Suggestion.PortfolioItem> out = new ArrayList<>();
         if (merged.isEmpty()) return out;
+        Map<Integer, Map<String, Object>> quotes;
+        try { quotes = market.quotes(merged.keySet()); }
+        catch (Exception ex) { quotes = java.util.Collections.emptyMap(); }
         for (Map.Entry<Integer, long[]> e : merged.entrySet())
         {
             int id = e.getKey();
@@ -346,8 +348,7 @@ public class RuneAssistSuggestionSource
             if (hv == null || hv.length < 2 || hv[0] <= 0L) continue;
             int qty = hv[0] > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) hv[0];
             long avgBuy = hv[1];
-            Map<String, Object> q;
-            try { q = flipScorer.sellQuote(id); } catch (Exception ex) { q = null; }
+            Map<String, Object> q = quotes.get(id);
             long sell = q != null && q.get("sell_at") instanceof Number
                 ? ((Number) q.get("sell_at")).longValue() : avgBuy;
             long tax = q != null && q.get("tax_at_sell") instanceof Number
@@ -432,9 +433,9 @@ public class RuneAssistSuggestionSource
             if (!(idObj instanceof Number) || !(limObj instanceof Number)) continue;
             int id = ((Number) idObj).intValue();
             int geLimit = ((Number) limObj).intValue();
-            if (geLimit <= 0) geLimit = flipScorer.geLimit(id);
+            if (geLimit <= 0) geLimit = market.geLimit(id);
             int remaining = heldCostTracker.limitRemaining(displayName, id, geLimit);
-            if (remaining < 0) continue; // unknown wiki limit
+            if (remaining < 0) continue; // unknown GE limit
             int pending = pendingBuy.getOrDefault(id, 0);
             remaining = Math.max(0, remaining - pending);
             boolean tracked = heldCostTracker.hasLimitTrackerData(displayName, id);
@@ -449,8 +450,7 @@ public class RuneAssistSuggestionSource
         return out;
     }
 
-    /** Local market health for filling offers and held stock so we can MODIFY/ABORT
-     *  and skip listing items whose wiki margin is already dead. */
+    /** Attach Ares market health for filling offers and held stock (MODIFY/ABORT / dead margin). */
     private void addMarketHealthForOffers(List<Map<String, Object>> combined, long[][] offers,
                                           Map<Integer, long[]> held,
                                           int timeframe, RiskLevel risk, boolean membersItemsAllowed)
@@ -464,8 +464,7 @@ public class RuneAssistSuggestionSource
             if (idObj instanceof Number) marketById.putIfAbsent(((Number) idObj).intValue(), flip);
         }
 
-        // Gather every id we want health for, then ask once. This used to be a call per item,
-        // which was fine when the scoring was local and free; it is now a request each.
+        // One batched /v1/market/health call per suggestion cycle.
         java.util.LinkedHashSet<Integer> wanted = new java.util.LinkedHashSet<>();
         if (offers != null) for (long[] o : offers)
         {
@@ -480,7 +479,7 @@ public class RuneAssistSuggestionSource
         if (wanted.isEmpty()) return;
 
         Map<Integer, Map<String, Object>> health;
-        try { health = flipScorer.evaluateItems(wanted, timeframe, risk, membersItemsAllowed); }
+        try { health = market.evaluateItems(wanted, timeframe, risk, membersItemsAllowed); }
         catch (Exception e) { return; }
 
         for (Integer id : wanted)
@@ -647,30 +646,40 @@ public class RuneAssistSuggestionSource
         return n;
     }
 
-    /** Turn held stock into sell suggestions (side="sell"), best profit first. */
+    /** Turn held stock into sell rows (side="sell") using one batched Ares quote call. */
     private List<Map<String, Object>> buildSells(Map<Integer, long[]> held, Set<Integer> skipped)
     {
         List<Map<String, Object>> out = new java.util.ArrayList<>();
-        for (Map.Entry<Integer, long[]> e : held.entrySet())
+        if (held == null || held.isEmpty()) return out;
+        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        for (Integer id : held.keySet())
         {
-            int id = e.getKey();
+            if (id == null) continue;
             if (skipped != null && skipped.contains(id)) continue;
-            long qty = e.getValue()[0], avgBuy = e.getValue()[1];
-            Map<String, Object> q;
-            try { q = flipScorer.sellQuote(id); } catch (Exception ex) { q = null; }
+            ids.add(id);
+        }
+        Map<Integer, Map<String, Object>> quotes;
+        try { quotes = market.quotes(ids); }
+        catch (Exception ex) { return out; }
+        for (Integer id : ids)
+        {
+            long[] hv = held.get(id);
+            if (hv == null || hv.length < 2) continue;
+            long qty = hv[0], avgBuy = hv[1];
+            Map<String, Object> q = quotes.get(id);
             if (q == null) continue;
             Object sellObj = q.get("sell_at");
             Object taxObj = q.get("tax_at_sell");
             if (!(sellObj instanceof Number) || !(taxObj instanceof Number)) continue;
             long sell = ((Number) sellObj).longValue();
             long tax = ((Number) taxObj).longValue();
-            long marginEa = sell - tax - avgBuy;   // may be negative (underwater / cut loss)
-            if (marginEa <= 0) continue; // never list held stock that fails post-tax vs cost basis
+            long marginEa = sell - tax - avgBuy;
+            if (marginEa <= 0) continue;
             Map<String, Object> s = new java.util.LinkedHashMap<>();
             s.put("id", id);
             s.put("name", q.get("name"));
             s.put("side", "sell");
-            s.put("loss", marginEa < 0);
+            s.put("loss", false);
             s.put("buy_at", avgBuy);
             s.put("sell_at", sell);
             s.put("margin_post_tax", marginEa);
@@ -733,7 +742,7 @@ public class RuneAssistSuggestionSource
     /**
      * A "go decant what you're already holding" suggestion, for the best held dose-variant
      * stock worth converting — independent of whether that family is currently a good thing to
-     * buy into, which is the only thing {@link FlipScorer#topDecants} considers. Returns null
+     * buy into, which is the only thing {@link AresMarketClient#topDecants} considers. Returns null
      * when nothing held is worth converting.
      *
      * <p>No GE slot is needed to decant (it's a bank action), so unlike the buy/sell legs this
@@ -752,7 +761,7 @@ public class RuneAssistSuggestionSource
             Long qty = e.getValue();
             if (qty == null || qty <= 0 || blocked.contains(itemId) || skipped.contains(itemId)) continue;
             Map<String, Object> row;
-            try { row = flipScorer.decantForHeld(itemId, qty); }
+            try { row = market.decantForHeld(itemId, qty); }
             catch (Exception ex) { continue; }
             if (row == null) continue;
             int sellItemId = ((Number) row.get("sellItemId")).intValue();
@@ -804,12 +813,12 @@ public class RuneAssistSuggestionSource
         // routinely falls out of that ranking the moment you buy into it -- your own buying
         // pressure thins the very margin that ranked it. Without this, stock bought on the
         // plugin's own advice is stranded: never decanted, and eventually dumped unconverted
-        // by the normal sell path for less than it was worth. See FlipScorer.decantForHeld.
+        // by the normal sell path for less than it was worth. See AresMarketClient.decantForHeld.
         Suggestion heldDecant = buildHeldDecantCandidate(displayName, blocked, skipped, ownedQty, carriedPotions);
         if (heldDecant != null) return heldDecant;
 
         List<Map<String, Object>> decants;
-        try { decants = flipScorer.topDecants(1); }
+        try { decants = market.topDecants(1); }
         catch (Exception e) { return null; }
         if (decants == null || decants.isEmpty()) return null;
         Map<String, Object> d = decants.get(0);
@@ -889,7 +898,7 @@ public class RuneAssistSuggestionSource
         // NEED_BUY
         if (hasActiveOffer(offersBySlot, buyItemId)) return null;
         if (remainingSlots <= 0 || buyAt <= 0 || coins < buyAt) return null;
-        int geLimit = flipScorer.geLimit(buyItemId);
+        int geLimit = market.geLimit(buyItemId);
         int remainingLimit = geLimit > 0 ? heldCostTracker.remainingLimitOrUnknown(displayName, buyItemId, geLimit) : -1;
         long qty = Math.min(buyQtyTarget, coins / buyAt);
         if (remainingLimit >= 0) qty = Math.min(qty, remainingLimit);
