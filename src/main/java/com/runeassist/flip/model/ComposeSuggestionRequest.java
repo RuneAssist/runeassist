@@ -8,13 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Body for Ares {@code POST /v1/suggestion}: live GE / held / preference snapshot so the
- * server can rank candidates and compose a typed {@link Suggestion} (ABORT/MODIFY/SELL/BUY/WAIT).
- *
- * <p>No RSN or account id — same privacy posture as {@code /v1/flips}, plus held cost-basis
- * rows needed to decide SELL vs abort-under-cost and MODIFY_SELL floors.</p>
- */
+    /** Body for Ares {@code POST /v1/suggestion}: live GE / held / preference snapshot so the */
 @Getter
 @Setter
 public class ComposeSuggestionRequest

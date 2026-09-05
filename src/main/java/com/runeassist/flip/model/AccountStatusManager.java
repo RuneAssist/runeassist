@@ -31,7 +31,6 @@ public class AccountStatusManager {
     private final HeldItemSyncStateRS heldItemSyncStateRS;
     private final ItemController itemController;
     private final SuggestionManager suggestionManager;
-    private final com.runeassist.flip.TelemetryService telemetry;
 
     /** Skip lasts 45 minutes so an abort/skip does not loop the same item, then it can surface again. */
     private static final long SKIP_TTL_MS = 45L * 60L * 1000L;
@@ -183,7 +182,6 @@ public class AccountStatusManager {
         } else {
             log.info("skipping suggestion item {}", itemId);
         }
-        telemetry.logSuggestionDecision(null, suggestion, "skip", suggestion.getPickSource());
         suggestionManager.setSuggestionRefreshPending(true);
         suggestionManager.setSuggestionNeeded(true);
         return true;
@@ -291,14 +289,7 @@ public class AccountStatusManager {
         ownedModify = null;
     }
 
-    /**
-     * Drop a MODIFY lock that is no longer being acted on. Cancel-then-relist
-     * empties the slot while the offer editor is still open — keep the lock in
-     * that case only. Logout, GE home, skip, and a different live offer must
-     * not leave a ghost card that blocks BUY into empty slots.
-     *
-     * @return true if a lock was released
-     */
+    /** Drop a MODIFY lock that is no longer being acted on. Cancel-then-relist */
     public synchronized boolean releaseStaleOwnedModify(GrandExchangeOffer[] offers, boolean editorOpen) {
         if (ownedModify == null || ownedModify.itemId <= 0) {
             return false;

@@ -29,12 +29,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Thin Ares HTTP client for market data and suggestion composition. Flip <em>ranking</em>
- * is server-side ({@code POST /v1/flips}, {@code GET /v1/market/health}).
- * Typed suggestions come from {@code POST /v1/suggestion}. Quote/limit helpers stay here for
- * live inventory / per-tick latency. Decant ranking is not composed on-device.
- */
+    /** Thin Ares HTTP client for market data and suggestion composition. Flip <em>ranking</em> */
 @Slf4j
 @Singleton
 public class AresMarketClient
@@ -94,13 +89,7 @@ public class AresMarketClient
         return lastComposeUnreachable;
     }
 
-    /**
-     * Ask Ares to compose the next typed suggestion from a live GE / held snapshot.
-     * Returns null when unreachable or the body is unusable — callers soft-fail to WAIT.
-     * Always probes the network (no sticky skip after a miss).
-     *
-     * <p>Blocks on HTTP; call off the client thread.</p>
-     */
+    /** Ask Ares to compose the next typed suggestion from a live GE / held snapshot. */
     public Suggestion composeSuggestion(ComposeSuggestionRequest request)
     {
         lastFromCompose = false;

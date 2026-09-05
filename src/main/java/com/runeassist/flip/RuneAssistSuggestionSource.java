@@ -32,12 +32,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
-/**
- * Source of the next flip {@link Suggestion}. Composes via Ares {@code POST /v1/suggestion}
- * (server ranks + composes). Soft-fails to WAIT when compose is unreachable. Snapshots
- * offers + coins on the client thread; ranking stays proprietary on Ares. Does not apply
- * client-side suggestion overrides (e.g. held-decant) over the compose result.
- */
+    /** Source of the next flip {@link Suggestion}. Composes via Ares {@code POST /v1/suggestion} */
 @Slf4j
 @Singleton
 public class RuneAssistSuggestionSource
@@ -211,12 +206,7 @@ public class RuneAssistSuggestionSource
         });
     }
 
-    /**
-     * Stamp GE limit + remaining 4h buy-limit onto a built suggestion for the card.
-     * Remaining is live fills in HeldCostTracker only (GE history has no timestamps).
-     * Unknown when the Ares limit map has no cap, remaining is -1, or we have no
-     * live-fill data unless pending buy offers already exhaust the cap.
-     */
+    /** Stamp GE limit + remaining 4h buy-limit onto a built suggestion for the card. */
     private void stampLimitFields(String displayName, Suggestion suggestion, long[][] offers)
     {
         if (suggestion == null) return;
@@ -366,13 +356,7 @@ public class RuneAssistSuggestionSource
         long offerPrice;
     }
 
-    /**
-     * Reads GE-slot state (client-thread-only: {@code grandExchange.isSlotOpen()}/
-     * {@code getOpenSlot()} hit {@code client.getVarbitValue(...)}) to snapshot the
-     * in-progress MODIFY, if any, so an empty cancelled slot cannot become a BUY of a
-     * different item. Must be called from the client-thread-synchronous prefix of
-     * {@link #getSuggestionAsync}, not the background scoring thread.
-     */
+    /** Reads GE-slot state (client-thread-only: {@code grandExchange.isSlotOpen()}/ */
     private OwnedModifySnapshot computeOwnedModify()
     {
         OwnedModifySnapshot snap = new OwnedModifySnapshot();

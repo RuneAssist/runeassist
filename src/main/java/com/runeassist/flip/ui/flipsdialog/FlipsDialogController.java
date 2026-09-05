@@ -35,7 +35,6 @@ public class FlipsDialogController {
     private final OsrsLoginRS osrsLoginRS;
     private final PortfolioStateRS portfolioStateRS;
     private final BankStateRS bankStateRS;
-    private final LocalFlipLedger localFlipLedger;
     private final com.runeassist.flip.HeldCostTracker heldCostTracker;
     private final FlipHistorySyncService flipHistorySyncService;
 
@@ -61,7 +60,6 @@ public class FlipsDialogController {
             OsrsLoginRS osrsLoginRS,
             PortfolioStateRS portfolioStateRS,
             BankStateRS bankStateRS,
-            LocalFlipLedger localFlipLedger,
             com.runeassist.flip.HeldCostTracker heldCostTracker,
             FlipHistorySyncService flipHistorySyncService) {
         this.itemController = itemController;
@@ -74,7 +72,6 @@ public class FlipsDialogController {
         this.osrsLoginRS = osrsLoginRS;
         this.portfolioStateRS = portfolioStateRS;
         this.bankStateRS = bankStateRS;
-        this.localFlipLedger = localFlipLedger;
         this.heldCostTracker = heldCostTracker;
         this.flipHistorySyncService = flipHistorySyncService;
     }
@@ -92,8 +89,7 @@ public class FlipsDialogController {
                     itemController,
                     priceGraphConfigManager,
                     config,
-                    apiRequestHandler,
-                    localFlipLedger
+                    apiRequestHandler
             );
             PortfolioPanel portfolioPanel = new PortfolioPanel(
                     itemController,
