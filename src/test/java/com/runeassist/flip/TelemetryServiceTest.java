@@ -18,14 +18,10 @@ public class TelemetryServiceTest {
     public void geOfferSnapshotsOnlyRecordMeaningfulChanges() {
         TelemetryService telemetry = new TelemetryService(null, new Gson());
 
-        assertTrue(telemetry.claimGeOffer("acct", 2, "BUYING", 4151,
-            1_000, 10, 0, 0, 1_100, 900));
-        assertFalse(telemetry.claimGeOffer("acct", 2, "BUYING", 4151,
-            1_000, 10, 0, 0, 1_100, 900));
-        assertTrue(telemetry.claimGeOffer("acct", 2, "BUYING", 4151,
-            1_000, 10, 1, 1_000, 1_100, 900));
-        assertTrue(telemetry.claimGeOffer("other", 2, "BUYING", 4151,
-            1_000, 10, 1, 1_000, 1_100, 900));
+        assertTrue(telemetry.claimGeOffer("acct", 2, "BUYING", 4151, 1_000, 10, 0, 0));
+        assertFalse(telemetry.claimGeOffer("acct", 2, "BUYING", 4151, 1_000, 10, 0, 0));
+        assertTrue(telemetry.claimGeOffer("acct", 2, "BUYING", 4151, 1_000, 10, 1, 1_000));
+        assertTrue(telemetry.claimGeOffer("other", 2, "BUYING", 4151, 1_000, 10, 1, 1_000));
     }
 
     @Test

@@ -41,70 +41,24 @@ public class FlipScorer
 {
     private static final String UA = "RuneAssist-flip/1.0 (github.com/RuneAssist/runeassist)";
     private static final String ARES_FLIPS = "https://runeassist.ares-server.co.uk/v1/flips";
+    private static final String ARES_DECANTS = "https://runeassist.ares-server.co.uk/v1/decants";
+    private static final String ARES_HEALTH = "https://runeassist.ares-server.co.uk/v1/market/health";
+    private static final String ARES_LIMITS = "https://runeassist.ares-server.co.uk/v1/market/limits";
+    private static final String ARES_QUOTE = "https://runeassist.ares-server.co.uk/v1/market/quote";
+    private static final String ARES_FAMILIES = "https://runeassist.ares-server.co.uk/v1/decants/families";
+    // Buy limits move only when Jagex moves them, so this is held far longer than prices.
+    private static final long LIMITS_TTL = 6 * 60 * 60 * 1000L;
+    private static final long FAMILIES_TTL = 60_000L;
     private static final MediaType JSON = MediaType.parse("application/json");
     private static final Type CANDIDATE_LIST = new TypeToken<List<Map<String, Object>>>(){}.getType();
-    private static final String LATEST = "https://prices.runescape.wiki/api/v1/osrs/latest";
-    private static final String HOUR   = "https://prices.runescape.wiki/api/v1/osrs/1h";
-    private static final String FIVE   = "https://prices.runescape.wiki/api/v1/osrs/5m";
-    private static final String MAP    = "https://prices.runescape.wiki/api/v1/osrs/mapping";
-    private static final long PRICE_TTL = 60_000;
-    private static final long STALE_TRADE_SEC = 90 * 60; // last-trade older than this is ignored
-    // Sensibility floor applied regardless of what the caller passes, so a forgotten/zero
-    // minPredictedProfit never lets trivial-value "odd" flips (e.g. 25 units * 111gp) through.
-    private static final long MIN_PROJECTED_PROFIT = 3_000L;
-    // Only offer a FRACTION of the estimated tradeable liquidity in the timeframe, not all of
-    // it -- suggesting 100% of the visible order-book volume reads as "always max" and leaves
-    // no room for other buyers/sellers.
-    private static final double LIQUIDITY_FRACTION = 0.5;
-    // Expected margin give-back from repricing one leg toward the live market, as % of buy
-    // price. Telemetry shows buys repriced up ~3% and sells down ~2% on roughly a third of
-    // listings; the quoted 5m avgLow -> avgHigh spread is never fully captured by passive offers.
-    static final double SLIPPAGE_PCT = 0.5;
-    // A flip is two passive legs and we only take LIQUIDITY_FRACTION of the bottleneck side's
-    // volume. The old qty / volume estimate was 4-12x too short against realised fills.
-    private static final int FILL_LEGS = 2;
-    // 5m average this far below the 1h average is a falling market.
-    static final double FALLING_DRIFT_PCT = -0.5;
-    // How hard to penalise a flip that can only put a sliver of the slot's budget to work.
-    // GE buy limits are denominated in UNITS, not gp, so a cheap item's 4h limit caps the
-    // capital one slot can deploy far below an expensive item's -- and with only eight slots,
-    // a slot left 95% idle costs more than a slightly thinner margin does. Weighted in line
-    // with the other risk terms below, and self-cancelling on small accounts, where the budget
-    // is small enough that most items can fill it.
-    static final double SLOT_IDLE_RISK_WEIGHT = 0.3;
-
-    private static final double TAX_RATE = 0.02;
-    private static final long   TAX_CAP  = 5_000_000L;
-    private static final long   TAX_MAX_PRICE = 250_000_000L;
-    // Items exempt from the 2% GE sell tax.
-    private static final Set<Integer> TAX_EXEMPT = new HashSet<>(Arrays.asList(
-        8011, 365, 2309, 882, 806, 1891, 8010, 1755, 28824, 2140, 2142, 8009, 5325, 1785, 2347,
-        347, 884, 807, 28790, 379, 8008, 355, 2327, 558, 1733, 13190, 233, 351, 5341, 2552, 329,
-        8794, 5329, 5343, 1735, 315, 952, 886, 808, 8013, 361, 8007, 5331));
 
     private final OkHttpClient httpClient;
     private final Gson gson;
 
-    private static final class Meta
-    {
-        final String name;
-        final int limit;
-        final boolean members;
-        Meta(String name, int limit, boolean members)
-        {
-            this.name = name;
-            this.limit = limit;
-            this.members = members;
-        }
-    }
-
-    private final Map<Integer, Meta> meta = new ConcurrentHashMap<>();
-    private volatile long lastPriceFetch = 0;
-    // id -> {high, low, highTime, lowTime}
-    private volatile Map<Integer, long[]> latest = new ConcurrentHashMap<>();
-    // id -> {highVol, lowVol, avgHigh, avgLow}
-    private volatile Map<Integer, int[]> volume1h = new ConcurrentHashMap<>();
-    private volatile Map<Integer, int[]> volume5m = new ConcurrentHashMap<>();
+    private volatile Map<Integer, Integer> geLimits = new ConcurrentHashMap<>();
+    private volatile long limitsFetchedAt = 0;
+    private volatile List<Map<String, Object>> decantFamilies = new ArrayList<>();
+    private volatile long familiesFetchedAt = 0;
     /** True when the last {@link #topFlips} pick came from Ares rather than the local wiki fallback. */
     private volatile boolean lastFromAres = false;
     /** True when the last Ares {@code /v1/flips} call failed (HTTP/timeout/parse), not empty-ok. */
@@ -173,135 +127,21 @@ public class FlipScorer
         lastFromAres = false;
         if (remote != null)
         {
-            log.info("Ares /v1/flips returned 0 candidates, using local scorer");
+            log.info("Ares /v1/flips returned 0 candidates");
         }
 
-        try { ensureLoaded(); }
-        catch (Exception e) { log.warn("flip scorer load failed: {}", e.getMessage()); return new ArrayList<>(); }
-
-        RiskProfile risk = RiskProfile.of(riskLevel);
-        int tfMin = Math.max(1, Math.min(24 * 60, timeframeMinutes));
-        int slots = Math.max(1, remainingSlots);
-        long nowSec = System.currentTimeMillis() / 1000L;
-        Set<Integer> exclude = new HashSet<>();
-        if (blockedIds != null) exclude.addAll(blockedIds);
-        if (skippedIds != null) exclude.addAll(skippedIds);
-
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (Map.Entry<Integer, Meta> me : meta.entrySet())
-        {
-            int id = me.getKey();
-            Meta m = me.getValue();
-            if (m.limit <= 0) continue; // unknown/zero GE buy limit — never invent a quantity
-            if (!membersItemsAllowed && m.members) continue;
-            if (exclude.contains(id)) continue;
-            if (isOddName(m.name)) continue;
-
-            long[] p = latest.get(id);
-            int[]  v1 = volume1h.get(id);
-            int[]  v5 = volume5m.get(id);
-            if (v1 == null) continue;
-
-            int highVol = v1[0], lowVol = v1[1], avgHigh = v1[2], avgLow = v1[3];
-            int vol = highVol + lowVol;
-            if (vol < risk.minVolume) continue;
-            if (Math.min(highVol, lowVol) < risk.minSideVolume) continue;
-
-            long[] prices = pickPrices(p, v1, v5, tfMin, nowSec);
-            if (prices == null) continue;
-            long buy = prices[0], sell = prices[1];
-            if (buy <= 0 || sell <= 0 || sell <= buy) continue;
-
-            long tax = taxAmount(id, sell);
-            long margin = sell - buy - tax;
-            if (margin < risk.minMargin) continue;
-            double marginPct = margin * 100.0 / buy;
-            if (marginPct > risk.maxMarginPct) continue; // wide last-trade / 1h gap = odd / trap
-
-            // Rank and floor on what a passive flip realistically keeps, not the full quoted spread.
-            long expectedMargin = expectedMargin(buy, margin);
-            double expectedMarginPct = expectedMargin * 100.0 / buy;
-            if (expectedMarginPct < risk.minMarginPct) continue;
-
-            Double drift = driftPct(v5, v1);
-            // Falling faster than the whole margin: the sell target is already gone.
-            if (drift != null && drift < -marginPct) continue;
-
-            double imbalance = vol > 0 ? Math.abs(highVol - lowVol) / (double) vol : 1;
-            if (imbalance > risk.maxImbalance) continue;
-
-            int perHour = Math.max(1, Math.min(highVol, lowVol));
-            int liqQty = liquidityQty(tfMin, perHour, v5);
-            long qtyCap = Math.min(m.limit, liqQty);
-            boolean remainingKnown = remainingBuyLimit != null && remainingBuyLimit.containsKey(id);
-            int remaining = m.limit;
-            if (remainingKnown)
-                remaining = remainingBuyLimit.get(id);
-            else if (usedBuyLimit != null && usedBuyLimit.containsKey(id))
-            {
-                remaining = m.limit - usedBuyLimit.get(id);
-                remainingKnown = true;
-            }
-            if (remaining <= 0) continue;
-            qtyCap = Math.min(qtyCap, remaining);
-            long budget = capital > 0 ? Math.min(capital, capital / slots) : 0;
-            if (budget > 0) qtyCap = Math.min(qtyCap, budget / buy);
-            if (qtyCap < 1) continue;
-            long projected = expectedMargin * qtyCap;
-            long effectiveMinProfit = Math.max(minPredictedProfit, MIN_PROJECTED_PROFIT);
-            if (projected < effectiveMinProfit) continue;
-            double fillHrs = expectedFillHours(qtyCap, perHour);
-
-            double spreadRisk  = marginPct > 15 ? 0.35 : 0;
-            double liqRisk     = vol < risk.minVolume * 4 ? 0.4 : 0;
-            boolean falling    = drift != null && drift < FALLING_DRIFT_PCT;
-            double fallingRisk = falling ? 0.25 : 0;
-            // Thin-margin flips are the ones a single reprice turns into a loss; bulk-quantity
-            // items used to out-rank fatter margins purely on qty.
-            double marginRisk  = expectedMarginPct < risk.minMarginPct * 2 ? 0.2 : 0;
-            // Capital this flip actually puts to work, against what the slot could have taken.
-            double slotRisk    = slotIdleRisk(qtyCap * buy, budget);
-            double riskScore   = Math.min(0.9, imbalance * 0.6 + spreadRisk + liqRisk + fallingRisk
-                + marginRisk + slotRisk);
-            double turnover    = 1.0 / Math.max(0.15, fillHrs);
-            long score         = Math.round(projected * turnover * (1 - riskScore));
-
-            List<String> flags = new ArrayList<>();
-            if (imbalance > 0.5) flags.add("one-sided");
-            if (spreadRisk > 0)  flags.add("wide-spread");
-            if (liqRisk > 0)     flags.add("thin");
-            if (slotRisk > SLOT_IDLE_RISK_WEIGHT / 2) flags.add("under-deploys");
-            if (falling)         flags.add("falling");
-            if (marginRisk > 0)  flags.add("thin-margin");
-
-            Map<String, Object> s = new LinkedHashMap<>();
-            s.put("id", id);
-            s.put("name", m.name);
-            s.put("buy_at", buy);
-            s.put("sell_at", sell);
-            s.put("margin_post_tax", margin);
-            s.put("margin_expected", expectedMargin);
-            s.put("margin_pct", Math.round(marginPct * 10) / 10.0);
-            s.put("suggested_qty", qtyCap);
-            s.put("ge_limit", m.limit);
-            s.put("members", m.members);
-            s.put("est_fill_hours", Math.round(fillHrs * 100) / 100.0);
-            s.put("projected_profit", projected);
-            s.put("flags", flags);
-            s.put("score", score);
-            if (drift != null) s.put("drift_pct", Math.round(drift * 10) / 10.0);
-            if (remainingKnown) s.put("limit_remaining", remaining);
-            rows.add(s);
-        }
-        rows.sort((a, b) -> Long.compare(((Number) b.get("score")).longValue(),
-                                         ((Number) a.get("score")).longValue()));
-        return rows.size() > 12 ? new ArrayList<>(rows.subList(0, 12)) : rows;
+        // Ranking is server-side only. This repository is public -- the Plugin Hub builds the
+        // plugin from it -- so the scoring model is not duplicated here. Keeping a second copy
+        // also meant two implementations that had to be held in lock-step and silently drifted
+        // apart when only one was changed. When Ares has no candidates the panel falls back to
+        // a WAIT (WAIT_ARES_DOWN when it is unreachable), which is honest about why there is
+        // nothing to suggest rather than substituting a different, weaker ranking.
+        //
+        // The wiki price/mapping cache below is still loaded and used locally, for GE limits,
+        // offer-screen quotes and decant detection -- those need live inventory and per-tick
+        // latency, so they cannot move server-side.
+        return new ArrayList<>();
     }
-
-    // Potion dose variants are named literally "X potion(N)" in the wiki mapping — no separate
-    // "family"/"dose" field exists, so this is derived from the name itself.
-    private static final java.util.regex.Pattern DOSE_SUFFIX =
-        java.util.regex.Pattern.compile("^(.*)\\((\\d)\\)$");
 
     /** Up to 5 best decant opportunities (buy a cheap dose, decant, sell a different dose). */
     public List<Map<String, Object>> topDecants()
@@ -319,125 +159,28 @@ public class FlipScorer
      */
     public List<Map<String, Object>> topDecants(int maxResults)
     {
-        try { ensureLoaded(); }
-        catch (Exception e) { log.warn("decant scorer load failed: {}", e.getMessage()); return new ArrayList<>(); }
-
-        RiskProfile risk = RiskProfile.of(RiskLevel.MEDIUM);
-        int tfMin = 60;
-        long nowSec = System.currentTimeMillis() / 1000L;
-
-        // family name -> {dose -> itemId}
-        Map<String, Map<Integer, Integer>> families = new LinkedHashMap<>();
-        for (Map.Entry<Integer, Meta> me : meta.entrySet())
+        Request request = new Request.Builder()
+            .url(ARES_DECANTS + "?top=" + Math.max(1, maxResults))
+            .header("User-Agent", UA)
+            .get()
+            .build();
+        try (Response r = httpClient.newCall(request).execute())
         {
-            Meta m = me.getValue();
-            if (isOddName(m.name)) continue;
-            java.util.regex.Matcher mm = DOSE_SUFFIX.matcher(m.name);
-            if (!mm.matches()) continue;
-            int dose;
-            try { dose = Integer.parseInt(mm.group(2)); } catch (NumberFormatException nfe) { continue; }
-            if (dose < 1 || dose > 9) continue;
-            families.computeIfAbsent(mm.group(1).trim(), k -> new LinkedHashMap<>()).put(dose, me.getKey());
+            if (!r.isSuccessful() || r.body() == null)
+            {
+                log.warn("Ares /v1/decants HTTP {}", r.code());
+                return new ArrayList<>();
+            }
+            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
+            if (root == null || !root.has("decants")) return new ArrayList<>();
+            List<Map<String, Object>> rows = gson.fromJson(root.get("decants"), CANDIDATE_LIST);
+            return rows == null ? new ArrayList<>() : rows;
         }
-
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (Map.Entry<String, Map<Integer, Integer>> fe : families.entrySet())
+        catch (Exception e)
         {
-            Map<Integer, Integer> doses = fe.getValue();
-            if (doses.size() < 2) continue;
-
-            Map<Integer, long[]> priced = new LinkedHashMap<>(); // dose -> {buy, sell}
-            Map<Integer, int[]> vols = new LinkedHashMap<>();    // dose -> {highVol, lowVol, avgHigh, avgLow}
-            for (Map.Entry<Integer, Integer> de : doses.entrySet())
-            {
-                int dose = de.getKey();
-                int id = de.getValue();
-                Meta m = meta.get(id);
-                if (m == null || m.limit <= 0) continue;
-                int[] v1 = volume1h.get(id);
-                if (v1 == null) continue;
-                long[] prices = pickPrices(latest.get(id), v1, volume5m.get(id), tfMin, nowSec);
-                if (prices == null || prices[0] <= 0 || prices[1] <= 0) continue;
-                priced.put(dose, prices);
-                vols.put(dose, v1);
-            }
-            if (priced.size() < 2) continue;
-
-            Integer dBuy = null, dSell = null;
-            double bestCostPerDose = Double.MAX_VALUE, bestSellPerDose = -1;
-            for (Map.Entry<Integer, long[]> pe : priced.entrySet())
-            {
-                int dose = pe.getKey();
-                long buy = pe.getValue()[0], sell = pe.getValue()[1];
-                long tax = taxAmount(doses.get(dose), sell);
-                double costPerDose = (double) buy / dose;
-                double sellPerDose = (double) (sell - tax) / dose;
-                if (costPerDose < bestCostPerDose) { bestCostPerDose = costPerDose; dBuy = dose; }
-                if (sellPerDose > bestSellPerDose) { bestSellPerDose = sellPerDose; dSell = dose; }
-            }
-            if (dBuy == null || dSell == null || dBuy.equals(dSell)) continue;
-            if (bestSellPerDose <= bestCostPerDose) continue;
-
-            int buyItemId = doses.get(dBuy);
-            int sellItemId = doses.get(dSell);
-            long buyAt = priced.get(dBuy)[0];
-            long sellAt = priced.get(dSell)[1];
-            Meta buyMeta = meta.get(buyItemId);
-            Meta sellMeta = meta.get(sellItemId);
-
-            int[] v1Buy = vols.get(dBuy);
-            int[] v1Sell = vols.get(dSell);
-            int perHourBuy = Math.max(1, Math.min(v1Buy[0], v1Buy[1]));
-            int perHourSell = Math.max(1, Math.min(v1Sell[0], v1Sell[1]));
-            int liqBuyBottles = liquidityQty(tfMin, perHourBuy, volume5m.get(buyItemId));
-            int liqSellBottles = liquidityQty(tfMin, perHourSell, volume5m.get(sellItemId));
-
-            long buyBottleCap = Math.min(buyMeta.limit, liqBuyBottles);
-            long doseUnits = Math.min(buyBottleCap * dBuy, (long) liqSellBottles * dSell);
-            long buyQty = doseUnits / dBuy;
-            // Round the suggested buy quantity down to a whole batch that decants with zero
-            // leftover doses (a multiple of sellDose/gcd(buyDose,sellDose) bottles) -- both so
-            // the reported sellQty/profit are exact rather than floored-with-a-remainder, and
-            // so a player who buys exactly this amount always converts cleanly (no odd-dose
-            // leftover potion), which live decant detection relies on to recognize the trade.
-            long step = dSell / gcd(dBuy, dSell);
-            buyQty = (buyQty / step) * step;
-            long sellQty = (buyQty * dBuy) / dSell; // exact now -- buyQty is a multiple of step
-            if (buyQty < 1 || sellQty < 1) continue;
-
-            long buyTotalCost = buyQty * buyAt;
-            long sellTax = taxAmount(sellItemId, sellAt);
-            long sellTotalRevenue = sellQty * (sellAt - sellTax);
-            long projected = sellTotalRevenue - buyTotalCost;
-            if (projected < MIN_PROJECTED_PROFIT) continue;
-
-            int volBuy = v1Buy[0] + v1Buy[1];
-            int volSell = v1Sell[0] + v1Sell[1];
-            int minVol = Math.min(volBuy, volSell);
-            if (minVol < risk.minVolume) continue;
-
-            List<String> flags = new ArrayList<>();
-            if (minVol < risk.minVolume * 4) flags.add("thin");
-
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("family", fe.getKey());
-            row.put("buyItemId", buyItemId);
-            row.put("buyName", buyMeta.name);
-            row.put("buyDose", dBuy);
-            row.put("buyAt", buyAt);
-            row.put("buyQty", buyQty);
-            row.put("sellItemId", sellItemId);
-            row.put("sellName", sellMeta.name);
-            row.put("sellDose", dSell);
-            row.put("sellAt", sellAt);
-            row.put("sellQty", sellQty);
-            row.put("projectedProfit", projected);
-            row.put("flags", flags);
-            rows.add(row);
+            log.warn("Ares /v1/decants failed: {}", e.getMessage());
+            return new ArrayList<>();
         }
-        rows.sort((a, b) -> Long.compare(((Number) b.get("projectedProfit")).longValue(),
-                                         ((Number) a.get("projectedProfit")).longValue()));
-        return rows.size() > maxResults ? new ArrayList<>(rows.subList(0, maxResults)) : rows;
     }
 
     /**
@@ -468,230 +211,248 @@ public class FlipScorer
 
     /**
      * Best decant for stock already held, or null if converting it isn't worth more than
-     * selling it as-is (or this item isn't a dose-variant potion at all). Row shape matches
-     * {@link #topDecants}, with {@code buyItemId}/{@code buyQty} describing what you hold
-     * rather than something to go and buy, and {@code projectedProfit} being the gain over
-     * selling as-is rather than a full buy-to-sell profit.
+     * selling it as-is (or this item isn't part of a family worth converting).
      *
-     * <p>Unlike {@link #topDecants} this applies no profit floor, no volume floor and no
-     * liquidity cap: the stock is already bought, so the only question is whether to convert
-     * it, and you can list however much of it you hold.</p>
+     * <p>Priced from the server's dose-family table, which lists only families where some
+     * conversion currently gains value. Held quantity never leaves the client: the table comes
+     * down, this matches it against what is actually held, and the comparison below is done
+     * locally. Row shape matches {@link #topDecants}, with {@code buyItemId}/{@code buyQty}
+     * describing what is held rather than something to buy, and {@code projectedProfit} being
+     * the gain over selling as-is rather than a full buy-to-sell profit.
      */
     public Map<String, Object> decantForHeld(int heldItemId, long heldQty)
     {
         if (heldQty <= 0) return null;
-        try { ensureLoaded(); }
-        catch (Exception e) { return null; }
+        List<Map<String, Object>> families = ensureFamilies();
+        if (families.isEmpty()) return null;
 
-        Meta heldMeta = meta.get(heldItemId);
-        if (heldMeta == null || isOddName(heldMeta.name)) return null;
-        java.util.regex.Matcher mm = DOSE_SUFFIX.matcher(heldMeta.name);
-        if (!mm.matches()) return null;
-        int heldDose;
-        try { heldDose = Integer.parseInt(mm.group(2)); }
-        catch (NumberFormatException nfe) { return null; }
-        if (heldDose < 1 || heldDose > 9) return null;
-        String family = mm.group(1).trim();
-
-        long nowSec = System.currentTimeMillis() / 1000L;
-        long[] heldPrices = dosePrices(heldItemId, nowSec);
-        if (heldPrices == null) return null;
-        long heldSellAt = heldPrices[1];
-        long heldTax = taxAmount(heldItemId, heldSellAt);
-
-        int bestDose = 0, bestItemId = 0;
-        long bestGain = 0, bestSellAt = 0, bestSellQty = 0;
-        for (Map.Entry<Integer, Meta> me : meta.entrySet())
+        for (Map<String, Object> fam : families)
         {
-            int id = me.getKey();
-            if (id == heldItemId) continue;
-            Meta m = me.getValue();
-            if (isOddName(m.name)) continue;
-            java.util.regex.Matcher sm = DOSE_SUFFIX.matcher(m.name);
-            if (!sm.matches() || !family.equals(sm.group(1).trim())) continue;
-            int dose;
-            try { dose = Integer.parseInt(sm.group(2)); }
-            catch (NumberFormatException nfe) { continue; }
-            if (dose < 1 || dose > 9) continue;
+            Object dosesObj = fam.get("doses");
+            if (!(dosesObj instanceof List)) continue;
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> doses = (List<Map<String, Object>>) dosesObj;
 
-            long[] prices = dosePrices(id, nowSec);
-            if (prices == null) continue;
-            long sellAt = prices[1];
-            long gain = decantGainOverRawSell(heldQty, heldDose, dose,
-                heldSellAt, heldTax, sellAt, taxAmount(id, sellAt));
-            if (gain > bestGain)
+            Map<String, Object> heldDose = null;
+            for (Map<String, Object> d : doses)
             {
-                bestGain = gain;
-                bestDose = dose;
-                bestItemId = id;
-                bestSellAt = sellAt;
-                bestSellQty = (heldQty * heldDose) / dose;
+                if (num(d.get("itemId")) == heldItemId) { heldDose = d; break; }
+            }
+            if (heldDose == null) continue;
+
+            long heldDoseCount = num(heldDose.get("dose"));
+            long heldSellAt = num(heldDose.get("sell"));
+            long heldTax = num(heldDose.get("tax"));
+            if (heldDoseCount <= 0 || heldSellAt <= 0) return null;
+
+            Map<String, Object> best = null;
+            long bestGain = 0, bestSellQty = 0;
+            for (Map<String, Object> d : doses)
+            {
+                long dose = num(d.get("dose"));
+                if (dose <= 0 || dose == heldDoseCount) continue;
+                long gain = decantGainOverRawSell(heldQty, (int) heldDoseCount, (int) dose,
+                    heldSellAt, heldTax, num(d.get("sell")), num(d.get("tax")));
+                if (gain > bestGain)
+                {
+                    bestGain = gain;
+                    best = d;
+                    bestSellQty = (heldQty * heldDoseCount) / dose;
+                }
+            }
+            if (best == null || bestSellQty < 1) return null;
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("family", fam.get("family"));
+            row.put("buyItemId", heldItemId);
+            row.put("buyName", heldDose.get("name"));
+            row.put("buyDose", heldDoseCount);
+            row.put("buyAt", num(heldDose.get("buy")));
+            row.put("buyQty", heldQty);
+            row.put("sellItemId", num(best.get("itemId")));
+            row.put("sellName", best.get("name"));
+            row.put("sellDose", num(best.get("dose")));
+            row.put("sellAt", num(best.get("sell")));
+            row.put("sellQty", bestSellQty);
+            row.put("projectedProfit", bestGain);
+            row.put("flags", new ArrayList<>(Arrays.asList("held")));
+            return row;
+        }
+        return null;
+    }
+
+    private static long num(Object o)
+    {
+        return o instanceof Number ? ((Number) o).longValue() : 0L;
+    }
+
+    /** Dose families worth converting, refreshed on the same cadence as prices. */
+    private List<Map<String, Object>> ensureFamilies()
+    {
+        if (!decantFamilies.isEmpty() && System.currentTimeMillis() - familiesFetchedAt < FAMILIES_TTL)
+        {
+            return decantFamilies;
+        }
+        Request request = new Request.Builder().url(ARES_FAMILIES).header("User-Agent", UA).get().build();
+        try (Response r = httpClient.newCall(request).execute())
+        {
+            if (!r.isSuccessful() || r.body() == null) return decantFamilies;
+            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
+            if (root == null || !root.has("families")) return decantFamilies;
+            List<Map<String, Object>> rows = gson.fromJson(root.get("families"), CANDIDATE_LIST);
+            if (rows != null)
+            {
+                decantFamilies = rows;
+                familiesFetchedAt = System.currentTimeMillis();
             }
         }
-        if (bestItemId == 0 || bestSellQty < 1) return null;
-
-        Meta sellMeta = meta.get(bestItemId);
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("family", family);
-        row.put("buyItemId", heldItemId);
-        row.put("buyName", heldMeta.name);
-        row.put("buyDose", heldDose);
-        row.put("buyAt", heldPrices[0]);
-        row.put("buyQty", heldQty);
-        row.put("sellItemId", bestItemId);
-        row.put("sellName", sellMeta != null ? sellMeta.name : ("item " + bestItemId));
-        row.put("sellDose", bestDose);
-        row.put("sellAt", bestSellAt);
-        row.put("sellQty", bestSellQty);
-        row.put("projectedProfit", bestGain);
-        row.put("flags", new ArrayList<>(Arrays.asList("held")));
-        return row;
+        catch (Exception e)
+        {
+            log.warn("Ares /v1/decants/families failed: {}", e.getMessage());
+        }
+        return decantFamilies;
     }
 
-    /** Timeframe-smoothed {buy, sell} for one dose variant, or null if it isn't priced. */
-    private long[] dosePrices(int itemId, long nowSec)
-    {
-        Meta m = meta.get(itemId);
-        if (m == null || m.limit <= 0) return null;
-        int[] v1 = volume1h.get(itemId);
-        if (v1 == null) return null;
-        long[] prices = pickPrices(latest.get(itemId), v1, volume5m.get(itemId), 60, nowSec);
-        return prices == null || prices[0] <= 0 || prices[1] <= 0 ? null : prices;
-    }
-
-    /** Current sell quote for a held item: {name, sell_at, ge_limit, tax_at_sell}, or null. */
+    /** Sell-side quote for a held item: {name, sell_at, ge_limit, tax_at_sell}, or null. */
     public Map<String, Object> sellQuote(int itemId)
     {
-        try { ensureLoaded(); } catch (Exception e) { return null; }
-        long sell = quotedSell(itemId);
-        if (sell <= 0) return null;
-        Meta m = meta.get(itemId);
-        Map<String, Object> q = new LinkedHashMap<>();
-        q.put("name", m != null ? m.name : ("item " + itemId));
-        q.put("sell_at", sell);
-        q.put("ge_limit", m != null ? m.limit : 0);
-        q.put("tax_at_sell", taxAmount(itemId, sell));
-        return q;
+        Map<String, Object> q = quote(itemId);
+        if (q == null || !(q.get("sell_at") instanceof Number)) return null;
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("name", q.get("name"));
+        out.put("sell_at", q.get("sell_at"));
+        out.put("ge_limit", q.get("ge_limit"));
+        out.put("tax_at_sell", q.get("tax_at_sell"));
+        return out;
     }
 
     /**
-     * Current market quote for ANY item (no margin/volume filtering) — used to price the
-     * GE offer-setup screen for an item the suggestion engine didn't propose. Returns
-     * {name, buy_at, sell_at, ge_limit} or null if the wiki has no price for this item.
-     * Blocks on HTTP (first call / stale cache); call off the client thread.
+     * Current market quote for any item: {name, buy_at, sell_at, ge_limit, tax_at_sell}, or
+     * null if the server has no price for it. Blocks on HTTP; call off the client thread.
      */
     public Map<String, Object> quote(int itemId)
     {
-        try { ensureLoaded(); } catch (Exception e) { return null; }
-        long[] p = latest.get(itemId);
-        int[] v1 = volume1h.get(itemId);
-        int[] v5 = volume5m.get(itemId);
-        long[] prices = pickPrices(p, v1, v5, 30, System.currentTimeMillis() / 1000L);
-        if (prices == null)
+        Request request = new Request.Builder()
+            .url(ARES_QUOTE + "?ids=" + itemId)
+            .header("User-Agent", UA)
+            .get()
+            .build();
+        try (Response r = httpClient.newCall(request).execute())
         {
-            if (p == null || (p[0] <= 0 && p[1] <= 0)) return null;
-            prices = new long[]{ p[1], p[0] };
+            if (!r.isSuccessful() || r.body() == null) return null;
+            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
+            if (root == null || !root.has("items")) return null;
+            List<Map<String, Object>> rows = gson.fromJson(root.get("items"), CANDIDATE_LIST);
+            return rows == null || rows.isEmpty() ? null : rows.get(0);
         }
-        Meta m = meta.get(itemId);
-        Map<String, Object> q = new LinkedHashMap<>();
-        q.put("name", m != null ? m.name : ("item " + itemId));
-        q.put("buy_at", prices[0]);
-        q.put("sell_at", prices[1]);
-        q.put("ge_limit", m != null ? m.limit : 0);
-        return q;
-    }
-
-    /** Wiki GE buy limit for an item, or 0 if unknown. */
-    public int geLimit(int itemId)
-    {
-        Meta m = meta.get(itemId);
-        return m != null ? m.limit : 0;
+        catch (Exception e)
+        {
+            log.warn("Ares /v1/market/quote failed: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
-     * Market health for an item already on the GE, using the same wiki averages and
-     * filters as ranking. Used to MODIFY vs ABORT existing offers. Returns null when
-     * there is no price (do not abort on missing data). {@code dead} is only set for a
-     * clear dead flip: non-positive margin after tax, odd name, or spread vs 1h avg
-     * beyond the risk cap — not thin volume or "not in the top 12".
+     * Wiki GE buy limit for an item, or 0 if unknown.
+     *
+     * <p>Served from a map fetched once and held, not a call per item: this is asked in loops
+     * (every item with a used limit, every scored candidate), and buy limits only change when
+     * Jagex changes them.
      */
-    public Map<String, Object> evaluateItem(int itemId, int timeframeMinutes, RiskLevel riskLevel,
-                                            boolean membersItemsAllowed)
+    public int geLimit(int itemId)
     {
-        try { ensureLoaded(); } catch (Exception e) { return null; }
-        Meta m = meta.get(itemId);
-        if (m == null) return null;
-        if (!membersItemsAllowed && m.members) return null;
-        RiskProfile risk = RiskProfile.of(riskLevel);
-        int tfMin = Math.max(1, Math.min(24 * 60, timeframeMinutes));
-        long nowSec = System.currentTimeMillis() / 1000L;
-        long[] p = latest.get(itemId);
-        int[] v1 = volume1h.get(itemId);
-        int[] v5 = volume5m.get(itemId);
-        long[] prices = pickPrices(p, v1, v5, tfMin, nowSec);
-        if (prices == null)
+        ensureLimits();
+        Integer limit = geLimits.get(itemId);
+        return limit != null ? limit : 0;
+    }
+
+    private void ensureLimits()
+    {
+        if (!geLimits.isEmpty() && System.currentTimeMillis() - limitsFetchedAt < LIMITS_TTL) return;
+        synchronized (this)
         {
-            // Still quote filling offers so MODIFY can fire; ranking already filtered these out.
-            if (p == null || (p[0] <= 0 && p[1] <= 0)) return null;
-            long high = p[0], low = p[1];
-            if (low > 0 && high > low) prices = new long[]{ low, high };
-            else if (low > 0) prices = new long[]{ low, low };
-            else if (high > 0) prices = new long[]{ high, high };
-            else return null;
-        }
-        long buy = prices[0], sell = prices[1];
-        if (buy <= 0 || sell <= 0) return null;
-
-        long tax = taxAmount(itemId, sell);
-        long margin = sell - buy - tax;
-        double marginPct = buy > 0 ? margin * 100.0 / buy : 0;
-
-        List<String> flags = new ArrayList<>();
-        boolean odd = isOddName(m.name);
-        if (odd) flags.add("odd");
-        boolean spreadBlowout = marginPct > risk.maxMarginPct;
-        if (spreadBlowout) flags.add("spread-blowout");
-        if (marginPct > 15) flags.add("wide-spread");
-
-        boolean dead = odd || margin <= 0 || spreadBlowout;
-        boolean viable = !dead && m.limit > 0;
-        if (v1 != null)
-        {
-            int highVol = v1[0], lowVol = v1[1];
-            int vol = highVol + lowVol;
-            double imbalance = vol > 0 ? Math.abs(highVol - lowVol) / (double) vol : 1;
-            if (vol < risk.minVolume || Math.min(highVol, lowVol) < risk.minSideVolume) viable = false;
-            if (imbalance > risk.maxImbalance)
+            if (!geLimits.isEmpty() && System.currentTimeMillis() - limitsFetchedAt < LIMITS_TTL) return;
+            Request request = new Request.Builder().url(ARES_LIMITS).header("User-Agent", UA).get().build();
+            try (Response r = httpClient.newCall(request).execute())
             {
-                flags.add("one-sided");
-                viable = false;
+                if (!r.isSuccessful() || r.body() == null) return;
+                JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
+                if (root == null || !root.has("limits")) return;
+                Map<Integer, Integer> parsed = new ConcurrentHashMap<>();
+                for (Map.Entry<String, com.google.gson.JsonElement> e : root.getAsJsonObject("limits").entrySet())
+                {
+                    try { parsed.put(Integer.parseInt(e.getKey()), e.getValue().getAsInt()); }
+                    catch (Exception ignored) { }
+                }
+                if (!parsed.isEmpty())
+                {
+                    geLimits = parsed;
+                    limitsFetchedAt = System.currentTimeMillis();
+                }
             }
-            if (vol < risk.minVolume * 4) flags.add("thin");
+            catch (Exception e)
+            {
+                // Keep whatever we already have; a stale limit is better than none, and the
+                // callers treat 0 as "unknown" rather than "no limit".
+                log.warn("Ares /v1/market/limits failed: {}", e.getMessage());
+            }
         }
-        else viable = false;
-        Double drift = driftPct(v5, v1);
-        if (drift != null && drift < FALLING_DRIFT_PCT) flags.add("falling");
+    }
 
-        Map<String, Object> s = new LinkedHashMap<>();
-        s.put("id", itemId);
-        s.put("name", m.name);
-        s.put("buy_at", buy);
-        s.put("sell_at", sell);
-        s.put("margin_post_tax", margin);
-        s.put("margin_pct", Math.round(marginPct * 10) / 10.0);
-        s.put("ge_limit", m.limit);
-        s.put("flags", flags);
-        s.put("viable", viable);
-        s.put("dead", dead);
-        if (drift != null) s.put("drift_pct", Math.round(drift * 10) / 10.0);
-        if (dead)
+    /**
+     * Market health for a batch of items, from Ares {@code GET /v1/market/health}, keyed by id.
+     *
+     * <p>Batched because this is wanted for every live offer and held stack on each suggestion
+     * cycle, and one request beats a dozen. The risk thresholds that decide {@code viable} and
+     * {@code dead} live on the server; this plugin only passes along the {@link RiskLevel} the
+     * player selected, which is the same split Flipping Copilot's public repository uses.
+     *
+     * <p>Returns an empty map if the server is unreachable -- callers treat a missing entry as
+     * "no health information", which is what they already did when an item was unpriced.
+     */
+    public Map<Integer, Map<String, Object>> evaluateItems(java.util.Collection<Integer> itemIds,
+                                                           int timeframeMinutes, RiskLevel riskLevel,
+                                                           boolean membersItemsAllowed)
+    {
+        Map<Integer, Map<String, Object>> out = new LinkedHashMap<>();
+        if (itemIds == null || itemIds.isEmpty()) return out;
+        StringBuilder ids = new StringBuilder();
+        for (Integer id : itemIds)
         {
-            String reason = odd ? "Odd / untradeable name."
-                : margin <= 0 ? "Margin gone after tax."
-                : "Spread blew out vs 1h average.";
-            s.put("dead_reason", reason);
+            if (id == null || id <= 0) continue;
+            if (ids.length() > 0) ids.append(',');
+            ids.append(id.intValue());
         }
-        return s;
+        if (ids.length() == 0) return out;
+
+        String url = ARES_HEALTH + "?ids=" + ids
+            + "&timeframe=" + Math.max(1, timeframeMinutes)
+            + "&risk=" + (riskLevel != null ? riskLevel.toApiValue() : "medium")
+            + "&membersItemsAllowed=" + membersItemsAllowed;
+        Request request = new Request.Builder().url(url).header("User-Agent", UA).get().build();
+        try (Response r = httpClient.newCall(request).execute())
+        {
+            if (!r.isSuccessful() || r.body() == null)
+            {
+                log.warn("Ares /v1/market/health HTTP {}", r.code());
+                return out;
+            }
+            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
+            if (root == null || !root.has("items")) return out;
+            List<Map<String, Object>> rows = gson.fromJson(root.get("items"), CANDIDATE_LIST);
+            if (rows == null) return out;
+            for (Map<String, Object> row : rows)
+            {
+                Object id = row.get("id");
+                if (id instanceof Number) out.put(((Number) id).intValue(), row);
+            }
+            return out;
+        }
+        catch (Exception e)
+        {
+            log.warn("Ares /v1/market/health failed: {}", e.getMessage());
+            return out;
+        }
     }
 
     /** POST /v1/flips on Ares. Returns the candidate list, or null if the server is unreachable. */
@@ -733,7 +494,7 @@ public class FlipScorer
             if (!r.isSuccessful() || r.body() == null)
             {
                 lastAresUnreachable = true;
-                log.warn("Ares /v1/flips HTTP {}, using local scorer", r.code());
+                log.warn("Ares /v1/flips HTTP {}", r.code());
                 return null;
             }
             JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
@@ -756,7 +517,7 @@ public class FlipScorer
         catch (Exception e)
         {
             lastAresUnreachable = true;
-            log.warn("Ares /v1/flips failed, using local scorer: {}", e.getMessage());
+            log.warn("Ares /v1/flips failed: {}", e.getMessage());
             return null;
         }
     }
@@ -793,234 +554,4 @@ public class FlipScorer
         return out;
     }
 
-    private long quotedSell(int itemId)
-    {
-        int[] v1 = volume1h.get(itemId);
-        if (v1 != null && v1[2] > 0) return v1[2];
-        int[] v5 = volume5m.get(itemId);
-        if (v5 != null && v5[2] > 0) return v5[2];
-        long[] p = latest.get(itemId);
-        return p != null ? p[0] : 0;
-    }
-
-    /**
-     * Buy/sell prices: prefer 5m averages for short timeframes, else 1h averages, else a
-     * fresh last-trade pair. Last-trade-only outliers (stale high or low) are rejected.
-     * Returns {buy, sell} or null.
-     */
-    private static long[] pickPrices(long[] latestPx, int[] v1, int[] v5, int timeframeMinutes, long nowSec)
-    {
-        if (timeframeMinutes <= 30 && v5 != null && v5[3] > 0 && v5[2] > v5[3])
-        {
-            return new long[]{ v5[3], v5[2] };
-        }
-        if (v1 != null && v1[3] > 0 && v1[2] > v1[3])
-        {
-            return new long[]{ v1[3], v1[2] };
-        }
-        if (latestPx == null) return null;
-        long high = latestPx[0], low = latestPx[1], highTime = latestPx[2], lowTime = latestPx[3];
-        if (high <= 0 || low <= 0 || high <= low) return null;
-        if (nowSec - highTime > STALE_TRADE_SEC || nowSec - lowTime > STALE_TRADE_SEC) return null;
-        return new long[]{ low, high };
-    }
-
-    /**
-     * Units expected to fill within the user's timeframe, from the bottleneck side's volume,
-     * scaled down to {@link #LIQUIDITY_FRACTION} of that estimate so a suggestion never asks
-     * the player to absorb the entire visible market in one go.
-     */
-    private static int liquidityQty(int timeframeMinutes, int perHour, int[] v5)
-    {
-        double perMinute = perHour / 60.0;
-        if (timeframeMinutes <= 30 && v5 != null)
-        {
-            int side5 = Math.max(0, Math.min(v5[0], v5[1]));
-            if (side5 > 0) perMinute = side5 / 5.0;
-        }
-        return Math.max(1, (int) Math.floor(perMinute * timeframeMinutes * LIQUIDITY_FRACTION));
-    }
-
-    /**
-     * Penalty for a flip that leaves most of its GE slot's capital idle.
-     *
-     * <p>Buy limits are set in units, so what one slot can deploy is {@code limit x unit price}.
-     * A cheap bulk item with a 2,000 limit tops out around 20m however good its margin looks,
-     * while an expensive item clears a whole slot budget in a handful of units. With eight
-     * slots and capital to spare, the binding constraint is slots, not gp -- an idle slot earns
-     * nothing, so under-deployment is a real cost that margin quality cannot repay.
-     *
-     * <p>Borne out in play: across 883 completed flips, profit per flip rose monotonically with
-     * how much of a slot the item could absorb -- 87k where the 4h limit covered only ~3% of the
-     * budget, up to 360k where it covered all of it -- even though ROI fell the other way.
-     *
-     * <p>Returns 0 (no penalty) when budget is unknown or the flip fills the slot, so small
-     * accounts, where nearly every item can absorb the budget, are unaffected.
-     */
-    static double slotIdleRisk(long deployed, long budget)
-    {
-        if (budget <= 0 || deployed <= 0) return 0;
-        double fill = Math.min(1.0, (double) deployed / budget);
-        return (1.0 - fill) * SLOT_IDLE_RISK_WEIGHT;
-    }
-
-    /** Hours to buy then sell {@code qty} when we capture LIQUIDITY_FRACTION of the bottleneck side. */
-    static double expectedFillHours(long qty, int perHour)
-    {
-        double share = Math.max(1, perHour) * LIQUIDITY_FRACTION;
-        return (FILL_LEGS * Math.max(0L, qty)) / share;
-    }
-
-    /** Post-tax margin minus the expected reprice give-back on one leg. */
-    static long expectedMargin(long buy, long marginPostTax)
-    {
-        return marginPostTax - (long) Math.floor(buy * SLIPPAGE_PCT / 100.0);
-    }
-
-    /** 5m high average relative to the 1h high average, in %. null when either is missing. */
-    static Double driftPct(int[] v5, int[] v1)
-    {
-        if (v5 == null || v1 == null || v5.length < 3 || v1.length < 3) return null;
-        int avgHigh5 = v5[2], avgHigh1h = v1[2];
-        if (avgHigh5 <= 0 || avgHigh1h <= 0) return null;
-        return (avgHigh5 - avgHigh1h) * 100.0 / avgHigh1h;
-    }
-
-    private static long gcd(long a, long b)
-    {
-        while (b != 0) { long t = b; b = a % b; a = t; }
-        return a == 0 ? 1 : a;
-    }
-
-    private static boolean isOddName(String name)
-    {
-        if (name == null || name.isEmpty()) return true;
-        String n = name.toLowerCase();
-        return n.contains("placeholder") || n.startsWith("broken ") || n.contains("(nz)");
-    }
-
-    private long taxAmount(int id, long price)
-    {
-        if (price <= 0 || TAX_EXEMPT.contains(id)) return 0;
-        if (price >= TAX_MAX_PRICE) return TAX_CAP;
-        return (long) Math.floor(price * TAX_RATE);
-    }
-
-    private static final class RiskProfile
-    {
-        final int minVolume;
-        final int minSideVolume;
-        final int minMargin;
-        /** Floor on the slippage-adjusted post-tax margin as a % of buy price. */
-        final double minMarginPct;
-        final double maxMarginPct;
-        final double maxImbalance;
-
-        RiskProfile(int minVolume, int minSideVolume, int minMargin, double minMarginPct,
-                    double maxMarginPct, double maxImbalance)
-        {
-            this.minVolume = minVolume;
-            this.minSideVolume = minSideVolume;
-            this.minMargin = minMargin;
-            this.minMarginPct = minMarginPct;
-            this.maxMarginPct = maxMarginPct;
-            this.maxImbalance = maxImbalance;
-        }
-
-        // Mirrors flip-scorer.mjs RISK exactly -- keep in sync.
-        static RiskProfile of(RiskLevel level)
-        {
-            // Raised from 2000/400/30 -- odd, near-worthless niche items (seeds, unf potions,
-            // low-tier food) were clearing the old floors with only a few thousand gp of
-            // total profit on offer.
-            if (level == RiskLevel.LOW)
-            {
-                return new RiskProfile(3000, 500, 40, 1.0, 8, 0.45);
-            }
-            if (level == RiskLevel.HIGH)
-            {
-                return new RiskProfile(400, 50, 15, 0.3, 20, 0.75);
-            }
-            // Raised from 800/150/20 for the same reason -- this is the default tier.
-            return new RiskProfile(1500, 250, 30, 0.6, 12, 0.55);
-        }
-    }
-
-    // ── fetch + cache ──────────────────────────────────────────────────────────
-
-    private synchronized void ensureLoaded() throws Exception
-    {
-        if (meta.isEmpty()) loadMapping();
-        if (System.currentTimeMillis() - lastPriceFetch > PRICE_TTL || latest.isEmpty())
-        {
-            loadLatest();
-            volume1h = loadVolume(HOUR);
-            volume5m = loadVolume(FIVE);
-            lastPriceFetch = System.currentTimeMillis();
-        }
-    }
-
-    private void loadMapping() throws Exception
-    {
-        try (Response r = httpClient.newCall(req(MAP)).execute())
-        {
-            if (!r.isSuccessful() || r.body() == null) return;
-            com.google.gson.JsonArray arr = gson.fromJson(r.body().charStream(), com.google.gson.JsonArray.class);
-            for (com.google.gson.JsonElement e : arr)
-            {
-                JsonObject o = e.getAsJsonObject();
-                if (!o.has("id")) continue;
-                int id = o.get("id").getAsInt();
-                String name = o.has("name") ? o.get("name").getAsString() : ("item " + id);
-                int limit = o.has("limit") && !o.get("limit").isJsonNull() ? o.get("limit").getAsInt() : 0;
-                boolean members = !o.has("members") || o.get("members").getAsBoolean();
-                meta.put(id, new Meta(name, limit, members));
-            }
-        }
-    }
-
-    private void loadLatest() throws Exception
-    {
-        Map<Integer, long[]> out = new ConcurrentHashMap<>();
-        try (Response r = httpClient.newCall(req(LATEST)).execute())
-        {
-            if (!r.isSuccessful() || r.body() == null) { latest = out; return; }
-            JsonObject data = gson.fromJson(r.body().charStream(), JsonObject.class).getAsJsonObject("data");
-            for (Map.Entry<String, com.google.gson.JsonElement> e : data.entrySet())
-            {
-                JsonObject o = e.getValue().getAsJsonObject();
-                long high = o.has("high") && !o.get("high").isJsonNull() ? o.get("high").getAsLong() : 0;
-                long low  = o.has("low")  && !o.get("low").isJsonNull()  ? o.get("low").getAsLong()  : 0;
-                long highTime = o.has("highTime") && !o.get("highTime").isJsonNull() ? o.get("highTime").getAsLong() : 0;
-                long lowTime  = o.has("lowTime")  && !o.get("lowTime").isJsonNull()  ? o.get("lowTime").getAsLong()  : 0;
-                if (high > 0 || low > 0) out.put(Integer.parseInt(e.getKey()), new long[]{ high, low, highTime, lowTime });
-            }
-        }
-        latest = out;
-    }
-
-    private Map<Integer, int[]> loadVolume(String url) throws Exception
-    {
-        Map<Integer, int[]> out = new ConcurrentHashMap<>();
-        try (Response r = httpClient.newCall(req(url)).execute())
-        {
-            if (!r.isSuccessful() || r.body() == null) return out;
-            JsonObject data = gson.fromJson(r.body().charStream(), JsonObject.class).getAsJsonObject("data");
-            for (Map.Entry<String, com.google.gson.JsonElement> e : data.entrySet())
-            {
-                JsonObject o = e.getValue().getAsJsonObject();
-                int hv = o.has("highPriceVolume") ? o.get("highPriceVolume").getAsInt() : 0;
-                int lv = o.has("lowPriceVolume")  ? o.get("lowPriceVolume").getAsInt()  : 0;
-                int ah = o.has("avgHighPrice") && !o.get("avgHighPrice").isJsonNull() ? o.get("avgHighPrice").getAsInt() : 0;
-                int al = o.has("avgLowPrice")  && !o.get("avgLowPrice").isJsonNull()  ? o.get("avgLowPrice").getAsInt()  : 0;
-                out.put(Integer.parseInt(e.getKey()), new int[]{ hv, lv, ah, al });
-            }
-        }
-        return out;
-    }
-
-    private static Request req(String url)
-    {
-        return new Request.Builder().url(url).header("User-Agent", UA).build();
-    }
 }
