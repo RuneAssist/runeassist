@@ -51,6 +51,7 @@ public class StatsPanelV2 extends JPanel {
     private final ClientThread clientThread;
     private final FlipsDialogController flipsDialogController;
     private final PortfolioStateRS portfolioStateRS;
+    private final FlipHistorySyncService flipHistorySyncService;
 
     // state
     private IntervalDropdown intervalDropdown;
@@ -82,7 +83,8 @@ public class StatsPanelV2 extends JPanel {
                         WebHookController webHookController,
                         ClientThread clientThread,
                         FlipsDialogController flipsDialogController,
-                        PortfolioStateRS portfolioStateRS) {
+                        PortfolioStateRS portfolioStateRS,
+                        FlipHistorySyncService flipHistorySyncService) {
         this.accountLoginRS = accountLoginRS;
         this.osrsLoginManager = osrsLoginManager;
         this.sessionManager = sessionManager;
@@ -92,6 +94,7 @@ public class StatsPanelV2 extends JPanel {
         this.clientThread = clientThread;
         this.flipsDialogController = flipsDialogController;
         this.portfolioStateRS = portfolioStateRS;
+        this.flipHistorySyncService = flipHistorySyncService;
         setLayout(new BorderLayout());
         setBackground(RuneAssistColors.SHELL);
 
@@ -349,7 +352,19 @@ public class StatsPanelV2 extends JPanel {
         if (flipsMaybeChanged) {
             flipsPanel.removeAll();
             flipManager.getPageFlips(paginator.getPageNumber(), 50)
-                    .forEach(f -> flipsPanel.add(new FlipPanel(f, config, () -> flipsDialogController.showVisualizeFlip(f))));
+                    .forEach(f -> flipsPanel.add(new FlipPanel(
+                            f,
+                            config,
+                            () -> flipsDialogController.showVisualizeFlip(f),
+                            () -> {
+                                String displayName = osrsLoginManager.getPlayerDisplayName();
+                                if (displayName == null || f.getId() == null) {
+                                    return;
+                                }
+                                if (flipHistorySyncService != null && flipHistorySyncService.isLinked()) {
+                                    flipHistorySyncService.deleteFlip(displayName, f.getId());
+                                }
+                            })));
             // labels displayed to the user
             roiVal.setText(String.format("%.3f%%", stats.calculateRoi() * 100));
             roiVal.setForeground(UIUtilities.getProfitColor(stats.profit, config));

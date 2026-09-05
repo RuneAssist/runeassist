@@ -46,6 +46,7 @@ public class MenuHandler {
     private final ChatboxPanelManager chatboxPanelManager;
     private final com.runeassist.flip.HeldCostTracker heldCostTracker;
     private final com.runeassist.flip.AresMarketClient market;
+    private final FlipHistorySyncService flipHistorySyncService;
     private final ExecutorService executorService;
 
     private static final String MENU_ADD = "Add-All to portfolio";
@@ -113,18 +114,10 @@ public class MenuHandler {
     }
 
     /**
-     * RuneAssist fork: local replacement for FC's cloud "add/remove item portfolio" (which
-     * called their {@code /profit-tracking/toggle-item-portfolio} endpoint — needs an FC
-     * account JWT we never have, so it silently did nothing). This is for stock RuneAssist
-     * never saw bought — "forgotten" items already sitting in the bank/inventory before the
-     * plugin tracked them, or bought outside a tracked GE offer — so they start showing up in
-     * sell suggestions and portfolio value like anything else. Adds a {@link
-     * com.runeassist.flip.HeldCostTracker} lot at the current market buy quote as an
-     * estimated cost basis (the real price paid is unknown for stock we never saw bought) —
-     * same estimation caveat already used for decant-carried-over cost. No "remove" side:
-     * unlike the old cloud feature, this only ever adds a tracked lot: to stop something
-     * being suggested, use the existing per-item Skip/Block action on the resulting
-     * suggestion instead of trying to un-track it here.
+     * RuneAssist: add untracked bank/inventory stock to the portfolio. When the
+     * client is linked, the server owns held cost (toggle-item-portfolio); local
+     * HeldCostTracker is updated optimistically then overwritten from the server
+     * snapshot after sync.
      */
     public void injectInventoryPortfolioMenuEntry(MenuEntryAdded event) {
         if (!playerLocationController.isNearGE()) {
@@ -189,9 +182,14 @@ public class MenuHandler {
             } catch (Exception ex) {
                 log.warn("market quote failed while adding item {} to portfolio", itemId, ex);
             }
-            heldCostTracker.addManualLot(displayName, itemId, qty, unitCost);
-            suggestionManager.setSuggestionNeeded(true);
-            log.info("added {} x item {} to local portfolio at estimated cost {} gp", qty, itemId, unitCost);
+            if (flipHistorySyncService != null && flipHistorySyncService.isLinked()
+                    && flipHistorySyncService.toggleItemPortfolio(displayName, itemId, qty, unitCost, false)) {
+                log.info("added {} x item {} to server portfolio at estimated cost {} gp", qty, itemId, unitCost);
+            } else {
+                heldCostTracker.addManualLot(displayName, itemId, qty, unitCost);
+                suggestionManager.setSuggestionNeeded(true);
+                log.info("added {} x item {} to local portfolio at estimated cost {} gp", qty, itemId, unitCost);
+            }
         });
     }
 
