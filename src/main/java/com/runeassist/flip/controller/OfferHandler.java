@@ -34,7 +34,6 @@ public class OfferHandler {
     private final Client client;
     private final ClientThread clientThread;
     private final SuggestionManager suggestionManager;
-    private final ApiRequestHandler apiRequestHandler;
     private final OsrsLoginManager osrsLoginManager;
     private final OfferManager offerManager;
     private final HighlightController highlightController;
