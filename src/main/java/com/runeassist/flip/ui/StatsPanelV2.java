@@ -179,7 +179,7 @@ public class StatsPanelV2 extends JPanel {
                                 ? null
                                 : accountLoginRS.get().getAccountId(displayName);
                         if (accountId == null || accountId == -1) {
-                            accountId = displayName == null ? null : LocalFlipLedger.accountIdFor(displayName);
+                            accountId = displayName == null ? null : FlipHistorySyncService.accountIdFor(displayName);
                         }
                         if (accountId != null && accountId != -1 && displayName != null) {
                             webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, true);
