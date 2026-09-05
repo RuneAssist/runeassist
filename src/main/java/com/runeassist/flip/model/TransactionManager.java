@@ -33,7 +33,7 @@ public class TransactionManager {
             }
         }
         // Legacy copilot transaction upload is disabled. FlipHistorySyncService
-        // handles opt-in history sync independently of this queue.
+        // uploads the unacked queue and pulls server flip history on login.
     }
 
     /**
