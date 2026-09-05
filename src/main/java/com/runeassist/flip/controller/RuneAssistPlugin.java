@@ -105,8 +105,6 @@ public class RuneAssistPlugin extends Plugin {
 	@Inject
 	private SlotProfitColorizer slotProfitColorizer;
 	@Inject
-	private DumpsStreamController dumpsStreamController;
-	@Inject
 	private GrandExchangeOpenRS grandExchangeOpenRS;
 	@Inject
 	private OsrsLoginRS osrsLoginRS;
@@ -116,10 +114,6 @@ public class RuneAssistPlugin extends Plugin {
 	private InventorySlotTooltipOverlay inventorySlotTooltipOverlay;
 	@Inject
 	private InventoryPortfolioBadgeOverlay inventoryPortfolioBadgeOverlay;
-	// RuneAssist fork: bank-tag components disabled (hard-depend on the core BankTags plugin,
-	// which breaks sideloaded construction). The niche "portfolio bank tab" feature is dropped.
-	// @Inject
-	// private PortfolioBankTabBadgeOverlay portfolioBankTabBadgeOverlay;
 	@Inject
 	private BankStateRS bankStateRS;
 
@@ -130,8 +124,6 @@ public class RuneAssistPlugin extends Plugin {
 	private GeHistoryStateRS geHistoryStateRS;
 	@Inject
 	private PatchNotesController patchNotesController;
-	// @Inject
-	// private PortfolioBankTagController portfolioBankTagController;
 	@Inject
 	private PlayerLocationController playerLocationController;
 	@Inject
@@ -169,8 +161,6 @@ public class RuneAssistPlugin extends Plugin {
 		keybindHandler.register();
 		overlayManager.add(inventorySlotTooltipOverlay);
 		overlayManager.add(inventoryPortfolioBadgeOverlay);
-		// overlayManager.add(portfolioBankTabBadgeOverlay);   // RuneAssist fork: BankTags disabled
-		// portfolioBankTagController.startUp();               // RuneAssist fork: BankTags disabled
 		highlightController.activate();
 		Persistance.setUp(gson);
 		// seems we need to delay instantiating the UI till here as otherwise the panels look different
@@ -226,8 +216,6 @@ public class RuneAssistPlugin extends Plugin {
 	protected void shutDown() throws Exception {
 		overlayManager.remove(inventorySlotTooltipOverlay);
 		overlayManager.remove(inventoryPortfolioBadgeOverlay);
-		// overlayManager.remove(portfolioBankTabBadgeOverlay); // RuneAssist fork: BankTags disabled
-		// portfolioBankTagController.shutDown();               // RuneAssist fork: BankTags disabled
 		offerManager.saveAll();
 		highlightController.deactivateAndRemoveAll();
 		clientThread.invokeLater(() -> slotProfitColorizer.resetAllSlots());
