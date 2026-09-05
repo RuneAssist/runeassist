@@ -42,6 +42,7 @@ public class FlipScorer
     private static final String UA = "RuneAssist-flip/1.0 (github.com/RuneAssist/runeassist)";
     private static final String ARES_FLIPS = "https://runeassist.ares-server.co.uk/v1/flips";
     private static final String ARES_DECANTS = "https://runeassist.ares-server.co.uk/v1/decants";
+    private static final String ARES_HEALTH = "https://runeassist.ares-server.co.uk/v1/market/health";
     private static final MediaType JSON = MediaType.parse("application/json");
     private static final Type CANDIDATE_LIST = new TypeToken<List<Map<String, Object>>>(){}.getType();
     private static final String LATEST = "https://prices.runescape.wiki/api/v1/osrs/latest";
@@ -50,8 +51,6 @@ public class FlipScorer
     private static final String MAP    = "https://prices.runescape.wiki/api/v1/osrs/mapping";
     private static final long PRICE_TTL = 60_000;
     private static final long STALE_TRADE_SEC = 90 * 60; // last-trade older than this is ignored
-    // 5m average this far below the 1h average is a falling market.
-    static final double FALLING_DRIFT_PCT = -0.5;
 
     private static final double TAX_RATE = 0.02;
     private static final long   TAX_CAP  = 5_000_000L;
@@ -383,89 +382,59 @@ public class FlipScorer
     }
 
     /**
-     * Market health for an item already on the GE, using the same wiki averages and
-     * filters as ranking. Used to MODIFY vs ABORT existing offers. Returns null when
-     * there is no price (do not abort on missing data). {@code dead} is only set for a
-     * clear dead flip: non-positive margin after tax, odd name, or spread vs 1h avg
-     * beyond the risk cap — not thin volume or "not in the top 12".
+     * Market health for a batch of items, from Ares {@code GET /v1/market/health}, keyed by id.
+     *
+     * <p>Batched because this is wanted for every live offer and held stack on each suggestion
+     * cycle, and one request beats a dozen. The risk thresholds that decide {@code viable} and
+     * {@code dead} live on the server; this plugin only passes along the {@link RiskLevel} the
+     * player selected, which is the same split Flipping Copilot's public repository uses.
+     *
+     * <p>Returns an empty map if the server is unreachable -- callers treat a missing entry as
+     * "no health information", which is what they already did when an item was unpriced.
      */
-    public Map<String, Object> evaluateItem(int itemId, int timeframeMinutes, RiskLevel riskLevel,
-                                            boolean membersItemsAllowed)
+    public Map<Integer, Map<String, Object>> evaluateItems(java.util.Collection<Integer> itemIds,
+                                                           int timeframeMinutes, RiskLevel riskLevel,
+                                                           boolean membersItemsAllowed)
     {
-        try { ensureLoaded(); } catch (Exception e) { return null; }
-        Meta m = meta.get(itemId);
-        if (m == null) return null;
-        if (!membersItemsAllowed && m.members) return null;
-        RiskProfile risk = RiskProfile.of(riskLevel);
-        int tfMin = Math.max(1, Math.min(24 * 60, timeframeMinutes));
-        long nowSec = System.currentTimeMillis() / 1000L;
-        long[] p = latest.get(itemId);
-        int[] v1 = volume1h.get(itemId);
-        int[] v5 = volume5m.get(itemId);
-        long[] prices = pickPrices(p, v1, v5, tfMin, nowSec);
-        if (prices == null)
+        Map<Integer, Map<String, Object>> out = new LinkedHashMap<>();
+        if (itemIds == null || itemIds.isEmpty()) return out;
+        StringBuilder ids = new StringBuilder();
+        for (Integer id : itemIds)
         {
-            // Still quote filling offers so MODIFY can fire; ranking already filtered these out.
-            if (p == null || (p[0] <= 0 && p[1] <= 0)) return null;
-            long high = p[0], low = p[1];
-            if (low > 0 && high > low) prices = new long[]{ low, high };
-            else if (low > 0) prices = new long[]{ low, low };
-            else if (high > 0) prices = new long[]{ high, high };
-            else return null;
+            if (id == null || id <= 0) continue;
+            if (ids.length() > 0) ids.append(',');
+            ids.append(id.intValue());
         }
-        long buy = prices[0], sell = prices[1];
-        if (buy <= 0 || sell <= 0) return null;
+        if (ids.length() == 0) return out;
 
-        long tax = taxAmount(itemId, sell);
-        long margin = sell - buy - tax;
-        double marginPct = buy > 0 ? margin * 100.0 / buy : 0;
-
-        List<String> flags = new ArrayList<>();
-        boolean odd = isOddName(m.name);
-        if (odd) flags.add("odd");
-        boolean spreadBlowout = marginPct > risk.maxMarginPct;
-        if (spreadBlowout) flags.add("spread-blowout");
-        if (marginPct > 15) flags.add("wide-spread");
-
-        boolean dead = odd || margin <= 0 || spreadBlowout;
-        boolean viable = !dead && m.limit > 0;
-        if (v1 != null)
+        String url = ARES_HEALTH + "?ids=" + ids
+            + "&timeframe=" + Math.max(1, timeframeMinutes)
+            + "&risk=" + (riskLevel != null ? riskLevel.toApiValue() : "medium")
+            + "&membersItemsAllowed=" + membersItemsAllowed;
+        Request request = new Request.Builder().url(url).header("User-Agent", UA).get().build();
+        try (Response r = httpClient.newCall(request).execute())
         {
-            int highVol = v1[0], lowVol = v1[1];
-            int vol = highVol + lowVol;
-            double imbalance = vol > 0 ? Math.abs(highVol - lowVol) / (double) vol : 1;
-            if (vol < risk.minVolume || Math.min(highVol, lowVol) < risk.minSideVolume) viable = false;
-            if (imbalance > risk.maxImbalance)
+            if (!r.isSuccessful() || r.body() == null)
             {
-                flags.add("one-sided");
-                viable = false;
+                log.warn("Ares /v1/market/health HTTP {}", r.code());
+                return out;
             }
-            if (vol < risk.minVolume * 4) flags.add("thin");
+            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
+            if (root == null || !root.has("items")) return out;
+            List<Map<String, Object>> rows = gson.fromJson(root.get("items"), CANDIDATE_LIST);
+            if (rows == null) return out;
+            for (Map<String, Object> row : rows)
+            {
+                Object id = row.get("id");
+                if (id instanceof Number) out.put(((Number) id).intValue(), row);
+            }
+            return out;
         }
-        else viable = false;
-        Double drift = driftPct(v5, v1);
-        if (drift != null && drift < FALLING_DRIFT_PCT) flags.add("falling");
-
-        Map<String, Object> s = new LinkedHashMap<>();
-        s.put("id", itemId);
-        s.put("name", m.name);
-        s.put("buy_at", buy);
-        s.put("sell_at", sell);
-        s.put("margin_post_tax", margin);
-        s.put("margin_pct", Math.round(marginPct * 10) / 10.0);
-        s.put("ge_limit", m.limit);
-        s.put("flags", flags);
-        s.put("viable", viable);
-        s.put("dead", dead);
-        if (drift != null) s.put("drift_pct", Math.round(drift * 10) / 10.0);
-        if (dead)
+        catch (Exception e)
         {
-            String reason = odd ? "Odd / untradeable name."
-                : margin <= 0 ? "Margin gone after tax."
-                : "Spread blew out vs 1h average.";
-            s.put("dead_reason", reason);
+            log.warn("Ares /v1/market/health failed: {}", e.getMessage());
+            return out;
         }
-        return s;
     }
 
     /** POST /v1/flips on Ares. Returns the candidate list, or null if the server is unreachable. */
@@ -603,14 +572,6 @@ public class FlipScorer
 
 
 
-    /** 5m high average relative to the 1h high average, in %. null when either is missing. */
-    static Double driftPct(int[] v5, int[] v1)
-    {
-        if (v5 == null || v1 == null || v5.length < 3 || v1.length < 3) return null;
-        int avgHigh5 = v5[2], avgHigh1h = v1[2];
-        if (avgHigh5 <= 0 || avgHigh1h <= 0) return null;
-        return (avgHigh5 - avgHigh1h) * 100.0 / avgHigh1h;
-    }
 
 
     private static boolean isOddName(String name)
@@ -625,46 +586,6 @@ public class FlipScorer
         if (price <= 0 || TAX_EXEMPT.contains(id)) return 0;
         if (price >= TAX_MAX_PRICE) return TAX_CAP;
         return (long) Math.floor(price * TAX_RATE);
-    }
-
-    private static final class RiskProfile
-    {
-        final int minVolume;
-        final int minSideVolume;
-        final int minMargin;
-        /** Floor on the slippage-adjusted post-tax margin as a % of buy price. */
-        final double minMarginPct;
-        final double maxMarginPct;
-        final double maxImbalance;
-
-        RiskProfile(int minVolume, int minSideVolume, int minMargin, double minMarginPct,
-                    double maxMarginPct, double maxImbalance)
-        {
-            this.minVolume = minVolume;
-            this.minSideVolume = minSideVolume;
-            this.minMargin = minMargin;
-            this.minMarginPct = minMarginPct;
-            this.maxMarginPct = maxMarginPct;
-            this.maxImbalance = maxImbalance;
-        }
-
-        // Mirrors flip-scorer.mjs RISK exactly -- keep in sync.
-        static RiskProfile of(RiskLevel level)
-        {
-            // Raised from 2000/400/30 -- odd, near-worthless niche items (seeds, unf potions,
-            // low-tier food) were clearing the old floors with only a few thousand gp of
-            // total profit on offer.
-            if (level == RiskLevel.LOW)
-            {
-                return new RiskProfile(3000, 500, 40, 1.0, 8, 0.45);
-            }
-            if (level == RiskLevel.HIGH)
-            {
-                return new RiskProfile(400, 50, 15, 0.3, 20, 0.75);
-            }
-            // Raised from 800/150/20 for the same reason -- this is the default tier.
-            return new RiskProfile(1500, 250, 30, 0.6, 12, 0.55);
-        }
     }
 
     // ── fetch + cache ──────────────────────────────────────────────────────────

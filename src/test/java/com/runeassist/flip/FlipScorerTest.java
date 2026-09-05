@@ -3,11 +3,11 @@ package com.runeassist.flip;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Local arithmetic that stays client-side: decant maths and market drift.
- *  Flip ranking is server-side only, so its scoring is not duplicated or tested here. */
+/** The only scoring arithmetic left client-side: valuing a decant of stock already held.
+ *  Flip ranking, decant ranking and per-item health are server-side, so none of their
+ *  scoring is duplicated or tested here. */
 public class FlipScorerTest {
 
     @Test
@@ -37,14 +37,4 @@ public class FlipScorerTest {
         assertEquals(0, FlipScorer.decantGainOverRawSell(208, 3, 0, 2403, 48, 3300, 66));
     }
 
-    @Test
-    public void driftComparesFiveMinuteHighToHourHigh() {
-        int[] v1 = {1000, 1000, 7300, 7000};
-        int[] v5 = {100, 100, 6933, 6700};
-        Double drift = FlipScorer.driftPct(v5, v1);
-        assertEquals((6933 - 7300) * 100.0 / 7300, drift, 1e-9);
-        assertTrue(drift < FlipScorer.FALLING_DRIFT_PCT);
-        assertNull(FlipScorer.driftPct(null, v1));
-        assertNull(FlipScorer.driftPct(new int[]{100, 100, 0, 0}, v1));
-    }
 }
