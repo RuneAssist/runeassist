@@ -1,21 +1,30 @@
 package com.runeassist.flip.ui;
 
 import com.runeassist.flip.config.RuneAssistConfig;
+import com.runeassist.flip.controller.BankTagsLookup;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.banktags.BankTagsPlugin;
-import net.runelite.client.ui.overlay.*;
+import net.runelite.client.ui.overlay.Overlay;
+import net.runelite.client.ui.overlay.OverlayLayer;
+import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.Text;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.awt.*;
+import java.awt.Dimension;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 
+/**
+ * Small RuneAssist badge on the local "portfolio" Bank Tags tab icon.
+ * Bank Tags is looked up at runtime so construction does not require a hard inject.
+ */
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class PortfolioBankTabBadgeOverlay extends Overlay {
@@ -25,12 +34,11 @@ public class PortfolioBankTabBadgeOverlay extends Overlay {
     private static final int BADGE_SIZE = 16;
     private static final int BADGE_MARGIN = 1;
     private static final BufferedImage BADGE_ICON = ImageUtil.resizeImage(
-            ImageUtil.loadImageResource(PortfolioBankTabBadgeOverlay.class, "/runeassist-flip.png"), BADGE_SIZE, BADGE_SIZE);
+            ImageUtil.loadImageResource(PortfolioBankTabBadgeOverlay.class, "/icon-small.png"), BADGE_SIZE, BADGE_SIZE);
 
     private final Client client;
     private final RuneAssistConfig config;
     private final PluginManager pluginManager;
-    private final BankTagsPlugin bankTagsPlugin;
 
     {
         setPosition(OverlayPosition.DYNAMIC);
@@ -42,7 +50,11 @@ public class PortfolioBankTabBadgeOverlay extends Overlay {
 
     @Override
     public Dimension render(Graphics2D graphics) {
-        if (!config.portfolioBankTag() || !pluginManager.isPluginActive(bankTagsPlugin)) {
+        if (!config.portfolioBankTag()) {
+            return null;
+        }
+        BankTagsPlugin bankTagsPlugin = BankTagsLookup.findActive(pluginManager);
+        if (bankTagsPlugin == null) {
             return null;
         }
 

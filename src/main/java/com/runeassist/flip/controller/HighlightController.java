@@ -12,8 +12,6 @@ import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.plugins.PluginManager;
-import net.runelite.client.plugins.banktags.BankTagsPlugin;
-import net.runelite.client.plugins.banktags.BankTagsService;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.outline.ModelOutlineRenderer;
@@ -57,8 +55,7 @@ public class HighlightController {
     private final OverlayManager overlayManager;
     private final HighlightColorController highlightColorController;
     private final PluginManager pluginManager;
-    private final BankTagsPlugin bankTagsPlugin;
-    private final BankTagsService bankTagsService;
+    // Bank Tags resolved at runtime via BankTagsLookup (no hard inject / PluginDependency).
     private final ModelOutlineRenderer modelOutlineRenderer;
 
     // state
@@ -632,9 +629,12 @@ public class HighlightController {
     }
 
     private Widget getPortfolioBankTagButton() {
-        if (!config.portfolioBankTag()
-                || !pluginManager.isPluginActive(bankTagsPlugin)
-                || PORTFOLIO_BANK_TAG.equals(bankTagsService.getActiveTag())) {
+        if (!config.portfolioBankTag()) {
+            return null;
+        }
+        net.runelite.client.plugins.banktags.BankTagsPlugin bankTagsPlugin =
+                BankTagsLookup.findActive(pluginManager);
+        if (bankTagsPlugin == null || PORTFOLIO_BANK_TAG.equals(bankTagsPlugin.getActiveTag())) {
             return null;
         }
 
