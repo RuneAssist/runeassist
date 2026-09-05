@@ -27,16 +27,20 @@ import javax.swing.SwingUtilities;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Server-owned flip history (FC-shaped). GE fills go to a local unacked queue
- * until uploaded; after device register / OSRS account link, txs upload and
+ * Server-owned flip history (FC-shaped). GE fills are persisted to an unacked
+ * JSONL queue until {@code POST /v1/account/transactions} returns {@code ackedIds};
+ * after device register / OSRS account link, uploads run and
  * {@code /v1/account/client-flips-delta} fills {@link FlipManager}. There is no
  * supported local-only or session-only history mode — Recent Flips come from
  * the server once this client is linked. {@link LocalFlipLedger} still matches
@@ -64,7 +68,8 @@ public class FlipHistorySyncService {
     private final OsrsLoginManager osrsLoginManager;
     private final ScheduledExecutorService executor;
 
-    private final ConcurrentLinkedQueue<QueuedTx> outbox = new ConcurrentLinkedQueue<>();
+    /** Display-name → unacked GE fills (backed by {@link Persistance} JSONL). */
+    private final ConcurrentMap<String, List<Transaction>> unackedByDisplay = new ConcurrentHashMap<>();
     private final List<Runnable> statusListeners = new CopyOnWriteArrayList<>();
     private volatile boolean started;
     private volatile boolean registering;
@@ -156,21 +161,50 @@ public class FlipHistorySyncService {
         });
     }
 
+    /**
+     * Persist a GE fill to the unacked JSONL queue (crash-safe), then schedule upload.
+     * Safe to call before the device is linked — rows stay on disk until {@code ackedIds}.
+     */
     public void enqueue(Transaction transaction, String displayName) {
-        if (transaction == null || transaction.getId() == null || displayName == null) {
+        if (transaction == null || transaction.getId() == null || displayName == null || displayName.isEmpty()) {
             return;
+        }
+        synchronized (this) {
+            List<Transaction> unacked = unackedList(displayName);
+            UUID id = transaction.getId();
+            boolean exists = false;
+            for (Transaction existing : unacked) {
+                if (id.equals(existing.getId())) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                unacked.add(LocalFlipLedger.copyTransaction(transaction));
+                Persistance.storeUnackedTransactions(unacked, displayName);
+            }
         }
         executor.execute(() -> {
             try {
-                String osrsAccountId = ensureOsrsAccount(displayName);
-                if (osrsAccountId == null) {
-                    return;
-                }
-                outbox.add(new QueuedTx(osrsAccountId, LocalFlipLedger.copyTransaction(transaction)));
+                flushDisplay(displayName);
             } catch (Exception e) {
-                log.debug("flip history enqueue: {}", e.getMessage());
+                log.debug("flip history enqueue flush: {}", e.getMessage());
             }
         });
+    }
+
+    /** Snapshot of unacked GE fills for session ledger replay / account status. */
+    public List<Transaction> listUnacked(String displayName) {
+        if (displayName == null || displayName.isEmpty()) {
+            return new ArrayList<>();
+        }
+        synchronized (this) {
+            List<Transaction> copy = new ArrayList<>();
+            for (Transaction t : unackedList(displayName)) {
+                copy.add(LocalFlipLedger.copyTransaction(t));
+            }
+            return copy;
+        }
     }
 
     public void flushNow() {
@@ -211,6 +245,7 @@ public class FlipHistorySyncService {
         if (name != null) {
             configManager.unsetConfiguration(CONFIG_GROUP, osrsKey(name));
             ensureOsrsAccount(name);
+            flushDisplay(name);
         }
     }
 
@@ -221,7 +256,7 @@ public class FlipHistorySyncService {
             return;
         }
         backfill(displayName, osrsAccountId);
-        flush();
+        flushDisplay(displayName);
         pullFlipsDelta(displayName, osrsAccountId);
     }
 
@@ -265,9 +300,12 @@ public class FlipHistorySyncService {
         List<Transaction> all = localFlipLedger.listSourceTransactions(displayName);
         for (int i = 0; i < all.size(); i += BATCH) {
             int end = Math.min(all.size(), i + BATCH);
-            if (!postTransactions(osrsAccountId, all.subList(i, end))) {
+            List<UUID> acked = postTransactions(osrsAccountId, all.subList(i, end));
+            if (acked == null) {
                 return;
             }
+            // Session source txs may also sit in the unacked JSONL — clear overlaps.
+            removeAcked(displayName, acked);
         }
         configManager.setConfiguration(CONFIG_GROUP, doneKey, "1");
     }
@@ -276,38 +314,59 @@ public class FlipHistorySyncService {
         if (deviceToken() == null) {
             return;
         }
-        while (true) {
-            List<QueuedTx> batch = new ArrayList<>(BATCH);
-            QueuedTx next;
-            while (batch.size() < BATCH && (next = outbox.poll()) != null) {
-                batch.add(next);
-            }
-            if (batch.isEmpty()) {
-                return;
-            }
-            String osrsAccountId = batch.get(0).osrsAccountId;
-            List<Transaction> txs = new ArrayList<>();
-            List<QueuedTx> leftover = new ArrayList<>();
-            for (QueuedTx q : batch) {
-                if (osrsAccountId.equals(q.osrsAccountId)) {
-                    txs.add(q.tx);
-                } else {
-                    leftover.add(q);
-                }
-            }
-            leftover.forEach(outbox::add);
-            if (!postTransactions(osrsAccountId, txs)) {
-                for (Transaction t : txs) {
-                    outbox.add(new QueuedTx(osrsAccountId, t));
-                }
-                return;
+        Set<String> names = new HashSet<>(unackedByDisplay.keySet());
+        String current = osrsLoginManager.getPlayerDisplayName();
+        if (current != null && !current.isEmpty()) {
+            names.add(current);
+        }
+        for (String displayName : names) {
+            try {
+                flushDisplay(displayName);
+            } catch (Exception e) {
+                log.debug("flip history flush {}: {}", displayName, e.getMessage());
             }
         }
     }
 
-    private boolean postTransactions(String osrsAccountId, List<Transaction> txs) {
+    private void flushDisplay(String displayName) throws Exception {
+        if (displayName == null || displayName.isEmpty() || deviceToken() == null) {
+            return;
+        }
+        String osrsAccountId = ensureOsrsAccount(displayName);
+        if (osrsAccountId == null) {
+            return;
+        }
+        while (true) {
+            List<Transaction> batch;
+            synchronized (this) {
+                List<Transaction> unacked = unackedList(displayName);
+                if (unacked.isEmpty()) {
+                    return;
+                }
+                int end = Math.min(BATCH, unacked.size());
+                batch = new ArrayList<>(end);
+                for (int i = 0; i < end; i++) {
+                    batch.add(LocalFlipLedger.copyTransaction(unacked.get(i)));
+                }
+            }
+            List<UUID> acked = postTransactions(osrsAccountId, batch);
+            if (acked == null) {
+                return;
+            }
+            if (acked.isEmpty()) {
+                // Server accepted nothing usable — avoid tight retry loop on bad rows.
+                return;
+            }
+            removeAcked(displayName, acked);
+        }
+    }
+
+    /**
+     * Upload a batch. Returns acked transaction ids on success, or {@code null} on transport/HTTP failure.
+     */
+    private List<UUID> postTransactions(String osrsAccountId, List<Transaction> txs) {
         if (txs == null || txs.isEmpty()) {
-            return true;
+            return new ArrayList<>();
         }
         JsonObject req = new JsonObject();
         req.addProperty("osrsAccountId", osrsAccountId);
@@ -319,7 +378,45 @@ public class FlipHistorySyncService {
             }
         }
         req.add("transactions", arr);
-        return post("/v1/account/transactions", req, true) != null;
+        JsonObject body = post("/v1/account/transactions", req, true);
+        if (body == null) {
+            return null;
+        }
+        List<UUID> acked = new ArrayList<>();
+        if (body.has("ackedIds") && body.get("ackedIds").isJsonArray()) {
+            for (JsonElement el : body.getAsJsonArray("ackedIds")) {
+                if (el == null || el.isJsonNull()) {
+                    continue;
+                }
+                try {
+                    acked.add(UUID.fromString(el.getAsString()));
+                } catch (Exception ignored) {
+                    // skip malformed ids
+                }
+            }
+        } else {
+            // Older servers without ackedIds: treat uploaded ids as acked on 200.
+            for (Transaction t : txs) {
+                if (t.getId() != null) {
+                    acked.add(t.getId());
+                }
+            }
+        }
+        return acked;
+    }
+
+    private synchronized void removeAcked(String displayName, List<UUID> ackedIds) {
+        if (ackedIds == null || ackedIds.isEmpty()) {
+            return;
+        }
+        Set<UUID> acked = new HashSet<>(ackedIds);
+        List<Transaction> unacked = unackedList(displayName);
+        unacked.removeIf(t -> t.getId() != null && acked.contains(t.getId()));
+        Persistance.storeUnackedTransactions(unacked, displayName);
+    }
+
+    private List<Transaction> unackedList(String displayName) {
+        return unackedByDisplay.computeIfAbsent(displayName, Persistance::loadUnackedTransactions);
     }
 
     private synchronized void ensureRegistered() throws Exception {
@@ -527,16 +624,6 @@ public class FlipHistorySyncService {
                 return FlipStatus.SELLING;
             default:
                 return FlipStatus.FINISHED;
-        }
-    }
-
-    private static final class QueuedTx {
-        final String osrsAccountId;
-        final Transaction tx;
-
-        QueuedTx(String osrsAccountId, Transaction tx) {
-            this.osrsAccountId = osrsAccountId;
-            this.tx = tx;
         }
     }
 }
