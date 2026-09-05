@@ -1,7 +1,6 @@
 package com.runeassist.flip.model;
 
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 import com.runeassist.flip.controller.Persistance;
 import com.runeassist.flip.rs.AccountLoginRS;
 import lombok.extern.slf4j.Slf4j;
@@ -9,11 +8,6 @@ import net.runelite.api.GrandExchangeOfferState;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -26,10 +20,10 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Local replacement for Flipping Copilot's transaction→flip server.
- * GE fills already become {@link Transaction}s in {@link TransactionManager}; this class
- * matches them FIFO-style into {@link FlipV2}s, persists them, and pushes them into
- * {@link FlipManager} so the panel / flips dialog can show profit without an FC account.
+ * Session-only replacement for Flipping Copilot's transaction→flip server.
+ * GE fills become {@link Transaction}s in {@link TransactionManager}; this class matches
+ * them FIFO-style into {@link FlipV2}s in memory and pushes them into {@link FlipManager}
+ * so the panel / flips dialog can show live-session profit. No disk backup of flip history.
  */
 @Slf4j
 @Singleton
@@ -153,7 +147,6 @@ public class LocalFlipLedger {
             return 0L;
         }
         long profit = applyToBook(book, transaction);
-        persist(book);
         return profit;
     }
 
@@ -176,8 +169,7 @@ public class LocalFlipLedger {
             changed = true;
         }
         if (changed) {
-            persist(book);
-        }
+            }
     }
 
     public synchronized void ensureHydrated(int accountId) {
@@ -223,13 +215,11 @@ public class LocalFlipLedger {
             }
         }
         if (changed) {
-            persist(books.get(displayName));
         }
     }
 
     public synchronized void recordCancelled(String displayName, SavedOffer offer) {
         if (addCancelled(displayName, offer)) {
-            persist(books.get(displayName));
         }
     }
 
@@ -266,7 +256,6 @@ public class LocalFlipLedger {
             return null;
         }
         book.dismissals.add(dismissalKey(flip.getItemId(), flip.getOpenedTime()));
-        persist(book);
         // Push a deleted copy into FlipManager so open/incomplete UI drops it immediately,
         // while the ledger book keeps the live flip for future sell matching.
         FlipV2 hidden = copyFlip(flip);
@@ -277,47 +266,34 @@ public class LocalFlipLedger {
         return copyFlip(flip);
     }
 
+
     /**
-     * Apply cloud portfolio dismissals keyed by (itemId, openedTime).
-     *
-     * @return number of flips newly dismissed
+     * Soft-delete a flip from the session UI.
      */
-    public synchronized int applyCloudDismissals(String displayName, List<Dismissal> dismissals) {
-        if (displayName == null || displayName.isEmpty() || dismissals == null || dismissals.isEmpty()) {
-            return 0;
+    public synchronized FlipV2 deleteFlip(String displayName, UUID flipId) {
+        if (displayName == null || displayName.isEmpty() || flipId == null) {
+            return null;
         }
         hydrate(displayName);
         AccountBook book = books.get(displayName);
         if (book == null) {
-            return 0;
+            return null;
         }
-        int changed = 0;
-        for (Dismissal d : dismissals) {
-            if (d == null) {
-                continue;
-            }
-            String key = dismissalKey(d.itemId, d.openedTime);
-            if (!book.dismissals.add(key)) {
-                continue;
-            }
-            changed += 1;
-            for (FlipV2 flip : book.flips.values()) {
-                if (flip == null || FlipStatus.FINISHED.equals(flip.getStatus())) {
-                    continue;
-                }
-                if (flip.getItemId() != d.itemId || flip.getOpenedTime() != d.openedTime) {
-                    continue;
-                }
-                FlipV2 hidden = copyFlip(flip);
-                hidden.setDeleted(true);
-                hidden.setSeqNo(hidden.getSeqNo() + 1);
-                push(hidden);
-            }
+        FlipV2 flip = book.flips.get(flipId);
+        if (flip == null) {
+            return null;
         }
-        if (changed > 0) {
-            persist(book);
+        FlipV2 hidden = copyFlip(flip);
+        hidden.setDeleted(true);
+        hidden.setSeqNo(hidden.getSeqNo() + 1);
+        hidden.setUpdatedTime((int) Instant.now().getEpochSecond());
+        book.flips.put(flipId, hidden);
+        FlipV2 open = book.openByItemId.get(flip.getItemId());
+        if (open != null && flipId.equals(open.getId())) {
+            book.openByItemId.remove(flip.getItemId());
         }
-        return changed;
+        push(hidden);
+        return hidden;
     }
 
     public synchronized boolean isDismissed(String displayName, int itemId, int openedTime) {
@@ -331,16 +307,6 @@ public class LocalFlipLedger {
 
     private static String dismissalKey(int itemId, int openedTime) {
         return itemId + ":" + openedTime;
-    }
-
-    public static final class Dismissal {
-        public final int itemId;
-        public final int openedTime;
-
-        public Dismissal(int itemId, int openedTime) {
-            this.itemId = itemId;
-            this.openedTime = openedTime;
-        }
     }
 
     private boolean addCancelled(String displayName, SavedOffer offer) {
@@ -418,32 +384,6 @@ public class LocalFlipLedger {
      * Raw GE fills for cloud upload. Oldest first. Reconstructs from signed acked rows
      * when a ledger file predates {@code sourceTransactions}.
      */
-    public synchronized List<Transaction> listSourceTransactions(String displayName) {
-        if (displayName == null || displayName.isEmpty()) {
-            return Collections.emptyList();
-        }
-        hydrate(displayName);
-        AccountBook book = books.get(displayName);
-        if (book == null) {
-            return Collections.emptyList();
-        }
-        if (!book.sourceTransactions.isEmpty()) {
-            List<Transaction> copy = new ArrayList<>(book.sourceTransactions.size());
-            for (Transaction t : book.sourceTransactions) {
-                copy.add(copyTransaction(t));
-            }
-            return copy;
-        }
-        List<Transaction> reconstructed = new ArrayList<>();
-        for (int i = book.transactions.size() - 1; i >= 0; i--) {
-            Transaction t = fromAcked(book.transactions.get(i));
-            if (t != null) {
-                reconstructed.add(t);
-            }
-        }
-        return reconstructed;
-    }
-
     private long applyToBook(AccountBook book, Transaction transaction) {
         UUID txId = transaction.getId() != null ? transaction.getId() : UUID.randomUUID();
         transaction.setId(txId);
@@ -502,101 +442,7 @@ public class LocalFlipLedger {
         AccountBook book = new AccountBook();
         book.displayName = displayName;
         book.accountId = accountIdFor(displayName);
-        File file = bookFile(displayName);
-        if (!file.exists()) {
-            return book;
-        }
-        try {
-            String json = Files.readString(file.toPath(), StandardCharsets.UTF_8);
-            PersistedState saved = gson.fromJson(json, new TypeToken<PersistedState>(){}.getType());
-            if (saved == null) {
-                return book;
-            }
-            if (saved.accountId != 0) {
-                book.accountId = saved.accountId;
-            }
-            if (saved.flips != null) {
-                for (FlipV2 flip : saved.flips) {
-                    if (flip == null || flip.getId() == null) {
-                        continue;
-                    }
-                    flip.setAccountId(book.accountId);
-                    flip.setUserId(LOCAL_USER_ID);
-                    book.flips.put(flip.getId(), flip);
-                    if (!FlipStatus.FINISHED.equals(flip.getStatus()) && !flip.isDeleted()) {
-                        book.openByItemId.put(flip.getItemId(), flip);
-                    }
-                }
-            }
-            if (saved.transactions != null) {
-                book.transactions.addAll(saved.transactions);
-            }
-            if (saved.appliedTransactionIds != null) {
-                for (String id : saved.appliedTransactionIds) {
-                    try {
-                        book.appliedTxIds.add(UUID.fromString(id));
-                    } catch (IllegalArgumentException ignored) {
-                        // skip malformed ids
-                    }
-                }
-            }
-            if (saved.cancelled != null) {
-                for (CancelledLeftover row : saved.cancelled) {
-                    if (row == null || row.id == null) {
-                        continue;
-                    }
-                    book.cancelled.put(row.id, row);
-                }
-            }
-            if (saved.sourceTransactions != null) {
-                for (Transaction t : saved.sourceTransactions) {
-                    if (t != null) {
-                        book.sourceTransactions.add(t);
-                    }
-                }
-            }
-            if (saved.dismissals != null) {
-                book.dismissals.addAll(saved.dismissals);
-            }
-            log.info("loaded {} local flips / {} transactions / {} cancelled leftovers / {} dismissals for {}",
-                    book.flips.size(), book.transactions.size(), book.cancelled.size(), book.dismissals.size(), displayName);
-        } catch (Exception e) {
-            log.warn("failed loading local flip ledger for {}", displayName, e);
-        }
         return book;
-    }
-
-    private void persist(AccountBook book) {
-        try {
-            File dir = Persistance.PLUGIN_DIR;
-            if (!dir.exists() && !dir.mkdirs()) {
-                log.warn("unable to create {}", dir);
-                return;
-            }
-            PersistedState state = new PersistedState();
-            state.accountId = book.accountId;
-            state.displayName = book.displayName;
-            state.flips = new ArrayList<>(book.flips.values());
-            state.transactions = new ArrayList<>(book.transactions);
-            state.appliedTransactionIds = new ArrayList<>();
-            for (UUID id : book.appliedTxIds) {
-                state.appliedTransactionIds.add(id.toString());
-            }
-            state.cancelled = new ArrayList<>(book.cancelled.values());
-            state.dismissals = new ArrayList<>(book.dismissals);
-            state.sourceTransactions = new ArrayList<>(book.sourceTransactions.size());
-            for (Transaction t : book.sourceTransactions) {
-                state.sourceTransactions.add(copyTransaction(t));
-            }
-            File file = bookFile(book.displayName);
-            Files.writeString(file.toPath(), gson.toJson(state), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.warn("failed saving local flip ledger for {}", book.displayName, e);
-        }
-    }
-
-    private static File bookFile(String displayName) {
-        return new File(Persistance.PLUGIN_DIR, Persistance.hashDisplayName(displayName) + "_local_flips.json");
     }
 
     public static int accountIdFor(String displayName) {
@@ -660,17 +506,6 @@ public class LocalFlipLedger {
         final List<Transaction> sourceTransactions = new ArrayList<>();
         /** itemId:openedTime keys for open lots removed from the portfolio UI. */
         final Set<String> dismissals = new HashSet<>();
-    }
-
-    static final class PersistedState {
-        int accountId;
-        String displayName;
-        List<FlipV2> flips;
-        List<AckedTransaction> transactions;
-        List<String> appliedTransactionIds;
-        List<CancelledLeftover> cancelled;
-        List<Transaction> sourceTransactions;
-        List<String> dismissals;
     }
 
     public static final class CancelledLeftover {
