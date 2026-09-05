@@ -192,7 +192,11 @@ public class RuneAssistPlugin extends Plugin {
 		grandExchangeCollectHandler.setSuggestionPanel(mainPanel.runeAssistPanel.suggestionPanel);
 		statsPanel = mainPanel.runeAssistPanel.statsPanel;
 
-		mainPanel.refresh();
+		// On the client thread, as every other refresh site already is: the status strip reads
+		// the inventory through AccountStatusManager, and client.getItemContainer asserts it is
+		// called from there. startUp runs on the Swing EDT, so refreshing straight from here
+		// raised an AssertionError that aborted plugin startup outright.
+		clientThread.invokeLater(mainPanel::refresh);
 		SwingUtilities.invokeLater(() -> patchNotesController.maybeShowOnStartup(mainPanel, hadExistingInstallation));
 
 		if(osrsLoginManager.getInvalidStateDisplayMessage() == null) {

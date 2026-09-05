@@ -107,7 +107,11 @@ public class StatusStrip extends JPanel {
         }
         try {
             return accountStatusManager.getAccountStatus();
-        } catch (RuntimeException ignored) {
+        } catch (Throwable ignored) {
+            // Throwable, not RuntimeException: reading the inventory off the client thread
+            // raises an AssertionError under -ea, which is an Error and slipped straight past,
+            // taking the panel -- and with it plugin startup -- down with it. This strip is
+            // decoration; it renders without a status rather than stopping anything else.
             return null;
         }
     }
