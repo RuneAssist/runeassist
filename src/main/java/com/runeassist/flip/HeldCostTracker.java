@@ -196,6 +196,55 @@ public class HeldCostTracker
     }
 
     /**
+     * Drop tracked held stock for {@code itemId} -- what the portfolio panel's "Remove from
+     * portfolio" now does. FC's version posted to their cloud {@code toggle-item-portfolio}
+     * endpoint, which this fork never reaches, so removal silently did nothing at all.
+     * {@code qty <= 0} removes every lot for the item; otherwise the oldest lots go first,
+     * the same FIFO order a sell would consume them in. Returns the quantity removed.
+     *
+     * <p>This forgets a cost basis; it does not sell, bank or otherwise touch the item in
+     * game. Units still filling on a live buy offer are re-floored back into the portfolio on
+     * the next suggestion cycle (see {@code mergeHeldWithOfferFills} in the suggestion
+     * source), so removing those only sticks once the offer is collected.</p>
+     */
+    public synchronized int removeLots(String displayName, int itemId, int qty)
+    {
+        if (itemId <= 0) return 0;
+        Account acc = account(displayName);
+        ensureLoaded(displayName, acc);
+        int before = heldQty(acc, itemId);
+        if (before <= 0) return 0;
+        if (qty <= 0) acc.positions.remove(itemId);
+        else consumeSell(acc, itemId, qty);
+        save(displayName, acc);
+        return before - heldQty(acc, itemId);
+    }
+
+    /** Drop every tracked lot for this account -- "Remove everything from portfolio". */
+    public synchronized int clearLots(String displayName)
+    {
+        Account acc = account(displayName);
+        ensureLoaded(displayName, acc);
+        int removed = 0;
+        for (Deque<Lot> lots : acc.positions.values())
+        {
+            for (Lot l : lots) removed += l.qty;
+        }
+        acc.positions.clear();
+        save(displayName, acc);
+        return removed;
+    }
+
+    private static int heldQty(Account acc, int itemId)
+    {
+        Deque<Lot> lots = acc.positions.get(itemId);
+        if (lots == null) return 0;
+        int qty = 0;
+        for (Lot l : lots) qty += l.qty;
+        return qty;
+    }
+
+    /**
      * When GE history opens, add FIFO lots for completed buys that are not already in
      * this tracker. Does not record 4h limit usage (history usually has no timestamps)
      * and does not autotype. Returns the number of lots added.
