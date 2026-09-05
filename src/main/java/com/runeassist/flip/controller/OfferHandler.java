@@ -65,6 +65,8 @@ public class OfferHandler {
 
             // Price an item the suggestion engine didn't propose via Ares /v1/market/quote.
             // Blocks on HTTP, so run off the client thread and marshal the result back.
+            // Quote may include a wiki-feature hint in "message" (freshness / confidence) —
+            // same offer-editor slot FC fills from ItemPrice.message, without a closed quant.
             viewedSlotPriceErrorText = "Loading price...";
             final int itemIdForQuote = currentItemId;
             executorService.execute(() -> {
@@ -76,10 +78,25 @@ public class OfferHandler {
                         viewedSlotPriceErrorText = "No price data for this item.";
                         return;
                     }
-                    viewedSlotPriceErrorText = null;
+                    Object hint = fq.get("message");
+                    if (hint instanceof String && !((String) hint).isEmpty()) {
+                        viewedSlotPriceErrorText = (String) hint;
+                    } else {
+                        viewedSlotPriceErrorText = null;
+                    }
+                    Number buyAt = fq.get("buy_at") instanceof Number ? (Number) fq.get("buy_at") : null;
+                    Number sellAt = fq.get("sell_at") instanceof Number ? (Number) fq.get("sell_at") : null;
+                    if (buyAt == null && sellAt == null) {
+                        viewedSlotPriceErrorText = "No price data for this item.";
+                        return;
+                    }
                     long price = isSelling()
-                        ? ((Number) fq.get("sell_at")).longValue()
-                        : ((Number) fq.get("buy_at")).longValue();
+                        ? (sellAt != null ? sellAt.longValue() : buyAt.longValue())
+                        : (buyAt != null ? buyAt.longValue() : sellAt.longValue());
+                    if (price <= 0) {
+                        viewedSlotPriceErrorText = "No price data for this item.";
+                        return;
+                    }
                     offerManager.setViewedSlotItemPrice(price);
 
                     highlightController.redraw();
@@ -92,7 +109,12 @@ public class OfferHandler {
 
                     OfferEditor flippingWidget = offerEditorSupplier.get();
                     if (flippingWidget != null) {
-                        flippingWidget.showPrice(price);
+                        String warn = viewedSlotPriceErrorText;
+                        if (warn != null && (warn.startsWith("Loading") || warn.startsWith("No price"))) {
+                            flippingWidget.showPrice(price);
+                        } else {
+                            flippingWidget.showPrice(price, warn);
+                        }
                     }
                 });
             });
