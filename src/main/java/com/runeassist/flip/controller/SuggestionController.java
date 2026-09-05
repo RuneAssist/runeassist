@@ -313,7 +313,7 @@ public class SuggestionController {
         };
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
-        // Ranked candidates from Ares; LocalSuggestionEngine composes against live GE state.
+        // Ranked candidates from Ares; compose prefers /v1/suggestion, else LocalSuggestionEngine.
         suggestionManager.setGraphDataReadingInProgress(false); // graph is served separately
         runeAssistSource.getSuggestionAsync(suggestionConsumer);
     }

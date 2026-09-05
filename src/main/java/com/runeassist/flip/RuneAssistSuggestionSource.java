@@ -1,6 +1,7 @@
 package com.runeassist.flip;
 
 import com.runeassist.flip.model.AccountStatusManager;
+import com.runeassist.flip.model.ComposeSuggestionRequest;
 import com.runeassist.flip.model.ModifyStep;
 import com.runeassist.flip.model.OsrsLoginManager;
 import com.runeassist.flip.model.RiskLevel;
@@ -33,10 +34,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 /**
- * Source of the next flip {@link Suggestion}. Market ranking comes from Ares
- * ({@link AresMarketClient#topFlips}); live GE / held composition stays on-device via
- * {@link LocalSuggestionEngine}. Snapshots offers + coins on the client thread, fetches
- * ranked candidates off-thread, then delivers the Suggestion back on the client thread.
+ * Source of the next flip {@link Suggestion}. Prefers Ares {@code POST /v1/suggestion}
+ * (server ranks + composes). When that endpoint is missing or fails, falls back to
+ * {@code /v1/flips} + {@link LocalSuggestionEngine}. Snapshots offers + coins on the
+ * client thread; ranking stays proprietary on Ares.
  */
 @Slf4j
 @Singleton
@@ -127,62 +128,32 @@ public class RuneAssistSuggestionSource
                 int ge = market.geLimit(e.getKey());
                 if (ge > 0) remainingHint.put(e.getKey(), Math.max(0, ge - e.getValue()));
             }
+            Set<Integer> protectAbort = new HashSet<>(accountStatusManager.getProtectAbortItemIds());
 
-            List<Map<String, Object>> buys;
+            // Prefer server composition when Ares ships /v1/suggestion. On 404/failure,
+            // LocalSuggestionEngine remains the fallback so the panel never goes blank.
+            ComposeSuggestionRequest composeReq = buildComposeRequest(
+                coins, timeframe, risk, f2pOnly, maxSlots, remainingSlots, minProfit,
+                remainingHint, usedLimit, blocked, skipped, skipOffers, protectAbort,
+                offersBySlot, held, ownedModifySnap);
             try
             {
-                buys = market.topFlips(coins > 0 ? coins : 0L, timeframe, risk,
-                    !f2pOnly, remainingSlots, remainingHint, usedLimit, blocked, skipped,
-                    minProfit);
+                suggestion = market.composeSuggestion(composeReq);
             }
             catch (Exception e)
             {
-                log.warn("topFlips failed; continuing with sell-only rows", e);
-                buys = java.util.Collections.emptyList();
-            }
-
-            // Sell entries for held stock (side="sell"), so LocalSuggestionEngine can offer sells.
-            List<Map<String, Object>> combined = new java.util.ArrayList<>(buildSells(held, skipped));
-            if (buys != null) combined.addAll(buys);
-            addMarketHealthForOffers(combined, offersBySlot, held, timeframe, risk, !f2pOnly);
-
-            Map<Integer, Integer> remainingLimit = remainingLimits(displayName, combined, offersBySlot);
-
-            LocalSuggestionEngine.Input in = new LocalSuggestionEngine.Input();
-            in.scoredFlips = combined;
-            in.offersBySlot = offersBySlot;
-            in.held = held;
-            in.coins = coins;
-            in.maxSlots = maxSlots;
-            in.skippedItemIds = skipped;
-            in.blockedItemIds = blocked;
-            in.skipOfferItemIds = skipOffers;
-            in.protectAbortItemIds = new HashSet<>(accountStatusManager.getProtectAbortItemIds());
-            applyOwnedModify(in, ownedModifySnap);
-            in.remainingBuyLimit = remainingLimit;
-            in.minPredictedProfit = minProfit;
-            in.timeframeMinutes = timeframe;
-            in.nowMs = System.currentTimeMillis();
-
-            try { suggestion = LocalSuggestionEngine.next(in); }
-            catch (Exception e) {
-                log.warn("suggestion engine failed; falling back to Wait with slot status", e);
+                log.warn("composeSuggestion failed; falling back to local engine", e);
                 suggestion = null;
             }
-            if (suggestion != null && suggestion.isModifySuggestion()
-                    && (skipOffers.contains(suggestion.getItemId())
-                        || skipped.contains(suggestion.getItemId())
-                        || blocked.contains(suggestion.getItemId())))
+
+            if (suggestion == null)
             {
-                accountStatusManager.clearOwnedModify();
-                in.ownedModifyItemId = 0;
-                in.ownedModifySlot = -1;
-                try { suggestion = LocalSuggestionEngine.next(in); }
-                catch (Exception e) {
-                    log.warn("suggestion engine retry after dropped MODIFY failed", e);
-                    suggestion = null;
-                }
+                suggestion = composeLocally(displayName, coins, timeframe, risk, f2pOnly,
+                    maxSlots, remainingSlots, minProfit, remainingHint, usedLimit,
+                    blocked, skipped, skipOffers, protectAbort, offersBySlot, held,
+                    ownedModifySnap);
             }
+
             try
             {
                 Suggestion decant = buildDecantCandidate(displayName, offersBySlot, coins, remainingSlots, blocked, skipped, ownedQty, carriedPotions);
@@ -195,9 +166,12 @@ public class RuneAssistSuggestionSource
             {
                 log.warn("decant candidate failed", e);
             }
-            if (suggestion != null)
+            if (suggestion != null
+                    && (suggestion.getPickSource() == null || suggestion.getPickSource().isEmpty()))
             {
-                suggestion.setPickSource(market.lastFromAres() ? "ares" : "none");
+                suggestion.setPickSource(market.lastFromCompose()
+                    ? "ares-compose"
+                    : (market.lastFromAres() ? "ares" : "none"));
             }
             if (suggestion != null && suggestion.getItemId() > 0)
             {
@@ -263,7 +237,9 @@ public class RuneAssistSuggestionSource
                 suggestion.setTimeIssued(Instant.now());
                 if (suggestion.getPickSource() == null || suggestion.getPickSource().isEmpty())
                 {
-                    suggestion.setPickSource(market.lastFromAres() ? "ares" : "none");
+                    suggestion.setPickSource(market.lastFromCompose()
+                        ? "ares-compose"
+                        : (market.lastFromAres() ? "ares" : "none"));
                 }
                 try { stampLimitFields(displayName, suggestion, offersBySlot); }
                 catch (Exception e) { log.warn("limit stamp failed", e); }
@@ -581,6 +557,172 @@ public class RuneAssistSuggestionSource
             snap.name = current.getName() != null ? current.getName() : "";
         }
         return snap;
+    }
+
+    /**
+     * Fallback path while Ares {@code /v1/suggestion} is undeployed or unreachable.
+     * Keeps LocalSuggestionEngine so the plugin stays usable — remove once compose is
+     * mandatory server-side and the 404 probe is gone.
+     */
+    private Suggestion composeLocally(String displayName, long coins, int timeframe, RiskLevel risk,
+                                      boolean f2pOnly, int maxSlots, int remainingSlots, long minProfit,
+                                      Map<Integer, Integer> remainingHint, Map<Integer, Integer> usedLimit,
+                                      Set<Integer> blocked, Set<Integer> skipped, Set<Integer> skipOffers,
+                                      Set<Integer> protectAbort, long[][] offersBySlot,
+                                      Map<Integer, long[]> held, OwnedModifySnapshot ownedModifySnap)
+    {
+        List<Map<String, Object>> buys;
+        try
+        {
+            buys = market.topFlips(coins > 0 ? coins : 0L, timeframe, risk,
+                !f2pOnly, remainingSlots, remainingHint, usedLimit, blocked, skipped,
+                minProfit);
+        }
+        catch (Exception e)
+        {
+            log.warn("topFlips failed; continuing with sell-only rows", e);
+            buys = java.util.Collections.emptyList();
+        }
+
+        List<Map<String, Object>> combined = new java.util.ArrayList<>(buildSells(held, skipped));
+        if (buys != null) combined.addAll(buys);
+        addMarketHealthForOffers(combined, offersBySlot, held, timeframe, risk, !f2pOnly);
+
+        Map<Integer, Integer> remainingLimit = remainingLimits(displayName, combined, offersBySlot);
+
+        LocalSuggestionEngine.Input in = new LocalSuggestionEngine.Input();
+        in.scoredFlips = combined;
+        in.offersBySlot = offersBySlot;
+        in.held = held;
+        in.coins = coins;
+        in.maxSlots = maxSlots;
+        in.skippedItemIds = skipped;
+        in.blockedItemIds = blocked;
+        in.skipOfferItemIds = skipOffers;
+        in.protectAbortItemIds = protectAbort;
+        applyOwnedModify(in, ownedModifySnap);
+        in.remainingBuyLimit = remainingLimit;
+        in.minPredictedProfit = minProfit;
+        in.timeframeMinutes = timeframe;
+        in.nowMs = System.currentTimeMillis();
+
+        Suggestion suggestion;
+        try { suggestion = LocalSuggestionEngine.next(in); }
+        catch (Exception e) {
+            log.warn("suggestion engine failed; falling back to Wait with slot status", e);
+            suggestion = null;
+        }
+        if (suggestion != null && suggestion.isModifySuggestion()
+                && (skipOffers.contains(suggestion.getItemId())
+                    || skipped.contains(suggestion.getItemId())
+                    || blocked.contains(suggestion.getItemId())))
+        {
+            accountStatusManager.clearOwnedModify();
+            in.ownedModifyItemId = 0;
+            in.ownedModifySlot = -1;
+            try { suggestion = LocalSuggestionEngine.next(in); }
+            catch (Exception e) {
+                log.warn("suggestion engine retry after dropped MODIFY failed", e);
+                suggestion = null;
+            }
+        }
+        return suggestion;
+    }
+
+    private static ComposeSuggestionRequest buildComposeRequest(
+            long coins, int timeframe, RiskLevel risk, boolean f2pOnly,
+            int maxSlots, int remainingSlots, long minProfit,
+            Map<Integer, Integer> remainingHint, Map<Integer, Integer> usedLimit,
+            Set<Integer> blocked, Set<Integer> skipped, Set<Integer> skipOffers,
+            Set<Integer> protectAbort, long[][] offersBySlot, Map<Integer, long[]> held,
+            OwnedModifySnapshot ownedModifySnap)
+    {
+        ComposeSuggestionRequest req = new ComposeSuggestionRequest();
+        req.setCapital(coins > 0 ? coins : 0L);
+        req.setTimeframeMinutes(Math.max(1, timeframe));
+        req.setRisk(risk != null ? risk.toApiValue() : "medium");
+        req.setMembersItemsAllowed(!f2pOnly);
+        req.setF2pOnly(f2pOnly);
+        req.setMaxSlots(maxSlots);
+        req.setRemainingSlots(Math.max(0, remainingSlots));
+        req.setMinPredictedProfit(minProfit);
+        req.setRemainingBuyLimit(stringifyKeys(remainingHint));
+        req.setUsedBuyLimit(stringifyKeys(usedLimit));
+        if (blocked != null) req.setBlockedIds(new ArrayList<>(blocked));
+        if (skipped != null) req.setSkippedIds(new ArrayList<>(skipped));
+        if (skipOffers != null) req.setSkipOfferItemIds(new ArrayList<>(skipOffers));
+        if (protectAbort != null) req.setProtectAbortItemIds(new ArrayList<>(protectAbort));
+        req.setOffers(toOfferSnapshots(offersBySlot));
+        req.setHeld(toHeldSnapshots(held));
+        if (ownedModifySnap != null && ownedModifySnap.itemId > 0)
+        {
+            ComposeSuggestionRequest.OwnedModifySnapshot om =
+                new ComposeSuggestionRequest.OwnedModifySnapshot();
+            om.setSlot(ownedModifySnap.slot);
+            om.setItemId(ownedModifySnap.itemId);
+            om.setBuy(ownedModifySnap.buy);
+            om.setTargetPrice(ownedModifySnap.targetPrice);
+            om.setQuantity(ownedModifySnap.quantity);
+            om.setName(ownedModifySnap.name != null ? ownedModifySnap.name : "");
+            om.setOfferPrice(ownedModifySnap.offerPrice);
+            req.setOwnedModify(om);
+        }
+        req.setNowMs(System.currentTimeMillis());
+        return req;
+    }
+
+    private static Map<String, Integer> stringifyKeys(Map<Integer, Integer> in)
+    {
+        Map<String, Integer> out = new java.util.LinkedHashMap<>();
+        if (in == null) return out;
+        for (Map.Entry<Integer, Integer> e : in.entrySet())
+        {
+            if (e.getKey() == null || e.getValue() == null) continue;
+            out.put(String.valueOf(e.getKey()), e.getValue());
+        }
+        return out;
+    }
+
+    private static List<ComposeSuggestionRequest.OfferSnapshot> toOfferSnapshots(long[][] offersBySlot)
+    {
+        List<ComposeSuggestionRequest.OfferSnapshot> out = new ArrayList<>();
+        if (offersBySlot == null) return out;
+        for (int slot = 0; slot < offersBySlot.length; slot++)
+        {
+            long[] o = offersBySlot[slot];
+            if (o == null || o.length < 6) continue;
+            int itemId = (int) o[0];
+            if (itemId <= 0) continue;
+            ComposeSuggestionRequest.OfferSnapshot snap = new ComposeSuggestionRequest.OfferSnapshot();
+            snap.setSlot(slot);
+            snap.setItemId(itemId);
+            snap.setBuy(o[1] == 1L);
+            snap.setPrice(o[2]);
+            snap.setSold((int) Math.max(0L, o[3]));
+            snap.setTotal((int) Math.max(0L, o[4]));
+            snap.setFilling(o[5] == 1L);
+            if (o.length > 6) snap.setLastProgressMs(o[6]);
+            if (o.length > 7) snap.setListedMs(o[7]);
+            out.add(snap);
+        }
+        return out;
+    }
+
+    private static List<ComposeSuggestionRequest.HeldSnapshot> toHeldSnapshots(Map<Integer, long[]> held)
+    {
+        List<ComposeSuggestionRequest.HeldSnapshot> out = new ArrayList<>();
+        if (held == null) return out;
+        for (Map.Entry<Integer, long[]> e : held.entrySet())
+        {
+            if (e.getKey() == null || e.getValue() == null || e.getValue().length < 1) continue;
+            if (e.getValue()[0] <= 0L) continue;
+            ComposeSuggestionRequest.HeldSnapshot h = new ComposeSuggestionRequest.HeldSnapshot();
+            h.setItemId(e.getKey());
+            h.setQty(e.getValue()[0]);
+            h.setAvgBuy(e.getValue().length > 1 ? e.getValue()[1] : 0L);
+            out.add(h);
+        }
+        return out;
     }
 
     /** Pure field copy onto {@code in} — no client-thread calls, safe from the background thread. */

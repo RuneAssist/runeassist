@@ -28,7 +28,7 @@ public interface RuneAssistConfig extends Config
             description = "Off by default. Uploads GE offers, completed GE history and flip-panel " +
                     "decisions to RuneAssist's server under a pseudonymous account hash (SHA-256 of " +
                     "your RSN). Never sends chat, bank contents or your RSN in plain text. Does not " +
-                    "gate flip suggestions (those use the server's /v1/flips independently). Untick " +
+                    "gate flip suggestions (those use the server's /v1/suggestion and /v1/flips independently). Untick " +
                     "stays local. No endpoint or token needed for the hosted server.",
             warning = "This feature submits your Grand Exchange offers and IP address to a 3rd-party server not controlled or verified by RuneLite developers",
             section = privacySection,
