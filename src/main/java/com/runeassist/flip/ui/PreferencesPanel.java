@@ -344,7 +344,7 @@ public class PreferencesPanel extends JPanel {
         addVerticalGap(preferencesContent, 4);
 
         JLabel cloudIntro = RuneAssistColors.caption(
-                "Recent Flips sync from the server after this client is linked (device register + OSRS account). There is no local-only history mode.");
+                "Link this client (device + OSRS account) to unlock Recent Flips — same gate as signing in. History is stored on your RuneAssist account; there is no local-only history mode.");
         cloudIntro.setAlignmentX(Component.LEFT_ALIGNMENT);
         preferencesContent.add(cloudIntro);
         addVerticalGap(preferencesContent, 4);

@@ -35,7 +35,8 @@ import java.util.concurrent.*;
 
 @Slf4j
 // Self-wiring flipping plugin. Suggestions come from RuneAssistSuggestionSource
-// (Ares /v1/suggestion compose + held-cost / held-decant).
+// (Ares /v1/suggestion compose + held-cost tracking).
+// No Flipping Copilot account or servers.
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
 		description = "Grand Exchange flipping assistant with server compose suggestions, held-cost tracking, and Ares market data. Anonymous contribution is opt-in (Configuration -> Privacy).",
