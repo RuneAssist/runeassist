@@ -124,9 +124,6 @@ public class RuneAssistPlugin extends Plugin {
 	private BankStateRS bankStateRS;
 
 	@Inject
-	private com.runeassist.flip.ShopLiveTracker shopLiveTracker;
-
-	@Inject
 	private GeHistoryStateRS geHistoryStateRS;
 	@Inject
 	private PatchNotesController patchNotesController;
@@ -268,8 +265,6 @@ public class RuneAssistPlugin extends Plugin {
 
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event) {
-		shopLiveTracker.onItemContainerChanged(event);
-
 		boolean inventoryChanged = event.getContainerId() == InventoryID.INV;
 		boolean bankChanged = event.getContainerId() == InventoryID.BANK;
 
