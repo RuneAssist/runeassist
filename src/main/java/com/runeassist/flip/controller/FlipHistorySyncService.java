@@ -12,6 +12,7 @@ import com.runeassist.flip.model.OfferStatus;
 import com.runeassist.flip.model.OsrsLoginManager;
 import com.runeassist.flip.model.SuggestionManager;
 import com.runeassist.flip.model.Transaction;
+import com.runeassist.flip.model.VisualizeFlipResponse;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.config.ConfigManager;
 import okhttp3.MediaType;
@@ -38,6 +39,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
     /** Server-owned flip history. GE fills persist to an unacked JSONL queue until */
 @Slf4j
@@ -119,6 +121,15 @@ public class FlipHistorySyncService {
 
     public boolean isLinked() {
         return deviceToken() != null && userId() != null;
+    }
+
+    /** True when this install has cached an OSRS account id for the given display name. */
+    public boolean isOsrsLinked(String displayName) {
+        if (displayName == null || displayName.isEmpty() || !isLinked()) {
+            return false;
+        }
+        String cached = configManager.getConfiguration(CONFIG_GROUP, osrsKey(displayName));
+        return cached != null && !cached.isEmpty();
     }
 
     /** Short line for Preferences → Flip history. */
@@ -544,6 +555,59 @@ public class FlipHistorySyncService {
             }
         });
         return true;
+    }
+
+    /**
+     * Server lots + graph for one flip ({@code GET /v1/account/visualize-flip}).
+     * Invokes {@code onSuccess} on the worker thread (caller should hop to EDT for UI).
+     */
+    public void asyncVisualizeFlip(
+            String displayName,
+            UUID flipId,
+            Consumer<VisualizeFlipResponse> onSuccess,
+            Consumer<String> onFailure) {
+        if (onSuccess == null) {
+            return;
+        }
+        if (displayName == null || displayName.isEmpty() || flipId == null || !isLinked()) {
+            if (onFailure != null) {
+                onFailure.accept("not linked");
+            }
+            return;
+        }
+        executor.execute(() -> {
+            try {
+                String osrsAccountId = ensureOsrsAccount(displayName);
+                if (osrsAccountId == null) {
+                    if (onFailure != null) {
+                        onFailure.accept("OSRS account not linked");
+                    }
+                    return;
+                }
+                String path = "/v1/account/visualize-flip?osrsAccountId=" + urlEnc(osrsAccountId)
+                        + "&flipId=" + urlEnc(flipId.toString());
+                JsonObject body = get(path, true);
+                if (body == null) {
+                    if (onFailure != null) {
+                        onFailure.accept("visualize-flip request failed");
+                    }
+                    return;
+                }
+                if (body.has("error") && !body.get("error").isJsonNull()) {
+                    if (onFailure != null) {
+                        onFailure.accept(body.get("error").getAsString());
+                    }
+                    return;
+                }
+                VisualizeFlipResponse rsp = VisualizeFlipResponse.fromJson(body, gson);
+                onSuccess.accept(rsp);
+            } catch (Exception e) {
+                log.warn("visualize-flip failed: {}", e.getMessage());
+                if (onFailure != null) {
+                    onFailure.accept(e.getMessage() != null ? e.getMessage() : "visualize-flip failed");
+                }
+            }
+        });
     }
 
     private void mutateFlip(String displayName, String path, UUID flipId, JsonObject extra) throws Exception {

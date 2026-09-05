@@ -1,5 +1,9 @@
 package com.runeassist.flip.model;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.runeassist.flip.ui.graph.model.Data;
 import lombok.*;
 
@@ -22,7 +26,33 @@ public class VisualizeFlipResponse {
     // set, with everything else empty, when the item has no usable price data
     public String message;
 
-    /** Overlay buy/sell markers on a price series; FlipV2 aggregates fill gaps when lot rows are empty. */
+    /**
+     * Parse Ares {@code GET /v1/account/visualize-flip} JSON (FC-shaped lot overlay + graph).
+     */
+    public static VisualizeFlipResponse fromJson(JsonObject o, Gson gson) {
+        VisualizeFlipResponse r = new VisualizeFlipResponse();
+        if (o == null) {
+            return r;
+        }
+        if (o.has("message") && !o.get("message").isJsonNull()) {
+            r.message = o.get("message").getAsString();
+        }
+        if (o.has("graphData") && o.get("graphData").isJsonObject() && gson != null) {
+            r.graphData = gson.fromJson(o.get("graphData"), Data.class);
+        }
+        r.buyTimes = intArray(o, "buyTimes");
+        r.buyVolumes = intArray(o, "buyVolumes");
+        r.buyPrices = longArray(o, "buyPrices");
+        r.sellTimes = intArray(o, "sellTimes");
+        r.sellVolumes = intArray(o, "sellVolumes");
+        r.sellPrices = longArray(o, "sellPrices");
+        return r;
+    }
+
+    /**
+     * Overlay local buy/sell lots on an Ares (or other) price series. When the ledger
+     * has no per-lot rows, FlipV2 aggregates become a single buy and/or sell marker.
+     */
     public static VisualizeFlipResponse fromLocalLots(Data graph, FlipV2 flip, List<AckedTransaction> txs) {
         VisualizeFlipResponse r = new VisualizeFlipResponse();
         r.graphData = graph;
@@ -73,6 +103,32 @@ public class VisualizeFlipResponse {
         return r;
     }
 
+    private static int[] intArray(JsonObject o, String key) {
+        if (o == null || !o.has(key) || !o.get(key).isJsonArray()) {
+            return new int[0];
+        }
+        JsonArray arr = o.getAsJsonArray(key);
+        int[] out = new int[arr.size()];
+        for (int i = 0; i < arr.size(); i++) {
+            JsonElement el = arr.get(i);
+            out[i] = el == null || el.isJsonNull() ? 0 : el.getAsInt();
+        }
+        return out;
+    }
+
+    private static long[] longArray(JsonObject o, String key) {
+        if (o == null || !o.has(key) || !o.get(key).isJsonArray()) {
+            return new long[0];
+        }
+        JsonArray arr = o.getAsJsonArray(key);
+        long[] out = new long[arr.size()];
+        for (int i = 0; i < arr.size(); i++) {
+            JsonElement el = arr.get(i);
+            out[i] = el == null || el.isJsonNull() ? 0L : el.getAsLong();
+        }
+        return out;
+    }
+
     private static int[] toIntArray(List<Integer> values) {
         int[] a = new int[values.size()];
         for (int i = 0; i < values.size(); i++) {
@@ -89,4 +145,4 @@ public class VisualizeFlipResponse {
         return a;
     }
 
-    }
+}
