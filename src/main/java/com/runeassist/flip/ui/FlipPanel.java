@@ -6,7 +6,6 @@ import net.runelite.client.ui.FontManager;
 
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
-import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.SwingConstants;
@@ -14,6 +13,7 @@ import javax.swing.SwingUtilities;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.function.Consumer;
 
 import static com.runeassist.flip.util.DateUtil.formatEpoch;
 
@@ -24,7 +24,7 @@ public class FlipPanel extends JPanel {
         this(flip, config, onClick, null);
     }
 
-    public FlipPanel(FlipV2 flip, RuneAssistConfig config, Runnable onClick, Runnable onDelete) {
+    public FlipPanel(FlipV2 flip, RuneAssistConfig config, Runnable onClick, Consumer<JPopupMenu> buildMenu) {
         setLayout(new BorderLayout());
         setBackground(RuneAssistColors.CARD);
         setBorder(BorderFactory.createCompoundBorder(
@@ -80,7 +80,7 @@ public class FlipPanel extends JPanel {
         profitLabel.setToolTipText(tooltipText);
 
         Component[] clickableComponents = {this, leftPanel, qtyLabel, itemNameLabel, profitLabel};
-        if (onClick != null || onDelete != null) {
+        if (onClick != null || buildMenu != null) {
             MouseAdapter clickListener = new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
@@ -94,12 +94,12 @@ public class FlipPanel extends JPanel {
 
                 @Override
                 public void mousePressed(MouseEvent e) {
-                    maybeShowDeleteMenu(e, onDelete);
+                    maybeShowMenu(e, buildMenu);
                 }
 
                 @Override
                 public void mouseReleased(MouseEvent e) {
-                    maybeShowDeleteMenu(e, onDelete);
+                    maybeShowMenu(e, buildMenu);
                 }
 
                 @Override
@@ -127,15 +127,15 @@ public class FlipPanel extends JPanel {
         }
     }
 
-    private void maybeShowDeleteMenu(MouseEvent e, Runnable onDelete) {
-        if (onDelete == null || !e.isPopupTrigger()) {
+    private void maybeShowMenu(MouseEvent e, Consumer<JPopupMenu> buildMenu) {
+        if (buildMenu == null || !e.isPopupTrigger()) {
             return;
         }
         JPopupMenu menu = new JPopupMenu();
-        JMenuItem delete = new JMenuItem("Delete flip");
-        delete.addActionListener(evt -> onDelete.run());
-        menu.add(delete);
-        menu.show(e.getComponent(), e.getX(), e.getY());
+        buildMenu.accept(menu);
+        if (menu.getComponentCount() > 0) {
+            menu.show(e.getComponent(), e.getX(), e.getY());
+        }
     }
 
     private static String statusLine(FlipV2 flip) {
