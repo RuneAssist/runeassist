@@ -351,20 +351,40 @@ public class StatsPanelV2 extends JPanel {
         long s = System.nanoTime();
         if (flipsMaybeChanged) {
             flipsPanel.removeAll();
+            String displayName = osrsLoginManager.getPlayerDisplayName();
             flipManager.getPageFlips(paginator.getPageNumber(), 50)
                     .forEach(f -> flipsPanel.add(new FlipPanel(
                             f,
                             config,
                             () -> flipsDialogController.showVisualizeFlip(f),
-                            () -> {
-                                String displayName = osrsLoginManager.getPlayerDisplayName();
-                                if (displayName == null || f.getId() == null) {
-                                    return;
-                                }
-                                if (flipHistorySyncService != null && flipHistorySyncService.isLinked()) {
-                                    flipHistorySyncService.deleteFlip(displayName, f.getId());
-                                }
-                            })));
+                            menu -> FlipRepairMenus.addStandardActions(
+                                    menu, this, f, displayName, flipHistorySyncService, true, false))));
+            Integer accountId = flipManager.getIntervalAccount();
+            if (accountId == null && displayName != null) {
+                accountId = FlipHistorySyncService.accountIdFor(displayName);
+            }
+            java.util.List<FlipV2> missed = accountId == null
+                    ? java.util.Collections.emptyList()
+                    : flipManager.getMissedFlipsForAccount(accountId);
+            if (!missed.isEmpty()) {
+                JLabel missedHeader = RuneAssistColors.kicker("MISSED / GHOST");
+                missedHeader.setBorder(BorderFactory.createEmptyBorder(8, 0, 2, 0));
+                flipsPanel.add(missedHeader);
+                int shown = 0;
+                for (FlipV2 f : missed) {
+                    if (shown >= 20) {
+                        break;
+                    }
+                    boolean disappeared = PortfolioId.isDisappeared(f.getPortfolioId());
+                    flipsPanel.add(new FlipPanel(
+                            f,
+                            config,
+                            () -> flipsDialogController.showVisualizeFlip(f),
+                            menu -> FlipRepairMenus.addStandardActions(
+                                    menu, this, f, displayName, flipHistorySyncService, disappeared, true)));
+                    shown++;
+                }
+            }
             // labels displayed to the user
             roiVal.setText(String.format("%.3f%%", stats.calculateRoi() * 100));
             roiVal.setForeground(UIUtilities.getProfitColor(stats.profit, config));

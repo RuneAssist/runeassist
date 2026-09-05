@@ -43,10 +43,11 @@ public class FlipsDialogController {
     private JDialog dialog;
     private VisualizeFlipPanel visualizeFlipPanel;
 
-    // Tab indices after Path A analytics cut: Portfolio, Price graph, Visualize flip
+    // Tab indices: Portfolio, Price graph, Visualize flip, Transactions
     private static final int TAB_PORTFOLIO = 0;
     private static final int TAB_PRICE_GRAPH = 1;
     private static final int TAB_VISUALIZE_FLIP = 2;
+    private static final int TAB_TRANSACTIONS = 3;
 
     @Inject
     public FlipsDialogController(
@@ -111,9 +112,16 @@ public class FlipsDialogController {
                     osrsLoginManager,
                     suggestionManager
             );
+            TransactionsPanel transactionsPanel = new TransactionsPanel(
+                    flipHistorySyncService,
+                    itemController,
+                    osrsLoginManager,
+                    executorService
+            );
             tabbedPane.addTab("Portfolio", portfolioPanel);
             tabbedPane.addTab("Price graph", priceGraphPanel);
             tabbedPane.addTab("Visualize flip", visualizeFlipPanel);
+            tabbedPane.addTab("Transactions", transactionsPanel);
 
             JDialog dialog = new JDialog(windowAncestor);
             dialog.setTitle("RuneAssist Flipping");
@@ -128,6 +136,9 @@ public class FlipsDialogController {
                         break;
                     case TAB_PRICE_GRAPH:
                         priceGraphPanel.onTabShown();
+                        break;
+                    case TAB_TRANSACTIONS:
+                        transactionsPanel.onTabShown();
                         break;
                     default:
                         break;
