@@ -43,47 +43,22 @@ public class FlipScorer
     private static final String ARES_FLIPS = "https://runeassist.ares-server.co.uk/v1/flips";
     private static final String ARES_DECANTS = "https://runeassist.ares-server.co.uk/v1/decants";
     private static final String ARES_HEALTH = "https://runeassist.ares-server.co.uk/v1/market/health";
+    private static final String ARES_LIMITS = "https://runeassist.ares-server.co.uk/v1/market/limits";
+    private static final String ARES_QUOTE = "https://runeassist.ares-server.co.uk/v1/market/quote";
+    private static final String ARES_FAMILIES = "https://runeassist.ares-server.co.uk/v1/decants/families";
+    // Buy limits move only when Jagex moves them, so this is held far longer than prices.
+    private static final long LIMITS_TTL = 6 * 60 * 60 * 1000L;
+    private static final long FAMILIES_TTL = 60_000L;
     private static final MediaType JSON = MediaType.parse("application/json");
     private static final Type CANDIDATE_LIST = new TypeToken<List<Map<String, Object>>>(){}.getType();
-    private static final String LATEST = "https://prices.runescape.wiki/api/v1/osrs/latest";
-    private static final String HOUR   = "https://prices.runescape.wiki/api/v1/osrs/1h";
-    private static final String FIVE   = "https://prices.runescape.wiki/api/v1/osrs/5m";
-    private static final String MAP    = "https://prices.runescape.wiki/api/v1/osrs/mapping";
-    private static final long PRICE_TTL = 60_000;
-    private static final long STALE_TRADE_SEC = 90 * 60; // last-trade older than this is ignored
-
-    private static final double TAX_RATE = 0.02;
-    private static final long   TAX_CAP  = 5_000_000L;
-    private static final long   TAX_MAX_PRICE = 250_000_000L;
-    // Items exempt from the 2% GE sell tax.
-    private static final Set<Integer> TAX_EXEMPT = new HashSet<>(Arrays.asList(
-        8011, 365, 2309, 882, 806, 1891, 8010, 1755, 28824, 2140, 2142, 8009, 5325, 1785, 2347,
-        347, 884, 807, 28790, 379, 8008, 355, 2327, 558, 1733, 13190, 233, 351, 5341, 2552, 329,
-        8794, 5329, 5343, 1735, 315, 952, 886, 808, 8013, 361, 8007, 5331));
 
     private final OkHttpClient httpClient;
     private final Gson gson;
 
-    private static final class Meta
-    {
-        final String name;
-        final int limit;
-        final boolean members;
-        Meta(String name, int limit, boolean members)
-        {
-            this.name = name;
-            this.limit = limit;
-            this.members = members;
-        }
-    }
-
-    private final Map<Integer, Meta> meta = new ConcurrentHashMap<>();
-    private volatile long lastPriceFetch = 0;
-    // id -> {high, low, highTime, lowTime}
-    private volatile Map<Integer, long[]> latest = new ConcurrentHashMap<>();
-    // id -> {highVol, lowVol, avgHigh, avgLow}
-    private volatile Map<Integer, int[]> volume1h = new ConcurrentHashMap<>();
-    private volatile Map<Integer, int[]> volume5m = new ConcurrentHashMap<>();
+    private volatile Map<Integer, Integer> geLimits = new ConcurrentHashMap<>();
+    private volatile long limitsFetchedAt = 0;
+    private volatile List<Map<String, Object>> decantFamilies = new ArrayList<>();
+    private volatile long familiesFetchedAt = 0;
     /** True when the last {@link #topFlips} pick came from Ares rather than the local wiki fallback. */
     private volatile boolean lastFromAres = false;
     /** True when the last Ares {@code /v1/flips} call failed (HTTP/timeout/parse), not empty-ok. */
@@ -168,11 +143,6 @@ public class FlipScorer
         return new ArrayList<>();
     }
 
-    // Potion dose variants are named literally "X potion(N)" in the wiki mapping — no separate
-    // "family"/"dose" field exists, so this is derived from the name itself.
-    private static final java.util.regex.Pattern DOSE_SUFFIX =
-        java.util.regex.Pattern.compile("^(.*)\\((\\d)\\)$");
-
     /** Up to 5 best decant opportunities (buy a cheap dose, decant, sell a different dose). */
     public List<Map<String, Object>> topDecants()
     {
@@ -241,144 +211,192 @@ public class FlipScorer
 
     /**
      * Best decant for stock already held, or null if converting it isn't worth more than
-     * selling it as-is (or this item isn't a dose-variant potion at all). Row shape matches
-     * {@link #topDecants}, with {@code buyItemId}/{@code buyQty} describing what you hold
-     * rather than something to go and buy, and {@code projectedProfit} being the gain over
-     * selling as-is rather than a full buy-to-sell profit.
+     * selling it as-is (or this item isn't part of a family worth converting).
      *
-     * <p>Unlike {@link #topDecants} this applies no profit floor, no volume floor and no
-     * liquidity cap: the stock is already bought, so the only question is whether to convert
-     * it, and you can list however much of it you hold.</p>
+     * <p>Priced from the server's dose-family table, which lists only families where some
+     * conversion currently gains value. Held quantity never leaves the client: the table comes
+     * down, this matches it against what is actually held, and the comparison below is done
+     * locally. Row shape matches {@link #topDecants}, with {@code buyItemId}/{@code buyQty}
+     * describing what is held rather than something to buy, and {@code projectedProfit} being
+     * the gain over selling as-is rather than a full buy-to-sell profit.
      */
     public Map<String, Object> decantForHeld(int heldItemId, long heldQty)
     {
         if (heldQty <= 0) return null;
-        try { ensureLoaded(); }
-        catch (Exception e) { return null; }
+        List<Map<String, Object>> families = ensureFamilies();
+        if (families.isEmpty()) return null;
 
-        Meta heldMeta = meta.get(heldItemId);
-        if (heldMeta == null || isOddName(heldMeta.name)) return null;
-        java.util.regex.Matcher mm = DOSE_SUFFIX.matcher(heldMeta.name);
-        if (!mm.matches()) return null;
-        int heldDose;
-        try { heldDose = Integer.parseInt(mm.group(2)); }
-        catch (NumberFormatException nfe) { return null; }
-        if (heldDose < 1 || heldDose > 9) return null;
-        String family = mm.group(1).trim();
-
-        long nowSec = System.currentTimeMillis() / 1000L;
-        long[] heldPrices = dosePrices(heldItemId, nowSec);
-        if (heldPrices == null) return null;
-        long heldSellAt = heldPrices[1];
-        long heldTax = taxAmount(heldItemId, heldSellAt);
-
-        int bestDose = 0, bestItemId = 0;
-        long bestGain = 0, bestSellAt = 0, bestSellQty = 0;
-        for (Map.Entry<Integer, Meta> me : meta.entrySet())
+        for (Map<String, Object> fam : families)
         {
-            int id = me.getKey();
-            if (id == heldItemId) continue;
-            Meta m = me.getValue();
-            if (isOddName(m.name)) continue;
-            java.util.regex.Matcher sm = DOSE_SUFFIX.matcher(m.name);
-            if (!sm.matches() || !family.equals(sm.group(1).trim())) continue;
-            int dose;
-            try { dose = Integer.parseInt(sm.group(2)); }
-            catch (NumberFormatException nfe) { continue; }
-            if (dose < 1 || dose > 9) continue;
+            Object dosesObj = fam.get("doses");
+            if (!(dosesObj instanceof List)) continue;
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> doses = (List<Map<String, Object>>) dosesObj;
 
-            long[] prices = dosePrices(id, nowSec);
-            if (prices == null) continue;
-            long sellAt = prices[1];
-            long gain = decantGainOverRawSell(heldQty, heldDose, dose,
-                heldSellAt, heldTax, sellAt, taxAmount(id, sellAt));
-            if (gain > bestGain)
+            Map<String, Object> heldDose = null;
+            for (Map<String, Object> d : doses)
             {
-                bestGain = gain;
-                bestDose = dose;
-                bestItemId = id;
-                bestSellAt = sellAt;
-                bestSellQty = (heldQty * heldDose) / dose;
+                if (num(d.get("itemId")) == heldItemId) { heldDose = d; break; }
+            }
+            if (heldDose == null) continue;
+
+            long heldDoseCount = num(heldDose.get("dose"));
+            long heldSellAt = num(heldDose.get("sell"));
+            long heldTax = num(heldDose.get("tax"));
+            if (heldDoseCount <= 0 || heldSellAt <= 0) return null;
+
+            Map<String, Object> best = null;
+            long bestGain = 0, bestSellQty = 0;
+            for (Map<String, Object> d : doses)
+            {
+                long dose = num(d.get("dose"));
+                if (dose <= 0 || dose == heldDoseCount) continue;
+                long gain = decantGainOverRawSell(heldQty, (int) heldDoseCount, (int) dose,
+                    heldSellAt, heldTax, num(d.get("sell")), num(d.get("tax")));
+                if (gain > bestGain)
+                {
+                    bestGain = gain;
+                    best = d;
+                    bestSellQty = (heldQty * heldDoseCount) / dose;
+                }
+            }
+            if (best == null || bestSellQty < 1) return null;
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("family", fam.get("family"));
+            row.put("buyItemId", heldItemId);
+            row.put("buyName", heldDose.get("name"));
+            row.put("buyDose", heldDoseCount);
+            row.put("buyAt", num(heldDose.get("buy")));
+            row.put("buyQty", heldQty);
+            row.put("sellItemId", num(best.get("itemId")));
+            row.put("sellName", best.get("name"));
+            row.put("sellDose", num(best.get("dose")));
+            row.put("sellAt", num(best.get("sell")));
+            row.put("sellQty", bestSellQty);
+            row.put("projectedProfit", bestGain);
+            row.put("flags", new ArrayList<>(Arrays.asList("held")));
+            return row;
+        }
+        return null;
+    }
+
+    private static long num(Object o)
+    {
+        return o instanceof Number ? ((Number) o).longValue() : 0L;
+    }
+
+    /** Dose families worth converting, refreshed on the same cadence as prices. */
+    private List<Map<String, Object>> ensureFamilies()
+    {
+        if (!decantFamilies.isEmpty() && System.currentTimeMillis() - familiesFetchedAt < FAMILIES_TTL)
+        {
+            return decantFamilies;
+        }
+        Request request = new Request.Builder().url(ARES_FAMILIES).header("User-Agent", UA).get().build();
+        try (Response r = httpClient.newCall(request).execute())
+        {
+            if (!r.isSuccessful() || r.body() == null) return decantFamilies;
+            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
+            if (root == null || !root.has("families")) return decantFamilies;
+            List<Map<String, Object>> rows = gson.fromJson(root.get("families"), CANDIDATE_LIST);
+            if (rows != null)
+            {
+                decantFamilies = rows;
+                familiesFetchedAt = System.currentTimeMillis();
             }
         }
-        if (bestItemId == 0 || bestSellQty < 1) return null;
-
-        Meta sellMeta = meta.get(bestItemId);
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("family", family);
-        row.put("buyItemId", heldItemId);
-        row.put("buyName", heldMeta.name);
-        row.put("buyDose", heldDose);
-        row.put("buyAt", heldPrices[0]);
-        row.put("buyQty", heldQty);
-        row.put("sellItemId", bestItemId);
-        row.put("sellName", sellMeta != null ? sellMeta.name : ("item " + bestItemId));
-        row.put("sellDose", bestDose);
-        row.put("sellAt", bestSellAt);
-        row.put("sellQty", bestSellQty);
-        row.put("projectedProfit", bestGain);
-        row.put("flags", new ArrayList<>(Arrays.asList("held")));
-        return row;
+        catch (Exception e)
+        {
+            log.warn("Ares /v1/decants/families failed: {}", e.getMessage());
+        }
+        return decantFamilies;
     }
 
-    /** Timeframe-smoothed {buy, sell} for one dose variant, or null if it isn't priced. */
-    private long[] dosePrices(int itemId, long nowSec)
-    {
-        Meta m = meta.get(itemId);
-        if (m == null || m.limit <= 0) return null;
-        int[] v1 = volume1h.get(itemId);
-        if (v1 == null) return null;
-        long[] prices = pickPrices(latest.get(itemId), v1, volume5m.get(itemId), 60, nowSec);
-        return prices == null || prices[0] <= 0 || prices[1] <= 0 ? null : prices;
-    }
-
-    /** Current sell quote for a held item: {name, sell_at, ge_limit, tax_at_sell}, or null. */
+    /** Sell-side quote for a held item: {name, sell_at, ge_limit, tax_at_sell}, or null. */
     public Map<String, Object> sellQuote(int itemId)
     {
-        try { ensureLoaded(); } catch (Exception e) { return null; }
-        long sell = quotedSell(itemId);
-        if (sell <= 0) return null;
-        Meta m = meta.get(itemId);
-        Map<String, Object> q = new LinkedHashMap<>();
-        q.put("name", m != null ? m.name : ("item " + itemId));
-        q.put("sell_at", sell);
-        q.put("ge_limit", m != null ? m.limit : 0);
-        q.put("tax_at_sell", taxAmount(itemId, sell));
-        return q;
+        Map<String, Object> q = quote(itemId);
+        if (q == null || !(q.get("sell_at") instanceof Number)) return null;
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("name", q.get("name"));
+        out.put("sell_at", q.get("sell_at"));
+        out.put("ge_limit", q.get("ge_limit"));
+        out.put("tax_at_sell", q.get("tax_at_sell"));
+        return out;
     }
 
     /**
-     * Current market quote for ANY item (no margin/volume filtering) — used to price the
-     * GE offer-setup screen for an item the suggestion engine didn't propose. Returns
-     * {name, buy_at, sell_at, ge_limit} or null if the wiki has no price for this item.
-     * Blocks on HTTP (first call / stale cache); call off the client thread.
+     * Current market quote for any item: {name, buy_at, sell_at, ge_limit, tax_at_sell}, or
+     * null if the server has no price for it. Blocks on HTTP; call off the client thread.
      */
     public Map<String, Object> quote(int itemId)
     {
-        try { ensureLoaded(); } catch (Exception e) { return null; }
-        long[] p = latest.get(itemId);
-        int[] v1 = volume1h.get(itemId);
-        int[] v5 = volume5m.get(itemId);
-        long[] prices = pickPrices(p, v1, v5, 30, System.currentTimeMillis() / 1000L);
-        if (prices == null)
+        Request request = new Request.Builder()
+            .url(ARES_QUOTE + "?ids=" + itemId)
+            .header("User-Agent", UA)
+            .get()
+            .build();
+        try (Response r = httpClient.newCall(request).execute())
         {
-            if (p == null || (p[0] <= 0 && p[1] <= 0)) return null;
-            prices = new long[]{ p[1], p[0] };
+            if (!r.isSuccessful() || r.body() == null) return null;
+            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
+            if (root == null || !root.has("items")) return null;
+            List<Map<String, Object>> rows = gson.fromJson(root.get("items"), CANDIDATE_LIST);
+            return rows == null || rows.isEmpty() ? null : rows.get(0);
         }
-        Meta m = meta.get(itemId);
-        Map<String, Object> q = new LinkedHashMap<>();
-        q.put("name", m != null ? m.name : ("item " + itemId));
-        q.put("buy_at", prices[0]);
-        q.put("sell_at", prices[1]);
-        q.put("ge_limit", m != null ? m.limit : 0);
-        return q;
+        catch (Exception e)
+        {
+            log.warn("Ares /v1/market/quote failed: {}", e.getMessage());
+            return null;
+        }
     }
 
-    /** Wiki GE buy limit for an item, or 0 if unknown. */
+    /**
+     * Wiki GE buy limit for an item, or 0 if unknown.
+     *
+     * <p>Served from a map fetched once and held, not a call per item: this is asked in loops
+     * (every item with a used limit, every scored candidate), and buy limits only change when
+     * Jagex changes them.
+     */
     public int geLimit(int itemId)
     {
-        Meta m = meta.get(itemId);
-        return m != null ? m.limit : 0;
+        ensureLimits();
+        Integer limit = geLimits.get(itemId);
+        return limit != null ? limit : 0;
+    }
+
+    private void ensureLimits()
+    {
+        if (!geLimits.isEmpty() && System.currentTimeMillis() - limitsFetchedAt < LIMITS_TTL) return;
+        synchronized (this)
+        {
+            if (!geLimits.isEmpty() && System.currentTimeMillis() - limitsFetchedAt < LIMITS_TTL) return;
+            Request request = new Request.Builder().url(ARES_LIMITS).header("User-Agent", UA).get().build();
+            try (Response r = httpClient.newCall(request).execute())
+            {
+                if (!r.isSuccessful() || r.body() == null) return;
+                JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
+                if (root == null || !root.has("limits")) return;
+                Map<Integer, Integer> parsed = new ConcurrentHashMap<>();
+                for (Map.Entry<String, com.google.gson.JsonElement> e : root.getAsJsonObject("limits").entrySet())
+                {
+                    try { parsed.put(Integer.parseInt(e.getKey()), e.getValue().getAsInt()); }
+                    catch (Exception ignored) { }
+                }
+                if (!parsed.isEmpty())
+                {
+                    geLimits = parsed;
+                    limitsFetchedAt = System.currentTimeMillis();
+                }
+            }
+            catch (Exception e)
+            {
+                // Keep whatever we already have; a stale limit is better than none, and the
+                // callers treat 0 as "unknown" rather than "no limit".
+                log.warn("Ares /v1/market/limits failed: {}", e.getMessage());
+            }
+        }
     }
 
     /**
@@ -536,133 +554,4 @@ public class FlipScorer
         return out;
     }
 
-    private long quotedSell(int itemId)
-    {
-        int[] v1 = volume1h.get(itemId);
-        if (v1 != null && v1[2] > 0) return v1[2];
-        int[] v5 = volume5m.get(itemId);
-        if (v5 != null && v5[2] > 0) return v5[2];
-        long[] p = latest.get(itemId);
-        return p != null ? p[0] : 0;
-    }
-
-    /**
-     * Buy/sell prices: prefer 5m averages for short timeframes, else 1h averages, else a
-     * fresh last-trade pair. Last-trade-only outliers (stale high or low) are rejected.
-     * Returns {buy, sell} or null.
-     */
-    private static long[] pickPrices(long[] latestPx, int[] v1, int[] v5, int timeframeMinutes, long nowSec)
-    {
-        if (timeframeMinutes <= 30 && v5 != null && v5[3] > 0 && v5[2] > v5[3])
-        {
-            return new long[]{ v5[3], v5[2] };
-        }
-        if (v1 != null && v1[3] > 0 && v1[2] > v1[3])
-        {
-            return new long[]{ v1[3], v1[2] };
-        }
-        if (latestPx == null) return null;
-        long high = latestPx[0], low = latestPx[1], highTime = latestPx[2], lowTime = latestPx[3];
-        if (high <= 0 || low <= 0 || high <= low) return null;
-        if (nowSec - highTime > STALE_TRADE_SEC || nowSec - lowTime > STALE_TRADE_SEC) return null;
-        return new long[]{ low, high };
-    }
-
-
-
-
-
-
-
-    private static boolean isOddName(String name)
-    {
-        if (name == null || name.isEmpty()) return true;
-        String n = name.toLowerCase();
-        return n.contains("placeholder") || n.startsWith("broken ") || n.contains("(nz)");
-    }
-
-    private long taxAmount(int id, long price)
-    {
-        if (price <= 0 || TAX_EXEMPT.contains(id)) return 0;
-        if (price >= TAX_MAX_PRICE) return TAX_CAP;
-        return (long) Math.floor(price * TAX_RATE);
-    }
-
-    // ── fetch + cache ──────────────────────────────────────────────────────────
-
-    private synchronized void ensureLoaded() throws Exception
-    {
-        if (meta.isEmpty()) loadMapping();
-        if (System.currentTimeMillis() - lastPriceFetch > PRICE_TTL || latest.isEmpty())
-        {
-            loadLatest();
-            volume1h = loadVolume(HOUR);
-            volume5m = loadVolume(FIVE);
-            lastPriceFetch = System.currentTimeMillis();
-        }
-    }
-
-    private void loadMapping() throws Exception
-    {
-        try (Response r = httpClient.newCall(req(MAP)).execute())
-        {
-            if (!r.isSuccessful() || r.body() == null) return;
-            com.google.gson.JsonArray arr = gson.fromJson(r.body().charStream(), com.google.gson.JsonArray.class);
-            for (com.google.gson.JsonElement e : arr)
-            {
-                JsonObject o = e.getAsJsonObject();
-                if (!o.has("id")) continue;
-                int id = o.get("id").getAsInt();
-                String name = o.has("name") ? o.get("name").getAsString() : ("item " + id);
-                int limit = o.has("limit") && !o.get("limit").isJsonNull() ? o.get("limit").getAsInt() : 0;
-                boolean members = !o.has("members") || o.get("members").getAsBoolean();
-                meta.put(id, new Meta(name, limit, members));
-            }
-        }
-    }
-
-    private void loadLatest() throws Exception
-    {
-        Map<Integer, long[]> out = new ConcurrentHashMap<>();
-        try (Response r = httpClient.newCall(req(LATEST)).execute())
-        {
-            if (!r.isSuccessful() || r.body() == null) { latest = out; return; }
-            JsonObject data = gson.fromJson(r.body().charStream(), JsonObject.class).getAsJsonObject("data");
-            for (Map.Entry<String, com.google.gson.JsonElement> e : data.entrySet())
-            {
-                JsonObject o = e.getValue().getAsJsonObject();
-                long high = o.has("high") && !o.get("high").isJsonNull() ? o.get("high").getAsLong() : 0;
-                long low  = o.has("low")  && !o.get("low").isJsonNull()  ? o.get("low").getAsLong()  : 0;
-                long highTime = o.has("highTime") && !o.get("highTime").isJsonNull() ? o.get("highTime").getAsLong() : 0;
-                long lowTime  = o.has("lowTime")  && !o.get("lowTime").isJsonNull()  ? o.get("lowTime").getAsLong()  : 0;
-                if (high > 0 || low > 0) out.put(Integer.parseInt(e.getKey()), new long[]{ high, low, highTime, lowTime });
-            }
-        }
-        latest = out;
-    }
-
-    private Map<Integer, int[]> loadVolume(String url) throws Exception
-    {
-        Map<Integer, int[]> out = new ConcurrentHashMap<>();
-        try (Response r = httpClient.newCall(req(url)).execute())
-        {
-            if (!r.isSuccessful() || r.body() == null) return out;
-            JsonObject data = gson.fromJson(r.body().charStream(), JsonObject.class).getAsJsonObject("data");
-            for (Map.Entry<String, com.google.gson.JsonElement> e : data.entrySet())
-            {
-                JsonObject o = e.getValue().getAsJsonObject();
-                int hv = o.has("highPriceVolume") ? o.get("highPriceVolume").getAsInt() : 0;
-                int lv = o.has("lowPriceVolume")  ? o.get("lowPriceVolume").getAsInt()  : 0;
-                int ah = o.has("avgHighPrice") && !o.get("avgHighPrice").isJsonNull() ? o.get("avgHighPrice").getAsInt() : 0;
-                int al = o.has("avgLowPrice")  && !o.get("avgLowPrice").isJsonNull()  ? o.get("avgLowPrice").getAsInt()  : 0;
-                out.put(Integer.parseInt(e.getKey()), new int[]{ hv, lv, ah, al });
-            }
-        }
-        return out;
-    }
-
-    private static Request req(String url)
-    {
-        return new Request.Builder().url(url).header("User-Agent", UA).build();
-    }
 }
