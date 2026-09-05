@@ -41,6 +41,7 @@ public class FlipScorer
 {
     private static final String UA = "RuneAssist-flip/1.0 (github.com/RuneAssist/runeassist)";
     private static final String ARES_FLIPS = "https://runeassist.ares-server.co.uk/v1/flips";
+    private static final String ARES_DECANTS = "https://runeassist.ares-server.co.uk/v1/decants";
     private static final MediaType JSON = MediaType.parse("application/json");
     private static final Type CANDIDATE_LIST = new TypeToken<List<Map<String, Object>>>(){}.getType();
     private static final String LATEST = "https://prices.runescape.wiki/api/v1/osrs/latest";
@@ -49,13 +50,6 @@ public class FlipScorer
     private static final String MAP    = "https://prices.runescape.wiki/api/v1/osrs/mapping";
     private static final long PRICE_TTL = 60_000;
     private static final long STALE_TRADE_SEC = 90 * 60; // last-trade older than this is ignored
-    // Sensibility floor applied regardless of what the caller passes, so a forgotten/zero
-    // minPredictedProfit never lets trivial-value "odd" flips (e.g. 25 units * 111gp) through.
-    private static final long MIN_PROJECTED_PROFIT = 3_000L;
-    // Only offer a FRACTION of the estimated tradeable liquidity in the timeframe, not all of
-    // it -- suggesting 100% of the visible order-book volume reads as "always max" and leaves
-    // no room for other buyers/sellers.
-    private static final double LIQUIDITY_FRACTION = 0.5;
     // 5m average this far below the 1h average is a falling market.
     static final double FALLING_DRIFT_PCT = -0.5;
 
@@ -196,125 +190,28 @@ public class FlipScorer
      */
     public List<Map<String, Object>> topDecants(int maxResults)
     {
-        try { ensureLoaded(); }
-        catch (Exception e) { log.warn("decant scorer load failed: {}", e.getMessage()); return new ArrayList<>(); }
-
-        RiskProfile risk = RiskProfile.of(RiskLevel.MEDIUM);
-        int tfMin = 60;
-        long nowSec = System.currentTimeMillis() / 1000L;
-
-        // family name -> {dose -> itemId}
-        Map<String, Map<Integer, Integer>> families = new LinkedHashMap<>();
-        for (Map.Entry<Integer, Meta> me : meta.entrySet())
+        Request request = new Request.Builder()
+            .url(ARES_DECANTS + "?top=" + Math.max(1, maxResults))
+            .header("User-Agent", UA)
+            .get()
+            .build();
+        try (Response r = httpClient.newCall(request).execute())
         {
-            Meta m = me.getValue();
-            if (isOddName(m.name)) continue;
-            java.util.regex.Matcher mm = DOSE_SUFFIX.matcher(m.name);
-            if (!mm.matches()) continue;
-            int dose;
-            try { dose = Integer.parseInt(mm.group(2)); } catch (NumberFormatException nfe) { continue; }
-            if (dose < 1 || dose > 9) continue;
-            families.computeIfAbsent(mm.group(1).trim(), k -> new LinkedHashMap<>()).put(dose, me.getKey());
+            if (!r.isSuccessful() || r.body() == null)
+            {
+                log.warn("Ares /v1/decants HTTP {}", r.code());
+                return new ArrayList<>();
+            }
+            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
+            if (root == null || !root.has("decants")) return new ArrayList<>();
+            List<Map<String, Object>> rows = gson.fromJson(root.get("decants"), CANDIDATE_LIST);
+            return rows == null ? new ArrayList<>() : rows;
         }
-
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (Map.Entry<String, Map<Integer, Integer>> fe : families.entrySet())
+        catch (Exception e)
         {
-            Map<Integer, Integer> doses = fe.getValue();
-            if (doses.size() < 2) continue;
-
-            Map<Integer, long[]> priced = new LinkedHashMap<>(); // dose -> {buy, sell}
-            Map<Integer, int[]> vols = new LinkedHashMap<>();    // dose -> {highVol, lowVol, avgHigh, avgLow}
-            for (Map.Entry<Integer, Integer> de : doses.entrySet())
-            {
-                int dose = de.getKey();
-                int id = de.getValue();
-                Meta m = meta.get(id);
-                if (m == null || m.limit <= 0) continue;
-                int[] v1 = volume1h.get(id);
-                if (v1 == null) continue;
-                long[] prices = pickPrices(latest.get(id), v1, volume5m.get(id), tfMin, nowSec);
-                if (prices == null || prices[0] <= 0 || prices[1] <= 0) continue;
-                priced.put(dose, prices);
-                vols.put(dose, v1);
-            }
-            if (priced.size() < 2) continue;
-
-            Integer dBuy = null, dSell = null;
-            double bestCostPerDose = Double.MAX_VALUE, bestSellPerDose = -1;
-            for (Map.Entry<Integer, long[]> pe : priced.entrySet())
-            {
-                int dose = pe.getKey();
-                long buy = pe.getValue()[0], sell = pe.getValue()[1];
-                long tax = taxAmount(doses.get(dose), sell);
-                double costPerDose = (double) buy / dose;
-                double sellPerDose = (double) (sell - tax) / dose;
-                if (costPerDose < bestCostPerDose) { bestCostPerDose = costPerDose; dBuy = dose; }
-                if (sellPerDose > bestSellPerDose) { bestSellPerDose = sellPerDose; dSell = dose; }
-            }
-            if (dBuy == null || dSell == null || dBuy.equals(dSell)) continue;
-            if (bestSellPerDose <= bestCostPerDose) continue;
-
-            int buyItemId = doses.get(dBuy);
-            int sellItemId = doses.get(dSell);
-            long buyAt = priced.get(dBuy)[0];
-            long sellAt = priced.get(dSell)[1];
-            Meta buyMeta = meta.get(buyItemId);
-            Meta sellMeta = meta.get(sellItemId);
-
-            int[] v1Buy = vols.get(dBuy);
-            int[] v1Sell = vols.get(dSell);
-            int perHourBuy = Math.max(1, Math.min(v1Buy[0], v1Buy[1]));
-            int perHourSell = Math.max(1, Math.min(v1Sell[0], v1Sell[1]));
-            int liqBuyBottles = liquidityQty(tfMin, perHourBuy, volume5m.get(buyItemId));
-            int liqSellBottles = liquidityQty(tfMin, perHourSell, volume5m.get(sellItemId));
-
-            long buyBottleCap = Math.min(buyMeta.limit, liqBuyBottles);
-            long doseUnits = Math.min(buyBottleCap * dBuy, (long) liqSellBottles * dSell);
-            long buyQty = doseUnits / dBuy;
-            // Round the suggested buy quantity down to a whole batch that decants with zero
-            // leftover doses (a multiple of sellDose/gcd(buyDose,sellDose) bottles) -- both so
-            // the reported sellQty/profit are exact rather than floored-with-a-remainder, and
-            // so a player who buys exactly this amount always converts cleanly (no odd-dose
-            // leftover potion), which live decant detection relies on to recognize the trade.
-            long step = dSell / gcd(dBuy, dSell);
-            buyQty = (buyQty / step) * step;
-            long sellQty = (buyQty * dBuy) / dSell; // exact now -- buyQty is a multiple of step
-            if (buyQty < 1 || sellQty < 1) continue;
-
-            long buyTotalCost = buyQty * buyAt;
-            long sellTax = taxAmount(sellItemId, sellAt);
-            long sellTotalRevenue = sellQty * (sellAt - sellTax);
-            long projected = sellTotalRevenue - buyTotalCost;
-            if (projected < MIN_PROJECTED_PROFIT) continue;
-
-            int volBuy = v1Buy[0] + v1Buy[1];
-            int volSell = v1Sell[0] + v1Sell[1];
-            int minVol = Math.min(volBuy, volSell);
-            if (minVol < risk.minVolume) continue;
-
-            List<String> flags = new ArrayList<>();
-            if (minVol < risk.minVolume * 4) flags.add("thin");
-
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("family", fe.getKey());
-            row.put("buyItemId", buyItemId);
-            row.put("buyName", buyMeta.name);
-            row.put("buyDose", dBuy);
-            row.put("buyAt", buyAt);
-            row.put("buyQty", buyQty);
-            row.put("sellItemId", sellItemId);
-            row.put("sellName", sellMeta.name);
-            row.put("sellDose", dSell);
-            row.put("sellAt", sellAt);
-            row.put("sellQty", sellQty);
-            row.put("projectedProfit", projected);
-            row.put("flags", flags);
-            rows.add(row);
+            log.warn("Ares /v1/decants failed: {}", e.getMessage());
+            return new ArrayList<>();
         }
-        rows.sort((a, b) -> Long.compare(((Number) b.get("projectedProfit")).longValue(),
-                                         ((Number) a.get("projectedProfit")).longValue()));
-        return rows.size() > maxResults ? new ArrayList<>(rows.subList(0, maxResults)) : rows;
     }
 
     /**
@@ -610,7 +507,7 @@ public class FlipScorer
             if (!r.isSuccessful() || r.body() == null)
             {
                 lastAresUnreachable = true;
-                log.warn("Ares /v1/flips HTTP {}, using local scorer", r.code());
+                log.warn("Ares /v1/flips HTTP {}", r.code());
                 return null;
             }
             JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
@@ -633,7 +530,7 @@ public class FlipScorer
         catch (Exception e)
         {
             lastAresUnreachable = true;
-            log.warn("Ares /v1/flips failed, using local scorer: {}", e.getMessage());
+            log.warn("Ares /v1/flips failed: {}", e.getMessage());
             return null;
         }
     }
@@ -702,21 +599,6 @@ public class FlipScorer
         return new long[]{ low, high };
     }
 
-    /**
-     * Units expected to fill within the user's timeframe, from the bottleneck side's volume,
-     * scaled down to {@link #LIQUIDITY_FRACTION} of that estimate so a suggestion never asks
-     * the player to absorb the entire visible market in one go.
-     */
-    private static int liquidityQty(int timeframeMinutes, int perHour, int[] v5)
-    {
-        double perMinute = perHour / 60.0;
-        if (timeframeMinutes <= 30 && v5 != null)
-        {
-            int side5 = Math.max(0, Math.min(v5[0], v5[1]));
-            if (side5 > 0) perMinute = side5 / 5.0;
-        }
-        return Math.max(1, (int) Math.floor(perMinute * timeframeMinutes * LIQUIDITY_FRACTION));
-    }
 
 
 
@@ -730,11 +612,6 @@ public class FlipScorer
         return (avgHigh5 - avgHigh1h) * 100.0 / avgHigh1h;
     }
 
-    private static long gcd(long a, long b)
-    {
-        while (b != 0) { long t = b; b = a % b; a = t; }
-        return a == 0 ? 1 : a;
-    }
 
     private static boolean isOddName(String name)
     {
