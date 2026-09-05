@@ -10,6 +10,7 @@ import com.runeassist.flip.model.FlipStatus;
 import com.runeassist.flip.model.FlipV2;
 import com.runeassist.flip.model.OfferStatus;
 import com.runeassist.flip.model.OsrsLoginManager;
+import com.runeassist.flip.model.PortfolioId;
 import com.runeassist.flip.model.SuggestionManager;
 import com.runeassist.flip.model.Transaction;
 import com.runeassist.flip.model.VisualizeFlipResponse;
@@ -413,9 +414,8 @@ public class FlipHistorySyncService {
                 req.addProperty("quantity", quantity);
                 req.addProperty("unitCost", unitCost);
                 req.addProperty("remove", remove);
-                if (remove) {
-                    req.addProperty("portfolioId", -1);
-                }
+                // FC shape: add → COFLIP (0); remove → -1
+                req.addProperty("portfolioId", remove ? -1 : PortfolioId.COFLIP_PORTFOLIO);
                 JsonObject body = post("/v1/account/toggle-item-portfolio", req, true);
                 if (body != null) {
                     applyHeldFromBody(displayName, body);
