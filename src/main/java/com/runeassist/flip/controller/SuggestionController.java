@@ -148,9 +148,9 @@ public class SuggestionController {
     /**
      * Click-to-modify / offer editor open for the current MODIFY card. Do not fetch
      * a replacement (the 60s "very out of date" path used to bypass isSlotOpen and
-     * LocalSuggestionEngine then saw the cancelled slot as empty and emitted BUY).
-     * A leftover lock with the editor closed (logout, hop, GE home) must not freeze
-     * the card — empty slots should get BUY.
+     * then treat the cancelled slot as empty, emitting BUY). A leftover lock with
+     * the editor closed (logout, hop, GE home) must not freeze the card — empty
+     * slots should get BUY.
      */
     private boolean isModifyInProgress(Suggestion p) {
         if (p != null && p.actionedTick != -1 && p.actionedTick <= client.getTickCount()) {
@@ -313,7 +313,7 @@ public class SuggestionController {
         };
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
-        // Ranked candidates from Ares; compose prefers /v1/suggestion, else LocalSuggestionEngine.
+        // Typed suggestion from Ares POST /v1/suggestion (compose-only).
         suggestionManager.setGraphDataReadingInProgress(false); // graph is served separately
         runeAssistSource.getSuggestionAsync(suggestionConsumer);
     }
