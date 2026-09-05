@@ -30,13 +30,14 @@ public class PrivacyPackagingTest {
      * packager rejects any key in that file other than displayName, author, description, tags,
      * plugins, version, build, support (see {@code Plugin.java} in plugin-hub-tooling).
      */
-    // Coin stack is listed because /v1/flips sends `capital` on every suggestion cycle, with no
-    // opt-in gate -- it is not covered by "offers" or "transactions", and it is the user's
-    // wealth, so it belongs in the text shown before install.
+    // Coin stack + held cost-basis are listed because /v1/suggestion (and /v1/flips) send
+    // capital and held rows on suggestion cycles with no opt-in gate -- not covered by
+    // "offers" or "transactions" alone, and they reflect wealth, so they belong in the
+    // text shown before install.
     private static final String HUB_WARNING_TEXT =
-            "This plugin submits your coin stack size, grand exchange offers, grand exchange "
-                    + "transactions, and IP address to a 3rd party server not controlled or "
-                    + "verified by the RuneLite Developers.";
+            "This plugin submits your coin stack size, held Grand Exchange stock with cost basis, "
+                    + "grand exchange offers, grand exchange transactions, and IP address to a 3rd "
+                    + "party server not controlled or verified by the RuneLite Developers.";
 
     private static final Set<String> ALLOWED_PROPERTIES_KEYS = new HashSet<>(Arrays.asList(
             "displayName", "author", "description", "tags", "plugins", "version", "build", "support"));
