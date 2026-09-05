@@ -310,54 +310,6 @@ public class FlipManager {
         missedFlipsByAccount.clear();
     }
 
-    public synchronized boolean isGhostFlip(int accountId, UUID flipId) {
-        if (flipId == null) {
-            return false;
-        }
-        Map<UUID, FlipV2> byId = missedFlipsByAccount.get(accountId);
-        if (byId == null) {
-            return false;
-        }
-        FlipV2 f = byId.get(flipId);
-        return f != null && f.getPortfolioId() == PortfolioId.GHOST;
-    }
-
-    /**
-     * Local incomplete flips (bought more than sold) for the Missed flips tab.
-     * These stay in the personal portfolio; they are not FC ghost/disappeared rows.
-     */
-    public synchronized List<FlipV2> getIncompleteFlipsForAccount(Integer accountId) {
-        Map<UUID, FlipV2> byId = new LinkedHashMap<>();
-        aggregateFlips(0, accountId, true, f -> {
-            if (f != null && !f.isDeleted() && f.getOpenedQuantity() > f.getClosedQuantity()) {
-                FlipV2 existing = byId.get(f.getId());
-                if (existing == null || f.isNewer(existing)) {
-                    byId.put(f.getId(), f);
-                }
-            }
-        });
-        List<FlipV2> result = new ArrayList<>(byId.values());
-        if (itemController != null) {
-            result.forEach(f -> f.setCachedItemName(itemController.getItemName(f.getItemId())));
-        }
-        return result;
-    }
-
-    public synchronized List<FlipV2> getMissedFlipsForAccount(Integer accountId) {
-        if (accountId == null) {
-            return Collections.emptyList();
-        }
-        Map<UUID, FlipV2> byId = missedFlipsByAccount.get(accountId);
-        if (byId == null || byId.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<FlipV2> result = new ArrayList<>(byId.values());
-        if (itemController != null) {
-            result.forEach(f -> f.setCachedItemName(itemController.getItemName(f.getItemId())));
-        }
-        return result;
-    }
-
     private void mergeFlip_(FlipV2 flip) {
         Integer existingCloseTime = existingCloseTimes.get(flip.getId());
 
