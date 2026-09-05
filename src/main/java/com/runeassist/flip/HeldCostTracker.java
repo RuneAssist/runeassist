@@ -235,6 +235,41 @@ public class HeldCostTracker
         return removed;
     }
 
+    /**
+     * Replace cost-basis lots from the server portfolio/held snapshot.
+     * Once the client is linked, server state wins across restarts; live GE fills
+     * may still update lots optimistically until the next sync. Slots and 4h
+     * limit trackers are left alone (session-local offer progress).
+     *
+     * @param held itemId -&gt; [qty, avgBuy]; null or empty clears positions
+     */
+    public synchronized void replaceServerHeld(String displayName, Map<Integer, long[]> held)
+    {
+        Account acc = account(displayName);
+        ensureLoaded(displayName, acc);
+        acc.positions.clear();
+        if (held != null)
+        {
+            for (Map.Entry<Integer, long[]> e : held.entrySet())
+            {
+                if (e.getKey() == null || e.getKey() <= 0 || e.getValue() == null || e.getValue().length < 2)
+                {
+                    continue;
+                }
+                int qty = (int) e.getValue()[0];
+                long unit = e.getValue()[1];
+                if (qty <= 0 || unit < 0)
+                {
+                    continue;
+                }
+                Deque<Lot> q = new ArrayDeque<>();
+                q.add(new Lot(qty, unit));
+                acc.positions.put(e.getKey(), q);
+            }
+        }
+        save(displayName, acc);
+    }
+
     private static int heldQty(Account acc, int itemId)
     {
         Deque<Lot> lots = acc.positions.get(itemId);
