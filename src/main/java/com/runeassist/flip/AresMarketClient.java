@@ -9,8 +9,6 @@ import com.runeassist.flip.model.ComposeSuggestionResponse;
 import com.runeassist.flip.model.RiskLevel;
 import com.runeassist.flip.model.Suggestion;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.Call;
-import okhttp3.Callback;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -19,7 +17,6 @@ import okhttp3.Response;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -31,7 +28,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 
 /**
  * Thin Ares HTTP client for market data and suggestion composition. Flip <em>ranking</em>
@@ -46,7 +42,6 @@ public class AresMarketClient
     private static final String UA = "RuneAssist-flip/1.0 (github.com/RuneAssist/runeassist)";
     private static final String ARES_FLIPS = "https://runeassist.ares-server.co.uk/v1/flips";
     private static final String ARES_SUGGESTION = "https://runeassist.ares-server.co.uk/v1/suggestion";
-    private static final String ARES_DUMP_ALERTS = "https://runeassist.ares-server.co.uk/v1/dump-alerts";
     private static final String ARES_DECANTS = "https://runeassist.ares-server.co.uk/v1/decants";
     private static final String ARES_HEALTH = "https://runeassist.ares-server.co.uk/v1/market/health";
     private static final String ARES_LIMITS = "https://runeassist.ares-server.co.uk/v1/market/limits";
@@ -555,70 +550,6 @@ public class AresMarketClient
             log.warn("Ares /v1/flips failed: {}", e.getMessage());
             return null;
         }
-    }
-
-
-    /**
-     * Long-lived dump-alert stream ({@code POST /v1/dump-alerts}). The response is handed
-     * to {@code onSuccess} still open — frames are length-prefixed JSON (keepalive = 0).
-     * No auth / no RSN; filters only.
-     */
-    public Call asyncConsumeDumpAlerts(long dumpMinPredictedProfit,
-                                       boolean f2pOnly,
-                                       Collection<Integer> blockedIds,
-                                       Consumer<Response> onSuccess,
-                                       Consumer<? super Exception> onFailure)
-    {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("dumpMinPredictedProfit", Math.max(0L, dumpMinPredictedProfit));
-        body.put("f2pOnly", f2pOnly);
-        body.put("membersItemsAllowed", !f2pOnly);
-        if (blockedIds != null && !blockedIds.isEmpty())
-        {
-            body.put("blockedIds", new ArrayList<>(blockedIds));
-        }
-
-        Request request = new Request.Builder()
-            .url(ARES_DUMP_ALERTS)
-            .header("User-Agent", UA)
-            .post(RequestBody.create(JSON, gson.toJson(body)))
-            .build();
-
-        Call call = httpClient.newBuilder()
-            .readTimeout(15, TimeUnit.SECONDS)
-            .callTimeout(0, TimeUnit.MILLISECONDS)
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .build()
-            .newCall(request);
-
-        call.enqueue(new Callback()
-        {
-            @Override
-            public void onFailure(Call call, IOException e)
-            {
-                if (onFailure != null)
-                {
-                    onFailure.accept(e);
-                }
-            }
-
-            @Override
-            public void onResponse(Call call, Response response)
-            {
-                if (!response.isSuccessful() || response.body() == null)
-                {
-                    int code = response.code();
-                    response.close();
-                    if (onFailure != null)
-                    {
-                        onFailure.accept(new IOException("dump-alerts HTTP " + code));
-                    }
-                    return;
-                }
-                onSuccess.accept(response);
-            }
-        });
-        return call;
     }
 
     private static Map<String, Integer> stringifyKeys(Map<Integer, Integer> in)

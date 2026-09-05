@@ -1,8 +1,9 @@
 package com.runeassist.flip.controller;
 
+import com.google.gson.Gson;
 import com.google.inject.Singleton;
-import com.runeassist.flip.model.AccountStatus;
-import com.runeassist.flip.model.AccountStatusManager;
+import com.runeassist.flip.AresMarketClient;
+import com.runeassist.flip.model.DumpAlert;
 import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.model.SuggestionPreferencesManager;
 import com.runeassist.flip.rs.AccountSuggestionPreferencesRS;
@@ -19,58 +20,64 @@ import okio.BufferedSource;
 import javax.inject.Inject;
 import java.io.IOException;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Subscribes to Ares {@code POST /v1/dump-alerts} when dump prefs are on, the
- * player is logged in, and the GE is open — same gating Flipping Copilot used,
- * without a Copilot login. Frames are uvarint-length JSON suggestion DTOs
- * (keepalive = zero-length frame).
+ * Subscribes to Ares {@code POST /v1/dump-alerts} when dump-alert prefs are on,
+ * the player is logged in, and the GE is open — same lifecycle as Flipping Copilot's
+ * {@code DumpsStreamController}, without a Copilot account.
  */
 @Slf4j
 @Singleton
 public class DumpsStreamController {
 
+    // a dump alert is a few hundred bytes; anything near this is a framing bug
     private static final long MAX_FRAME_BYTES = 1 << 20;
 
     private final ClientThread clientThread;
-    private final ApiRequestHandler apiRequestHandler;
+    private final AresMarketClient aresMarketClient;
     private final SuggestionController suggestionController;
     private final SuggestionPreferencesManager preferencesManager;
-    private final AccountStatusManager accountStatusManager;
+    private final Gson gson;
     private final AtomicReference<Call> activeCall = new AtomicReference<>();
-    private final ReactiveState<Boolean> shouldSubscribe;
+    private final ReactiveState<String> subscriptionKey;
 
     @Inject
-    public DumpsStreamController(
-            ClientThread clientThread,
-            ApiRequestHandler apiRequestHandler,
-            SuggestionController suggestionController,
-            SuggestionPreferencesManager preferencesManager,
-            AccountStatusManager accountStatusManager,
-            AccountSuggestionPreferencesRS accountSuggestionPreferencesRS,
-            OsrsLoginRS osrsLoginRS,
-            GrandExchangeOpenRS grandExchangeOpenRS) {
+    public DumpsStreamController(ClientThread clientThread,
+                                 AresMarketClient aresMarketClient,
+                                 SuggestionController suggestionController,
+                                 SuggestionPreferencesManager preferencesManager,
+                                 AccountSuggestionPreferencesRS accountSuggestionPreferencesRS,
+                                 OsrsLoginRS osrsLoginRS,
+                                 GrandExchangeOpenRS grandExchangeOpenRS,
+                                 Gson gson) {
         this.clientThread = clientThread;
-        this.apiRequestHandler = apiRequestHandler;
+        this.aresMarketClient = aresMarketClient;
         this.suggestionController = suggestionController;
         this.preferencesManager = preferencesManager;
-        this.accountStatusManager = accountStatusManager;
-        this.shouldSubscribe = ReactiveStateUtil.derive(
+        this.gson = gson;
+        this.subscriptionKey = ReactiveStateUtil.derive(
                 osrsLoginRS,
                 accountSuggestionPreferencesRS,
                 grandExchangeOpenRS,
-                (loginState, preferences, isGrandExchangeOpen) ->
-                        loginState != null
-                                && loginState.loggedIn
-                                && preferences != null
-                                && preferences.isReceiveDumpSuggestions()
-                                && Boolean.TRUE.equals(isGrandExchangeOpen));
-        shouldSubscribe.registerListener(active -> {
-            if (Boolean.TRUE.equals(active)) {
+                (loginState, preferences, isGrandExchangeOpen) -> {
+                    if (loginState == null
+                            || !loginState.loggedIn
+                            || loginState.displayName == null
+                            || loginState.displayName.isBlank()
+                            || preferences == null
+                            || !preferences.isReceiveDumpSuggestions()
+                            || !Boolean.TRUE.equals(isGrandExchangeOpen)) {
+                        return null;
+                    }
+                    long min = preferences.getDumpMinPredictedProfit() != null
+                            ? preferences.getDumpMinPredictedProfit()
+                            : SuggestionPreferencesManager.DEFAULT_DUMP_MIN_PROFIT;
+                    return loginState.displayName + "|" + min + "|" + preferences.isF2pOnlyMode();
+                });
+        subscriptionKey.registerListener(key -> {
+            if (key != null) {
                 consumeDumps();
             } else {
                 ensureUnsubscribed();
@@ -86,57 +93,42 @@ public class DumpsStreamController {
     }
 
     private void consumeDumps() {
-        if (!Boolean.TRUE.equals(shouldSubscribe.get())) {
+        String key = subscriptionKey.get();
+        if (key == null) {
             return;
         }
         Call previous = activeCall.get();
-        Map<String, Object> filters = buildFilters();
-        Call call = apiRequestHandler.asyncConsumeDumpAlerts(
-                filters,
+        Long effective = preferencesManager.getEffectiveDumpMinPredictedProfit();
+        long minProfit = effective != null
+                ? effective
+                : SuggestionPreferencesManager.DEFAULT_DUMP_MIN_PROFIT;
+        Call call = aresMarketClient.asyncConsumeDumpAlerts(
+                minProfit,
+                preferencesManager.isF2pOnlyMode(),
+                new ArrayList<>(preferencesManager.blockedItems()),
                 this::consumeDumpStream,
                 error -> {
                     log.warn("dump alerts connection failed, re-connecting: {}", error.getMessage());
-                    if (Boolean.TRUE.equals(shouldSubscribe.get())) {
+                    if (subscriptionKey.get() != null) {
                         consumeDumps();
                     }
                 });
-        log.info("subscribing to dump alerts");
-        if (activeCall.getAndSet(call) != previous || !Boolean.TRUE.equals(shouldSubscribe.get())) {
+        log.info("subscribing to dumps ({})", key);
+        if (call == null) {
+            return;
+        }
+        if (activeCall.getAndSet(call) != previous || subscriptionKey.get() == null) {
             ensureUnsubscribed();
         }
     }
 
-    private Map<String, Object> buildFilters() {
-        Map<String, Object> body = new HashMap<>();
-        Long minProfit = preferencesManager.getEffectiveDumpMinPredictedProfit();
-        if (minProfit != null) {
-            body.put("dumpMinPredictedProfit", minProfit);
-        }
-        body.put("f2pOnly", preferencesManager.isF2pOnlyMode());
-        List<Integer> blocked = preferencesManager.blockedItems();
-        if (blocked != null && !blocked.isEmpty()) {
-            body.put("blockedIds", blocked);
-        }
-        try {
-            AccountStatus status = accountStatusManager.getAccountStatus();
-            if (status != null) {
-                long cash = status.currentCashStack();
-                if (cash > 0) {
-                    body.put("capital", cash);
-                }
-                if (status.emptySlotExists()) {
-                    body.put("remainingSlots", 1);
-                }
-            }
-        } catch (Exception e) {
-            log.debug("dump filter account snapshot failed: {}", e.getMessage());
-        }
-        return body;
-    }
-
-    /** Each frame is a uvarint byte length followed by that many bytes of JSON; zero-length = keepalive. */
+    // each frame is a uvarint byte length followed by that many bytes of JSON DumpAlert;
+    // a zero-length frame is the keepalive
     private void consumeDumpStream(Response response) {
         try (Response resp = response) {
+            if (resp.body() == null) {
+                throw new IOException("empty dump-alert body");
+            }
             BufferedSource source = resp.body().source();
             while (activeCall.get() != null) {
                 long length = readUvarint(source);
@@ -149,7 +141,7 @@ public class DumpsStreamController {
                 handleDumpMessage(source.readByteArray(length));
             }
         } catch (IOException e) {
-            if (Boolean.TRUE.equals(shouldSubscribe.get())) {
+            if (subscriptionKey.get() != null) {
                 log.warn("dump alerts stream error", e);
                 consumeDumps();
             } else {
@@ -158,7 +150,7 @@ public class DumpsStreamController {
         }
     }
 
-    private static long readUvarint(BufferedSource source) throws IOException {
+    static long readUvarint(BufferedSource source) throws IOException {
         long value = 0;
         for (int shift = 0; shift < 64; shift += 7) {
             int b = source.readByte() & 0xFF;
@@ -171,16 +163,20 @@ public class DumpsStreamController {
     }
 
     private void handleDumpMessage(byte[] data) {
-        Suggestion suggestion = apiRequestHandler.decodeDumpSuggestionFrame(data);
+        Suggestion suggestion;
+        try {
+            suggestion = DumpAlert.decodeJson(data, gson).suggestion;
+        } catch (Exception e) {
+            log.warn("dump suggestion decode failed", e);
+            return;
+        }
         if (suggestion == null) {
             log.warn("dump suggestion decode failed");
             return;
         }
+        suggestion.setMessage("<html><b><font color=#FA4A4B>Dump alert!!</font></b></html>");
         suggestion.setDumpAlert(true);
         suggestion.setDumpAlertReceived(Instant.now());
-        if (suggestion.getMessage() == null || suggestion.getMessage().isEmpty()) {
-            suggestion.setMessage("<html><b><font color=#FA4A4B>Dump alert!!</font></b></html>");
-        }
         clientThread.invoke(() -> suggestionController.handleDumpSuggestion(suggestion));
         log.info("received dump suggestion {} {}", suggestion.getName(), suggestion.getType());
     }
