@@ -17,7 +17,7 @@ public interface RuneAssistConfig extends Config
     // Configuration → RuneAssist Flipping. Both toggles are opt-in (Hub requirement).
     @ConfigSection(
             name = "Privacy",
-            description = "Optional pseudonymous data contribution and opt-in cloud history sync",
+            description = "Optional pseudonymous data contribution",
             position = 0
     )
     String privacySection = "privacySection";
@@ -35,22 +35,6 @@ public interface RuneAssistConfig extends Config
             position = 0
     )
     default boolean shareTelemetry()
-    {
-        return false;
-    }
-
-    @ConfigItem(
-            keyName = "cloudSync",
-            name = "Cloud sync flip history",
-            description = "Off by default. Links this client to a RuneAssist cloud account and uploads " +
-                    "your GE transactions and RSN so history syncs across devices (raw transactions " +
-                    "only — not derived profit). Untick to keep history on this PC. Failures never block " +
-                    "suggestions. Pair another device from the plugin Preferences panel.",
-            warning = "This feature submits your Grand Exchange transactions and IP address to a 3rd-party server not controlled or verified by RuneLite developers",
-            section = privacySection,
-            position = 1
-    )
-    default boolean cloudSync()
     {
         return false;
     }
