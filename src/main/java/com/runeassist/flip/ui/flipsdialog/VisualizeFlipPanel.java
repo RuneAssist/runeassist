@@ -49,7 +49,7 @@ public class VisualizeFlipPanel extends JPanel {
         statsPanel.setBackground(configManager.getConfig().backgroundColor);
         statsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        add(DialogUi.centeredMessage("Right click on a flip in the flips tab and select 'Visualize flip' option.", ColorScheme.DARK_GRAY_COLOR, true, 16f), Cards.LANDING_CARD.name());
+        add(DialogUi.centeredMessage("Open a flip from the side panel to visualize it here.", ColorScheme.DARK_GRAY_COLOR, true, 16f), Cards.LANDING_CARD.name());
         add(DialogUi.loadingCard("Loading price data...", ColorScheme.DARK_GRAY_COLOR), Cards.LOADING_CARD.name());
         add(DialogUi.splitGraphCard(graphPanel, statsPanel), Cards.GRAPH_CARD.name());
         add(DialogUi.errorCard(errorLabel, () -> {

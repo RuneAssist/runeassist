@@ -11,7 +11,6 @@ import com.runeassist.flip.ui.RuneAssistColors;
 import com.runeassist.flip.ui.RuneAssistTabbedPaneUI;
 import com.google.inject.name.Named;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.client.callback.ClientThread;
 import net.runelite.client.util.LinkBrowser;
 
 import javax.inject.Inject;
@@ -26,9 +25,7 @@ import java.util.concurrent.ScheduledExecutorService;
 public class FlipsDialogController {
 
     private final ItemController itemController;
-    private final FlipManager flipsManager;
     private final ExecutorService executorService;
-    private final AccountLoginRS accountLoginRS;
     private final RuneAssistConfig config;
     private final ApiRequestHandler apiRequestHandler;
     private final PriceGraphConfigManager priceGraphConfigManager;
@@ -37,26 +34,23 @@ public class FlipsDialogController {
     private final OsrsLoginRS osrsLoginRS;
     private final PortfolioStateRS portfolioStateRS;
     private final BankStateRS bankStateRS;
-    private final GeHistoryStateRS geHistoryStateRS;
-    private final ClientThread clientThread;
-    private final TransactionManager transactionManager;
     private final LocalFlipLedger localFlipLedger;
-    private final OfferManager offerManager;
     private final com.runeassist.flip.HeldCostTracker heldCostTracker;
 
     public PriceGraphPanel priceGraphPanel;
     private JTabbedPane tabbedPane;
     private JDialog dialog;
-    private FlipsPanel flipsPanel;
-    private MissedFlipsPanel missedFlipsPanel;
     private VisualizeFlipPanel visualizeFlipPanel;
+
+    // Tab indices after Path A analytics cut: Portfolio, Price graph, Visualize flip
+    private static final int TAB_PORTFOLIO = 0;
+    private static final int TAB_PRICE_GRAPH = 1;
+    private static final int TAB_VISUALIZE_FLIP = 2;
 
     @Inject
     public FlipsDialogController(
             @Named("runeAssistExecutor") ScheduledExecutorService executorService,
             ItemController itemController,
-            FlipManager flipsManager,
-            AccountLoginRS accountLoginRS,
             RuneAssistConfig config,
             ApiRequestHandler apiRequestHandler,
             PriceGraphConfigManager priceGraphConfigManager,
@@ -65,16 +59,10 @@ public class FlipsDialogController {
             OsrsLoginRS osrsLoginRS,
             PortfolioStateRS portfolioStateRS,
             BankStateRS bankStateRS,
-            GeHistoryStateRS geHistoryStateRS,
-            ClientThread clientThread,
-            TransactionManager transactionManager,
             LocalFlipLedger localFlipLedger,
-            OfferManager offerManager,
             com.runeassist.flip.HeldCostTracker heldCostTracker) {
         this.itemController = itemController;
-        this.flipsManager = flipsManager;
         this.executorService = executorService;
-        this.accountLoginRS = accountLoginRS;
         this.config = config;
         this.apiRequestHandler = apiRequestHandler;
         this.priceGraphConfigManager = priceGraphConfigManager;
@@ -83,11 +71,7 @@ public class FlipsDialogController {
         this.osrsLoginRS = osrsLoginRS;
         this.portfolioStateRS = portfolioStateRS;
         this.bankStateRS = bankStateRS;
-        this.geHistoryStateRS = geHistoryStateRS;
-        this.clientThread = clientThread;
-        this.transactionManager = transactionManager;
         this.localFlipLedger = localFlipLedger;
-        this.offerManager = offerManager;
         this.heldCostTracker = heldCostTracker;
     }
 
@@ -107,17 +91,6 @@ public class FlipsDialogController {
                     apiRequestHandler,
                     localFlipLedger
             );
-            flipsPanel = new FlipsPanel(flipsManager, itemController, accountLoginRS,
-                    executorService, config, osrsLoginRS, localFlipLedger, (f) -> {
-                showVisualizeFlip(f);
-            });
-            missedFlipsPanel = new MissedFlipsPanel(osrsLoginRS, flipsManager, itemController, accountLoginRS,
-                    executorService, geHistoryStateRS, localFlipLedger, offerManager);
-            ItemAggregatePanel itemsPanel = new ItemAggregatePanel(flipsManager, itemController,
-                    accountLoginRS, executorService, config);
-            AccountsAggregatePanel accountsPanel = new AccountsAggregatePanel(accountLoginRS,
-                    executorService, config, flipsManager);
-            ProfitPanel profitPanel = new ProfitPanel(flipsManager, executorService, accountLoginRS, config);
             PortfolioPanel portfolioPanel = new PortfolioPanel(
                     itemController,
                     config,
@@ -129,9 +102,6 @@ public class FlipsDialogController {
                     bankStateRS,
                     itemId -> showPriceGraphTab(itemId, false, null)
             );
-            TransactionsPanel transactionsPanel = new TransactionsPanel(accountLoginRS, itemController,
-                    executorService, osrsLoginManager, config, flipsManager,
-                    transactionManager, localFlipLedger);
             priceGraphPanel = new PriceGraphPanel(
                     itemController,
                     priceGraphConfigManager,
@@ -141,48 +111,24 @@ public class FlipsDialogController {
                     suggestionManager
             );
             tabbedPane.addTab("Portfolio", portfolioPanel);
-            tabbedPane.addTab("Flips", flipsPanel);
-            tabbedPane.addTab("Items", itemsPanel);
-            tabbedPane.addTab("Accounts", accountsPanel);
-            tabbedPane.addTab("Profit graph", profitPanel);
-            tabbedPane.addTab("Transactions", transactionsPanel);
             tabbedPane.addTab("Price graph", priceGraphPanel);
             tabbedPane.addTab("Visualize flip", visualizeFlipPanel);
-            tabbedPane.addTab("Missed flips", missedFlipsPanel);
-
 
             JDialog dialog = new JDialog(windowAncestor);
             dialog.setTitle("RuneAssist Flipping");
             dialog.setResizable(true);
             dialog.setMinimumSize(new Dimension(800, 600));
 
-
             tabbedPane.addChangeListener(e -> {
                 int selectedIndex = tabbedPane.getSelectedIndex();
                 switch (selectedIndex) {
-                    case 0:
+                    case TAB_PORTFOLIO:
                         portfolioPanel.onTabShown();
                         break;
-                    case 1:
-                        flipsPanel.onTabShown();
-                        break;
-                    case 2:
-                        itemsPanel.onTabShown();
-                        break;
-                    case 3:
-                        accountsPanel.onTabShown();
-                        break;
-                    case 4:
-                        profitPanel.refreshGraph(true);
-                        break;
-                    case 5:
-                        transactionsPanel.loadTransactionsIfNeeded();
-                        break;
-                    case 6:
+                    case TAB_PRICE_GRAPH:
                         priceGraphPanel.onTabShown();
                         break;
-                    case 8:
-                        missedFlipsPanel.onTabShown();
+                    default:
                         break;
                 }
             });
@@ -201,7 +147,7 @@ public class FlipsDialogController {
     }
 
     public void showPriceGraphTab(Integer openOnPriceGraphItemId, boolean suggestionPriceGraph, PriceLine priceLine) {
-        tabbedPane.setSelectedIndex(6);
+        tabbedPane.setSelectedIndex(TAB_PRICE_GRAPH);
         if(openOnPriceGraphItemId != null) {
             priceGraphPanel.isShowingSuggestionPriceData = false;
             priceGraphPanel.searchBox.setItem(new ItemIdName(openOnPriceGraphItemId, itemController.getItemName(openOnPriceGraphItemId)));
@@ -240,7 +186,7 @@ public class FlipsDialogController {
 
 
     public void showPortfolioTab() {
-        tabbedPane.setSelectedIndex(0);
+        tabbedPane.setSelectedIndex(TAB_PORTFOLIO);
         dialog.setVisible(true);
     }
 
@@ -249,7 +195,7 @@ public class FlipsDialogController {
             return;
         }
         visualizeFlipPanel.showFlipVisualization(flip);
-        tabbedPane.setSelectedIndex(7);
+        tabbedPane.setSelectedIndex(TAB_VISUALIZE_FLIP);
         dialog.setVisible(true);
     }
 }
