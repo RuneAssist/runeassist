@@ -2,9 +2,11 @@ package com.runeassist.flip.ui.flipsdialog;
 
 import com.runeassist.flip.controller.ApiRequestHandler;
 import com.runeassist.flip.config.RuneAssistConfig;
+import com.runeassist.flip.controller.FlipHistorySyncService;
 import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.manager.PriceGraphConfigManager;
 import com.runeassist.flip.model.FlipV2;
+import com.runeassist.flip.model.OsrsLoginManager;
 import com.runeassist.flip.model.VisualizeFlipResponse;
 import com.runeassist.flip.ui.graph.*;
 import com.runeassist.flip.ui.graph.model.Data;
@@ -21,6 +23,8 @@ public class VisualizeFlipPanel extends JPanel {
 
     private final ItemController itemController;
     private final ApiRequestHandler apiRequestHandler;
+    private final FlipHistorySyncService flipHistorySyncService;
+    private final OsrsLoginManager osrsLoginManager;
 
     private final JLabel errorLabel = new JLabel();
     private final GraphPanel graphPanel;
@@ -32,9 +36,13 @@ public class VisualizeFlipPanel extends JPanel {
     public VisualizeFlipPanel(ItemController itemController,
                               PriceGraphConfigManager configManager,
                               RuneAssistConfig pluginConfig,
-                              ApiRequestHandler apiRequestHandler) {
+                              ApiRequestHandler apiRequestHandler,
+                              FlipHistorySyncService flipHistorySyncService,
+                              OsrsLoginManager osrsLoginManager) {
         this.itemController = itemController;
         this.apiRequestHandler = apiRequestHandler;
+        this.flipHistorySyncService = flipHistorySyncService;
+        this.osrsLoginManager = osrsLoginManager;
 
         setLayout(contentCardLayout);
         setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -65,6 +73,54 @@ public class VisualizeFlipPanel extends JPanel {
         Consumer<String> onFailure = (String errorMessage) -> {
             SwingUtilities.invokeLater(() -> showErrorCard(errorMessage));
         };
+        Consumer<VisualizeFlipResponse> onSuccess = (VisualizeFlipResponse d) -> {
+            if (d == null) {
+                onFailure.accept("No price data available for this item.");
+                return;
+            }
+            if (d.getGraphData() == null || !d.getGraphData().hasPriceSeries()) {
+                apiRequestHandler.asyncGetRuneAssistGraph(flip.getItemId(),
+                    (Data graph) -> {
+                        if (graph == null || !graph.hasPriceSeries()) {
+                            String message = d.getMessage();
+                            onFailure.accept(message == null || message.isEmpty()
+                                    ? "No price data available for this item."
+                                    : message);
+                            return;
+                        }
+                        d.graphData = graph;
+                        d.graphData.clearPredictionData();
+                        SwingUtilities.invokeLater(() -> showGraphCard(new DataManager(d.getGraphData(), d), flip));
+                    },
+                    (Throwable e) -> {
+                        String message = d.getMessage();
+                        onFailure.accept(message == null || message.isEmpty()
+                                ? "No price data available for this item."
+                                : message);
+                    });
+                return;
+            }
+            d.graphData.clearPredictionData();
+            SwingUtilities.invokeLater(() -> showGraphCard(new DataManager(d.getGraphData(), d), flip));
+        };
+
+        String displayName = osrsLoginManager != null ? osrsLoginManager.getPlayerDisplayName() : null;
+        if (displayName != null && flipHistorySyncService != null
+                && flipHistorySyncService.isOsrsLinked(displayName)
+                && flip.getId() != null) {
+            flipHistorySyncService.asyncVisualizeFlip(displayName, flip.getId(), onSuccess, (err) -> {
+                log.debug("server visualize flip failed, falling back to FlipV2 aggregates: {}", err);
+                loadAggregateOverlay(flip, onSuccess, onFailure);
+            });
+            return;
+        }
+        loadAggregateOverlay(flip, onSuccess, onFailure);
+    }
+
+    /** Post-diet fallback: graph + FlipV2 buy/sell aggregates (no local lot ledger). */
+    private void loadAggregateOverlay(FlipV2 flip,
+                                      Consumer<VisualizeFlipResponse> onSuccess,
+                                      Consumer<String> onFailure) {
         apiRequestHandler.asyncGetRuneAssistGraph(flip.getItemId(),
             (Data d) -> {
                 if (d == null || !d.hasPriceSeries()) {
@@ -72,9 +128,7 @@ public class VisualizeFlipPanel extends JPanel {
                     return;
                 }
                 d.clearPredictionData();
-                // FlipV2 aggregates supply buy/sell markers when per-lot ledger rows are absent.
-                VisualizeFlipResponse overlay = VisualizeFlipResponse.fromLocalLots(d, flip, Collections.emptyList());
-                SwingUtilities.invokeLater(() -> showGraphCard(new DataManager(overlay.getGraphData(), overlay), flip));
+                onSuccess.accept(VisualizeFlipResponse.fromLocalLots(d, flip, Collections.emptyList()));
             },
             (Throwable e) -> {
                 String detail = e != null && e.getMessage() != null && !e.getMessage().isEmpty()
