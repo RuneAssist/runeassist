@@ -298,6 +298,34 @@ public class FlipManager {
         missedFlipsByAccount.clear();
     }
 
+    public synchronized boolean isGhostFlip(int accountId, UUID flipId) {
+        if (flipId == null) {
+            return false;
+        }
+        Map<UUID, FlipV2> byId = missedFlipsByAccount.get(accountId);
+        if (byId == null) {
+            return false;
+        }
+        FlipV2 f = byId.get(flipId);
+        return f != null && f.getPortfolioId() == PortfolioId.GHOST;
+    }
+
+    public synchronized List<FlipV2> getMissedFlipsForAccount(Integer accountId) {
+        if (accountId == null) {
+            return Collections.emptyList();
+        }
+        Map<UUID, FlipV2> byId = missedFlipsByAccount.get(accountId);
+        if (byId == null || byId.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<FlipV2> result = new ArrayList<>(byId.values());
+        if (itemController != null) {
+            result.forEach(f -> f.setCachedItemName(itemController.getItemName(f.getItemId())));
+        }
+        result.sort(FLIP_STATUS_TIME_COMPARATOR);
+        return result;
+    }
+
     private void mergeFlip_(FlipV2 flip) {
         Integer existingCloseTime = existingCloseTimes.get(flip.getId());
 

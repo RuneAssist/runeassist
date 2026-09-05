@@ -5,6 +5,7 @@ import com.runeassist.flip.model.FlipStatus;
 import com.runeassist.flip.model.FlipV2;
 import com.runeassist.flip.model.OfferStatus;
 import com.runeassist.flip.model.Transaction;
+import com.runeassist.flip.ui.FlipRepairMenus;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -54,5 +55,36 @@ public class FlipHistorySyncServiceTest {
         assertEquals(4151, o.get("itemId").getAsInt());
         assertEquals(200, o.get("amountSpent").getAsLong());
         assertFalse(o.get("id").getAsString().isEmpty());
+    }
+
+    @Test
+    public void txFromJsonParsesSell() {
+        JsonObject o = new JsonObject();
+        o.addProperty("id", "33333333-3333-3333-3333-333333333333");
+        o.addProperty("type", "SELL");
+        o.addProperty("itemId", 4151);
+        o.addProperty("price", 500);
+        o.addProperty("quantity", 3);
+        o.addProperty("boxId", 2);
+        o.addProperty("amountSpent", 1500);
+        o.addProperty("timestamp", "2024-02-01T00:00:00Z");
+        Transaction t = FlipHistorySyncService.txFromJson(o);
+        assertNotNull(t);
+        assertEquals(OfferStatus.SELL, t.getType());
+        assertEquals(4151, t.getItemId());
+        assertEquals(1500, t.getAmountSpent());
+        assertEquals(UUID.fromString("33333333-3333-3333-3333-333333333333"), t.getId());
+    }
+
+    @Test
+    public void canMissedSaleRequiresOpenQty() {
+        FlipV2 open = new FlipV2();
+        open.setStatus(FlipStatus.SELLING);
+        open.setOpenedQuantity(10);
+        open.setClosedQuantity(4);
+        assertTrue(FlipRepairMenus.canMissedSale(open));
+        open.setClosedQuantity(10);
+        open.setStatus(FlipStatus.FINISHED);
+        assertFalse(FlipRepairMenus.canMissedSale(open));
     }
 }
