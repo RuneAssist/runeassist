@@ -14,7 +14,9 @@ import java.nio.charset.StandardCharsets;
 public interface RuneAssistConfig extends Config
 {
     // Keep this block first: RuneLite sorts sections by position, and users look at
-    // Configuration → RuneAssist Flipping. Both toggles are opt-in (Hub requirement).
+    // Configuration → RuneAssist Flipping. Telemetry remains opt-in (Hub requirement).
+    // Flip history is always server-backed once this client has a device identity /
+    // linked OSRS account (pair from Preferences) — there is no local-only history mode.
     @ConfigSection(
             name = "Privacy",
             description = "Optional pseudonymous data contribution",
@@ -29,7 +31,8 @@ public interface RuneAssistConfig extends Config
                     "decisions to RuneAssist's server under a pseudonymous account hash (SHA-256 of " +
                     "your RSN). Never sends chat, bank contents or your RSN in plain text. Does not " +
                     "gate flip suggestions (those use the server's /v1/suggestion and /v1/flips independently). Untick " +
-                    "stays local. No endpoint or token needed for the hosted server.",
+                    "stays local. No endpoint or token needed for the hosted server. Flip history sync " +
+                    "is separate — link a device in Preferences to keep Recent Flips across sessions.",
             warning = "This feature submits your Grand Exchange offers and IP address to a 3rd-party server not controlled or verified by RuneLite developers",
             section = privacySection,
             position = 0

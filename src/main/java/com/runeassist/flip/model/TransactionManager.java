@@ -1,5 +1,7 @@
 package com.runeassist.flip.model;
 
+import com.runeassist.flip.controller.FlipHistorySyncService;
+import com.runeassist.flip.controller.Persistance;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -13,18 +15,30 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class TransactionManager {
+
     private final ScheduledExecutorService executorService;
     private final OsrsLoginManager osrsLoginManager;
     private final LocalFlipLedger localFlipLedger;
     private final OfferManager offerManager;
+    private final FlipHistorySyncService flipHistorySyncService;
 
-    /** In-session leftover GE fills only — no disk backup. */
     private final ConcurrentMap<String, List<Transaction>> cachedUnAckedTransactions = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, AtomicBoolean> transactionSyncScheduled = new ConcurrentHashMap<>();
 
+    public void syncUnAckedTransactions(String displayName) {
+        synchronized (this) {
+            AtomicBoolean scheduled = transactionSyncScheduled.get(displayName);
+            if (scheduled != null) {
+                scheduled.set(false);
+            }
+        }
+        // Legacy copilot transaction upload is disabled. FlipHistorySyncService
+        // uploads the unacked queue and pulls server flip history on login.
+    }
+
     /**
      * Load the session flip book for this account and replay any leftover unacked
-     * GE fills still held in memory.
+     * GE fills that were recorded before the local ledger existed.
      */
     public void hydrateLocal(String displayName) {
         if (displayName == null || displayName.isEmpty()) {
@@ -42,6 +56,7 @@ public class TransactionManager {
             localFlipLedger.applyAll(leftover, displayName);
             synchronized (this) {
                 getUnAckedTransactions(displayName).clear();
+                Persistance.storeUnackedTransactions(Collections.emptyList(), displayName);
             }
         }
     }
@@ -93,18 +108,20 @@ public class TransactionManager {
         }
         hydrateLocal(displayName);
         long profit = localFlipLedger.apply(transaction, displayName);
+        flipHistorySyncService.enqueue(transaction, displayName);
         synchronized (this) {
             List<Transaction> unAckedTransactions = getUnAckedTransactions(displayName);
             UUID id = transaction.getId();
             if (id != null) {
                 unAckedTransactions.removeIf(t -> id.equals(t.getId()));
+                Persistance.storeUnackedTransactions(unAckedTransactions, displayName);
             }
         }
         return profit;
     }
 
     public List<Transaction> getUnAckedTransactions(String displayName) {
-        return cachedUnAckedTransactions.computeIfAbsent(displayName, (k) -> new ArrayList<>());
+        return cachedUnAckedTransactions.computeIfAbsent(displayName, Persistance::loadUnackedTransactions);
     }
 
 }

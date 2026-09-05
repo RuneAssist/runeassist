@@ -39,7 +39,7 @@ import java.util.concurrent.*;
 // No Flipping Copilot account or servers.
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
-		description = "Grand Exchange flipping assistant with server compose suggestions, held-cost tracking, and Ares market data. Contribution and cloud sync are opt-in (Configuration -> Privacy).",
+		description = "Grand Exchange flipping assistant with server compose suggestions, held-cost tracking, and Ares market data. Anonymous contribution is opt-in (Configuration -> Privacy).",
 		tags = {"runeassist", "flipping", "ge", "grand exchange", "merch", "money making", "profit"}
 )
 // RuneAssist fork: dropped @PluginDependency(BankTagsPlugin.class) -- a sideloaded plugin
@@ -130,6 +130,8 @@ public class RuneAssistPlugin extends Plugin {
 	private com.runeassist.flip.GeHistoryDump geHistoryDump;
 	@Inject
 	private com.runeassist.flip.GeHistoryHeldBackfill geHistoryHeldBackfill;
+	@Inject
+	private FlipHistorySyncService flipHistorySyncService;
 
 	// We use our own ThreadPool since the default ScheduledExecutorService only has a single thread and we don't want to block it
 	@Provides
@@ -185,6 +187,7 @@ public class RuneAssistPlugin extends Plugin {
 		}
 		flipsDialogController.initDialog(SwingUtilities.getWindowAncestor(mainPanel));
 		telemetry.onUploadSettingsChanged();
+		flipHistorySyncService.start();
 		executorService.scheduleAtFixedRate(() ->
 			clientThread.invoke(() -> {
 				boolean loginValid = osrsLoginManager.isValidLoginState();
@@ -277,6 +280,7 @@ public class RuneAssistPlugin extends Plugin {
 		sessionManager.startOrResume();
 		transactionManager.hydrateLocal(name);
 		transactionManager.seedLiveOffers(name, client.getGrandExchangeOffers());
+		flipHistorySyncService.onLogin(name);
 		int accountId = LocalFlipLedger.accountIdFor(name);
 		accountLoginRS.addAccountIfMissing(accountId, name);
 		flipManager.setPluginUserId(LocalFlipLedger.LOCAL_USER_ID);
@@ -365,6 +369,7 @@ public class RuneAssistPlugin extends Plugin {
 		switch (event.getGameState())
 		{
 			case LOGIN_SCREEN:
+				flipHistorySyncService.flushNow();
 				sessionManager.reset();
 				suggestionManager.reset();
 				osrsLoginManager.reset();
@@ -408,6 +413,7 @@ public class RuneAssistPlugin extends Plugin {
 	@Subscribe
 	public void onClientShutdown(ClientShutdown clientShutdownEvent) {
 		log.debug("client shutdown event received");
+		flipHistorySyncService.flushNow();
 		offerManager.saveAll();
 		String displayName = osrsLoginManager.getLastDisplayName();
 		Integer accountId = accountLoginRS.get().getAccountId(displayName);
