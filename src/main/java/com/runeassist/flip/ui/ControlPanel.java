@@ -91,7 +91,11 @@ public class ControlPanel extends JPanel
         timeframePanel.add(settingsHeader);
         UIUtilities.addVerticalGap(timeframePanel, 4);
 
-        JPanel strip = new JPanel(new GridLayout(1, 2, 8, 0));
+        // FlowLayout, not GridLayout: equal halves are narrower than the longest label needs, so
+        // the risk value truncated to "M..." while the shorter window value fitted. FlowLayout
+        // gives each combo its preferred width -- set from a prototype below -- and wraps rather
+        // than clipping if the panel is ever too narrow for both.
+        JPanel strip = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         strip.setOpaque(false);
         strip.setAlignmentX(LEFT_ALIGNMENT);
         strip.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
@@ -101,6 +105,7 @@ public class ControlPanel extends JPanel
         customExplicitlySelected = !isPreset(initMinutes);
 
         timeframeCombo = new JComboBox<>(TIMEFRAME_ITEMS);
+        timeframeCombo.setPrototypeDisplayValue("Custom");
         styleCompactCombo(timeframeCombo);
         timeframeCombo.setToolTipText(VOLUME_TOOLTIP);
         timeframeCombo.addActionListener(e -> {
@@ -118,6 +123,7 @@ public class ControlPanel extends JPanel
             preferencesManager.setRiskLevel(initialRiskLevel);
         }
         riskCombo = new JComboBox<>(new String[]{RISK_LOW_LABEL, RISK_MEDIUM_LABEL, RISK_HIGH_LABEL});
+        riskCombo.setPrototypeDisplayValue(RISK_HIGH_LABEL);
         styleCompactCombo(riskCombo);
         riskCombo.setToolTipText("Risk level for suggested flips");
         riskCombo.addActionListener(e -> {
@@ -128,10 +134,13 @@ public class ControlPanel extends JPanel
             applyRiskLevel(riskFromCombo());
         });
 
-        JPanel windowCell = labeledCombo("Window", timeframeCombo);
-        windowCell.setToolTipText(VOLUME_TOOLTIP);
-        strip.add(windowCell);
-        strip.add(labeledCombo("Risk", riskCombo));
+        // No inline "Window"/"Risk" captions: the section is already headed WINDOW / RISK, and in
+        // a ~225px side panel split into two cells the caption took most of the width, leaving the
+        // combo too narrow to show its own value -- both rendered as an ellipsis rather than the
+        // selected "30m" and "Med". The order matches the heading, and both carry tooltips.
+        timeframeCombo.setToolTipText(VOLUME_TOOLTIP);
+        strip.add(timeframeCombo);
+        strip.add(riskCombo);
         timeframePanel.add(strip);
 
         customPanel = new JPanel();
@@ -640,24 +649,15 @@ public class ControlPanel extends JPanel
         }
     }
 
-    private static JPanel labeledCombo(String caption, JComboBox<String> combo)
-    {
-        JPanel cell = new JPanel(new BorderLayout(4, 0));
-        cell.setOpaque(false);
-        JLabel label = RuneAssistColors.caption(caption);
-        cell.add(label, BorderLayout.WEST);
-        cell.add(combo, BorderLayout.CENTER);
-        return cell;
-    }
-
     private static void styleCompactCombo(JComboBox<String> combo)
     {
         combo.setBackground(RuneAssistColors.CARD);
         combo.setForeground(RuneAssistColors.TEXT);
         combo.setFocusable(false);
         combo.setMaximumRowCount(5);
-        combo.setPreferredSize(new Dimension(90, 24));
-        combo.setMinimumSize(new Dimension(72, 22));
+        // Width comes from the longest option via the prototype the caller sets, so a value
+        // can never be wider than the box showing it.
+        combo.setMinimumSize(new Dimension(56, 22));
         combo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
         combo.setBorder(BorderFactory.createLineBorder(RuneAssistColors.HAIRLINE));
         combo.setRenderer(new DefaultListCellRenderer()

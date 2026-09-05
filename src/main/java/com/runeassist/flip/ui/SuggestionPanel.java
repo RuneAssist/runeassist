@@ -33,6 +33,8 @@ import static com.runeassist.flip.util.Constants.MIN_GP_NEEDED_TO_FLIP;
 @Slf4j
 public class SuggestionPanel extends JPanel {
     private static final int DEFAULT_PANEL_HEIGHT = 168;
+    /** Tall enough for a 9pt chip plus its border and the row's own bottom padding. */
+    private static final int FLAGS_ROW_HEIGHT = 18;
     private static final int HEADER_TRAILING_INSET = 52;
     private static final String CARD_STRUCTURED = "structured";
     private static final String CARD_MESSAGE = "message";
@@ -176,6 +178,12 @@ public class SuggestionPanel extends JPanel {
         flagsRow.setBackground(RuneAssistColors.CARD);
         flagsRow.setAlignmentX(LEFT_ALIGNMENT);
         flagsRow.setBorder(BorderFactory.createEmptyBorder(0, 0, 2, 0));
+        // The card has a fixed preferred height, so the vertical BoxLayout shrinks whatever has no
+        // minimum. This row had none and collapsed to a few pixels: the chips rendered as slivers
+        // of their own gold border with no text. Pinning the height keeps them legible.
+        Dimension flagsSize = new Dimension(MainPanel.CONTENT_WIDTH - 20, FLAGS_ROW_HEIGHT);
+        flagsRow.setMinimumSize(flagsSize);
+        flagsRow.setPreferredSize(flagsSize);
         constrainWidth(flagsRow);
         structured.add(flagsRow);
         return structured;

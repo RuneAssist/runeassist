@@ -27,7 +27,10 @@ public final class RuneAssistColors {
     public static final Color CARD = ColorScheme.DARKER_GRAY_COLOR;
     public static final Color SHELL = ColorScheme.DARK_GRAY_COLOR;
     public static final Color TEXT = ColorScheme.LIGHT_GRAY_COLOR;
-    public static final Color MUTED = ColorScheme.MEDIUM_GRAY_COLOR;
+    // Not MEDIUM_GRAY: against CARD that is about 2.3:1, well under the 4.5:1 body text needs,
+    // and the why-line and limit text were hard to read. This clears 4.5:1 while staying visibly
+    // secondary to TEXT.
+    public static final Color MUTED = new Color(0x8E8E8E);
     /**
      * Unselected-chip text (Volume Window / Risk toggle buttons). MUTED (rgb 77,77,77) on
      * CARD (rgb 30,30,30) measures ~1.9:1 contrast -- well under the WCAG AA minimum of
