@@ -17,56 +17,41 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
+import static com.runeassist.flip.ui.PrefsUi.Option;
 import static com.runeassist.flip.ui.UIUtilities.*;
-import java.util.List;
 
 @Slf4j
 @Singleton
 public class PreferencesPanel extends JPanel {
-    private static final Option[] MIN_PREDICTED_PROFIT_OPTIONS = new Option[]{
-            new Option("Auto (off)", 0L),
-            new Option("20K", SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT),
-            new Option("50K", 50_000L),
-            new Option("100K", 100_000L),
-            new Option("200K", 200_000L),
-            new Option("500K", 500_000L),
-            new Option("1M", 1_000_000L)
+    private static final Option[] MIN_PREDICTED_PROFIT_OPTIONS = {
+            PrefsUi.option("Auto (off)", 0L),
+            PrefsUi.option("20K", SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT),
+            PrefsUi.option("50K", 50_000L),
+            PrefsUi.option("100K", 100_000L),
+            PrefsUi.option("200K", 200_000L),
+            PrefsUi.option("500K", 500_000L),
+            PrefsUi.option("1M", 1_000_000L)
     };
-
-    private static final Option[] RESERVED_SLOTS_OPTIONS = new Option[]{
-            new Option("Auto", null),
-            new Option("0", 0),
-            new Option("1", 1),
-            new Option("2", 2),
-            new Option("3", 3),
-            new Option("4", 4),
-            new Option("5", 5),
-            new Option("6", 6),
-            new Option("7", 7),
-            new Option("8", 8)
+    private static final Option[] RESERVED_SLOTS_OPTIONS = {
+            PrefsUi.option("Auto", null),
+            PrefsUi.option("0", 0), PrefsUi.option("1", 1), PrefsUi.option("2", 2),
+            PrefsUi.option("3", 3), PrefsUi.option("4", 4), PrefsUi.option("5", 5),
+            PrefsUi.option("6", 6), PrefsUi.option("7", 7), PrefsUi.option("8", 8)
     };
-
-    private static final Option[] DUMP_ALERT_MIN_PROFIT_OPTIONS = new Option[]{
-            new Option("Off", null),
-            new Option("100K+", 100_000L),
-            new Option("200K+", 200_000L),
-            new Option("500K+", 500_000L),
-            new Option("1M+", 1_000_000L),
-            new Option("2M+", 2_000_000L),
-            new Option("5M+", 5_000_000L)
+    private static final Option[] DUMP_ALERT_MIN_PROFIT_OPTIONS = {
+            PrefsUi.option("Off", null),
+            PrefsUi.option("100K+", 100_000L), PrefsUi.option("200K+", 200_000L),
+            PrefsUi.option("500K+", 500_000L), PrefsUi.option("1M+", 1_000_000L),
+            PrefsUi.option("2M+", 2_000_000L), PrefsUi.option("5M+", 5_000_000L)
     };
-
-    private static final Option[] TIME_BASED_ABORT_MINUTES_OPTIONS = new Option[]{
-            new Option("10m", 10),
-            new Option("15m", SuggestionPreferencesManager.DEFAULT_TIME_BASED_ABORT_MINUTES),
-            new Option("30m", 30),
-            new Option("60m", 60)
+    private static final Option[] TIME_BASED_ABORT_MINUTES_OPTIONS = {
+            PrefsUi.option("10m", 10),
+            PrefsUi.option("15m", SuggestionPreferencesManager.DEFAULT_TIME_BASED_ABORT_MINUTES),
+            PrefsUi.option("30m", 30), PrefsUi.option("60m", 60)
     };
 
     private final SuggestionPreferencesManager preferencesManager;
@@ -74,7 +59,6 @@ public class PreferencesPanel extends JPanel {
     private final FlipHistorySyncService flipHistorySyncService;
     @SuppressWarnings("unused") // Guice: keep stream controller alive with prefs UI
     private final DumpsStreamController dumpsStreamController;
-    private final ItemController itemController;
     private final ScheduledExecutorService executorService;
     private final PreferencesToggleButton sellOnlyModeToggleButton;
     private final PreferencesToggleButton buyAndHoldToggleButton;
@@ -98,8 +82,6 @@ public class PreferencesPanel extends JPanel {
     private final JButton openLinkButton;
     private final JButton linkDeviceBtn;
     private final JButton redeemBtn;
-    private final JButton linkWebBtn;
-    private boolean pairingIsWebLink;
     private boolean suppressMinProfitEvents;
     private boolean suppressReservedSlotsEvents;
     private boolean suppressDumpAlertsEvents;
@@ -119,7 +101,6 @@ public class PreferencesPanel extends JPanel {
         this.accountPreferences = accountPreferences;
         this.flipHistorySyncService = flipHistorySyncService;
         this.dumpsStreamController = dumpsStreamController;
-        this.itemController = itemController;
         this.executorService = executorService;
 
         blocklistDropdownPanel = new ItemSearchMultiSelect(
@@ -138,13 +119,8 @@ public class PreferencesPanel extends JPanel {
         setBackground(ColorScheme.DARKER_GRAY_COLOR);
         setBorder(BorderFactory.createEmptyBorder(8, 10, 10, 28));
 
-        preferencesContent = new PrefsBody();
-
-        JLabel preferencesTitle = new JLabel("Suggestion Settings");
-        preferencesTitle.setForeground(Color.WHITE);
-        preferencesTitle.setFont(preferencesTitle.getFont().deriveFont(Font.BOLD));
-        preferencesTitle.setHorizontalAlignment(SwingConstants.LEFT);
-        preferencesContent.add(preferencesTitle);
+        preferencesContent = PrefsUi.scrollBody();
+        preferencesContent.add(PrefsUi.sectionTitle("Suggestion Settings"));
         addVerticalGap(preferencesContent, 8);
 
         loginPromptPanel = darkPanel(new GridBagLayout(), ColorScheme.DARKER_GRAY_COLOR);
@@ -152,19 +128,15 @@ public class PreferencesPanel extends JPanel {
         loginPromptLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
         loginPromptPanel.add(loginPromptLabel);
 
-        add(scrollPreferences(preferencesContent), "preferences");
+        add(PrefsUi.verticalScroll(preferencesContent), "preferences");
         add(loginPromptPanel, "login");
 
-        // Profile selector panel
         JPanel profilePanel = transparentPanel(new BorderLayout());
         profilePanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 5, 0));
-
-        // Panel for dropdown and buttons
         JPanel profileControlPanel = new JPanel();
         profileControlPanel.setLayout(new BoxLayout(profileControlPanel, BoxLayout.X_AXIS));
         profileControlPanel.setOpaque(false);
 
-        // Initialize profile model with default
         profileSelector = new JComboBox<>();
         setFixedSize(profileSelector, 160, 25);
         profileSelector.addActionListener(e -> {
@@ -175,107 +147,51 @@ public class PreferencesPanel extends JPanel {
             }
         });
 
-        // Add button for creating new profiles
         addProfileButton = new JButton("+");
         setFixedSize(addProfileButton, 15, 25);
         addProfileButton.setToolTipText("Add new profile");
-        addProfileButton.addActionListener(e -> {
-            String newProfileName = JOptionPane.showInputDialog(
-                    SwingUtilities.getWindowAncestor(this),
-                    "Enter new profile name (must be valid file name):",
-                    "New preferences profile",
-                    JOptionPane.PLAIN_MESSAGE);
-            if (newProfileName != null && !newProfileName.trim().isEmpty()) {
-                newProfileName = newProfileName.trim();
-                try {
-                    preferencesManager.addProfile(newProfileName);
-                    refresh();
-                } catch (IOException ex) {
-                    log.error("adding new profile: {}", newProfileName, ex);
-                    JOptionPane.showMessageDialog(
-                            SwingUtilities.getWindowAncestor(this),
-                            "Error adding new profile: "+ ex.getMessage(),
-                            "Add profile failed",
-                            JOptionPane.WARNING_MESSAGE);
-                }
-            }
-        });
+        addProfileButton.addActionListener(e -> addProfile());
 
-        // Delete button for removing custom profiles
         deleteProfileButton = new JButton("-");
         setFixedSize(deleteProfileButton, 15, 25);
         deleteProfileButton.setToolTipText("Delete current profile");
-        deleteProfileButton.addActionListener(e -> {
-            String selectedProfile = (String) profileSelector.getSelectedItem();
-            if (selectedProfile != null) {
-                int result = JOptionPane.showConfirmDialog(
-                        SwingUtilities.getWindowAncestor(this),
-                        "Delete profile '" + selectedProfile + "'?",
-                        "Delete Profile",
-                        JOptionPane.YES_NO_OPTION,
-                        JOptionPane.QUESTION_MESSAGE);
-                if (result == JOptionPane.YES_OPTION) {
-                    ((DefaultComboBoxModel<String>) profileSelector.getModel()).removeElement(selectedProfile);
-                    try {
-                        preferencesManager.deleteSelectedProfile();
-                        profileSelector.setSelectedItem(preferencesManager.getCurrentProfile());
-                    } catch (IOException ex) {
-                        log.error("removing profile: {}", selectedProfile, ex);
-                        JOptionPane.showMessageDialog(
-                                SwingUtilities.getWindowAncestor(this),
-                                "Error deleting profile: "+ ex.getMessage(),
-                                "Remove profile failed",
-                                JOptionPane.WARNING_MESSAGE);
-                    }
-                    refresh();
-                }
-            }
-        });
+        deleteProfileButton.addActionListener(e -> deleteProfile());
 
         profileControlPanel.add(profileSelector);
         addHorizontalGap(profileControlPanel, 5);
         profileControlPanel.add(addProfileButton);
         addHorizontalGap(profileControlPanel, 2);
         profileControlPanel.add(deleteProfileButton);
-
         profilePanel.add(profileControlPanel, BorderLayout.LINE_START);
         preferencesContent.add(profilePanel);
 
-        // Blocklist dropdown panel
         blocklistDropdownPanel.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createEmptyBorder(5, 0, 5, 0),
                 blocklistDropdownPanel.getBorder()));
         preferencesContent.add(blocklistDropdownPanel);
 
-        // Buy and hold toggle
         buyAndHoldToggleButton = new PreferencesToggleButton("Disable holds", "Enable holds");
-        preferencesContent.add(formRow("Enable holds", buyAndHoldToggleButton));
+        PrefsUi.addRow(preferencesContent, "Enable holds", buyAndHoldToggleButton, 3);
         buyAndHoldToggleButton.addItemListener(i -> {
             preferencesManager.setBuyAndHold(buyAndHoldToggleButton.isSelected());
             suggestionManager.setSuggestionNeeded(true);
         });
-        addVerticalGap(preferencesContent, 3);
 
-        // Sell-only mode toggle
         sellOnlyModeToggleButton = new PreferencesToggleButton("Disable sell-only mode", "Enable sell-only mode");
-        preferencesContent.add(formRow("Sell-only mode", sellOnlyModeToggleButton));
+        PrefsUi.addRow(preferencesContent, "Sell-only mode", sellOnlyModeToggleButton, 3);
         sellOnlyModeToggleButton.addItemListener(i -> {
             preferencesManager.setSellOnlyMode(sellOnlyModeToggleButton.isSelected());
             suggestionManager.setSuggestionNeeded(true);
         });
-        addVerticalGap(preferencesContent, 3);
 
-        // F2P-only mode toggle
-        f2pOnlyModeToggleButton = new PreferencesToggleButton("Disable F2P-only mode",  "Enable F2P-only mode");
-        preferencesContent.add(formRow("F2P-only mode", f2pOnlyModeToggleButton));
+        f2pOnlyModeToggleButton = new PreferencesToggleButton("Disable F2P-only mode", "Enable F2P-only mode");
+        PrefsUi.addRow(preferencesContent, "F2P-only mode", f2pOnlyModeToggleButton, 0);
         f2pOnlyModeToggleButton.addItemListener(i -> {
             preferencesManager.setF2pOnlyMode(f2pOnlyModeToggleButton.isSelected());
             suggestionManager.setSuggestionNeeded(true);
         });
 
-        // Min predicted profit
-        minPredictedProfitDropdown = new JComboBox<>(new DefaultComboBoxModel<>(MIN_PREDICTED_PROFIT_OPTIONS));
-        setFixedSize(minPredictedProfitDropdown, 75, 25);
+        minPredictedProfitDropdown = combo(MIN_PREDICTED_PROFIT_OPTIONS);
         minPredictedProfitDropdown.addActionListener(e -> {
             if (suppressMinProfitEvents) {
                 return;
@@ -287,16 +203,12 @@ public class PreferencesPanel extends JPanel {
             preferencesManager.setMinPredictedProfit(v);
             suggestionManager.setSuggestionNeeded(true);
         });
-        JPanel minProfitRow = formRow("Min. predicted profit", minPredictedProfitDropdown);
-        String minProfitTip = "Default is 20K projected GP. Auto turns the floor off.";
+        JPanel minProfitRow = PrefsUi.addRow(preferencesContent, "Min. predicted profit", minPredictedProfitDropdown, 3);
+        String minProfitTip = "Default 20K projected GP. Auto turns the floor off.";
         minPredictedProfitDropdown.setToolTipText(minProfitTip);
         minProfitRow.setToolTipText(minProfitTip);
-        preferencesContent.add(minProfitRow);
-        addVerticalGap(preferencesContent, 3);
 
-        // Dump alerts dropdown
-        dumpAlertsDropdown = new JComboBox<>(new DefaultComboBoxModel<>(DUMP_ALERT_MIN_PROFIT_OPTIONS));
-        setFixedSize(dumpAlertsDropdown, 75, 25);
+        dumpAlertsDropdown = combo(DUMP_ALERT_MIN_PROFIT_OPTIONS);
         dumpAlertsDropdown.addActionListener(e -> {
             if (suppressDumpAlertsEvents) {
                 return;
@@ -311,23 +223,19 @@ public class PreferencesPanel extends JPanel {
             }
             suggestionManager.setSuggestionNeeded(true);
         });
-        preferencesContent.add(formRow("Dump alerts", dumpAlertsDropdown));
-        addVerticalGap(preferencesContent, 6);
+        PrefsUi.addRow(preferencesContent, "Dump alerts", dumpAlertsDropdown, 6);
 
-        // Opt-in time-based abort/modify (default off — conservative).
         timeBasedAbortToggleButton = new PreferencesToggleButton(
                 "Disable aged-offer reprice", "Enable aged-offer reprice");
-        preferencesContent.add(formRow("Aged-offer reprice", timeBasedAbortToggleButton));
+        PrefsUi.addRow(preferencesContent, "Aged-offer reprice", timeBasedAbortToggleButton, 3);
         timeBasedAbortToggleButton.setToolTipText(
-                "When enabled, offers older than the age below may be aborted or repriced if the market moved away. Default off.");
+                "When on, offers older than the minutes below may abort/reprice if the market moved. Default off.");
         timeBasedAbortToggleButton.addItemListener(i -> {
             preferencesManager.setTimeBasedAbortEnabled(timeBasedAbortToggleButton.isSelected());
             suggestionManager.setSuggestionNeeded(true);
         });
-        addVerticalGap(preferencesContent, 3);
 
-        timeBasedAbortMinutesDropdown = new JComboBox<>(new DefaultComboBoxModel<>(TIME_BASED_ABORT_MINUTES_OPTIONS));
-        setFixedSize(timeBasedAbortMinutesDropdown, 75, 25);
+        timeBasedAbortMinutesDropdown = combo(TIME_BASED_ABORT_MINUTES_OPTIONS);
         timeBasedAbortMinutesDropdown.addActionListener(e -> {
             if (suppressTimeBasedAbortMinutesEvents) {
                 return;
@@ -339,14 +247,10 @@ public class PreferencesPanel extends JPanel {
             preferencesManager.setTimeBasedAbortMinutes(mins);
             suggestionManager.setSuggestionNeeded(true);
         });
-        JPanel ageRow = formRow("Aged-offer minutes", timeBasedAbortMinutesDropdown);
+        JPanel ageRow = PrefsUi.addRow(preferencesContent, "Aged-offer minutes", timeBasedAbortMinutesDropdown, 6);
         ageRow.setToolTipText("Only used when Aged-offer reprice is enabled.");
-        preferencesContent.add(ageRow);
-        addVerticalGap(preferencesContent, 6);
 
-        // Reserved slots
-        reservedSlotsDropdown = new JComboBox<>(new DefaultComboBoxModel<>(RESERVED_SLOTS_OPTIONS));
-        setFixedSize(reservedSlotsDropdown, 75, 25);
+        reservedSlotsDropdown = combo(RESERVED_SLOTS_OPTIONS);
         reservedSlotsDropdown.addActionListener(e -> {
             if (suppressReservedSlotsEvents) {
                 return;
@@ -355,13 +259,9 @@ public class PreferencesPanel extends JPanel {
             preferencesManager.setReservedSlots(option == null || option.value == null ? null : option.value.intValue());
             suggestionManager.setSuggestionNeeded(true);
         });
-        preferencesContent.add(formRow("Reserved slots", reservedSlotsDropdown));
-        addVerticalGap(preferencesContent, 10);
+        PrefsUi.addRow(preferencesContent, "Reserved slots", reservedSlotsDropdown, 10);
 
-        JLabel historyTitle = new JLabel("Account & history");
-        historyTitle.setForeground(Color.WHITE);
-        historyTitle.setFont(historyTitle.getFont().deriveFont(Font.BOLD));
-        preferencesContent.add(historyTitle);
+        preferencesContent.add(PrefsUi.sectionTitle("Account & history"));
         addVerticalGap(preferencesContent, 4);
 
         historyStatusLabel = new JLabel();
@@ -410,31 +310,27 @@ public class PreferencesPanel extends JPanel {
         preferencesContent.add(pairingCodePanel);
         addVerticalGap(preferencesContent, 4);
 
-        JButton openWebsiteBtn = pairingActionButton("Open website",
+        JButton openWebsiteBtn = PrefsUi.ghostAction("Open website",
                 "Graphs, history, pairing, and support on the dashboard");
         RuneAssistColors.stylePrimaryButton(openWebsiteBtn);
-        openWebsiteBtn.addActionListener(e -> LinkBrowser.browse(WebAnalyticsLinks.url(flipHistorySyncService.websiteUrl(), null)));
+        openWebsiteBtn.addActionListener(e ->
+                LinkBrowser.browse(WebAnalyticsLinks.url(flipHistorySyncService.websiteUrl(), null)));
         preferencesContent.add(openWebsiteBtn);
         addVerticalGap(preferencesContent, 4);
 
-        linkDeviceBtn = pairingActionButton("Get pairing code", "Code for another PC or the website");
-        linkDeviceBtn.addActionListener(e -> startPairing("Get pairing code",
-                "Enter this code on the other device or website.", true));
+        linkDeviceBtn = PrefsUi.ghostAction("Get pairing code", "Code for another PC or the website");
+        linkDeviceBtn.addActionListener(e -> startPairing());
         preferencesContent.add(linkDeviceBtn);
         addVerticalGap(preferencesContent, 4);
 
-        redeemBtn = pairingActionButton("Enter pairing code",
+        redeemBtn = PrefsUi.ghostAction("Enter pairing code",
                 "Redeem a code from another device or the website");
         redeemBtn.addActionListener(e -> redeemPairing());
         preferencesContent.add(redeemBtn);
 
-        // Kept for setPairingBusy; website CTA covers dashboard pairing.
-        linkWebBtn = pairingActionButton("Link website", "");
-        linkWebBtn.setVisible(false);
-
         for (Component c : preferencesContent.getComponents()) {
             if (c instanceof JComponent && !(c instanceof Box.Filler)) {
-                stretchWidth((JComponent) c);
+                PrefsUi.stretchWidth((JComponent) c);
             }
         }
         preferencesContent.add(Box.createVerticalGlue());
@@ -443,18 +339,65 @@ public class PreferencesPanel extends JPanel {
         refreshHistoryStatus();
     }
 
-    private static JButton pairingActionButton(String text, String tip) {
-        JButton button = new JButton(text);
-        button.setToolTipText(tip);
-        button.setAlignmentX(Component.LEFT_ALIGNMENT);
-        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
-        button.setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH - 40, 28));
-        RuneAssistColors.styleGhostButton(button);
-        return button;
+    private static JComboBox<Option> combo(Option[] options) {
+        JComboBox<Option> box = new JComboBox<>(new DefaultComboBoxModel<>(options));
+        setFixedSize(box, 75, 25);
+        return box;
     }
 
-    private void startPairing(String title, String how, boolean isWebLink) {
-        pairingIsWebLink = isWebLink;
+    private void addProfile() {
+        String newProfileName = JOptionPane.showInputDialog(
+                SwingUtilities.getWindowAncestor(this),
+                "Enter new profile name (must be valid file name):",
+                "New preferences profile",
+                JOptionPane.PLAIN_MESSAGE);
+        if (newProfileName == null || newProfileName.trim().isEmpty()) {
+            return;
+        }
+        newProfileName = newProfileName.trim();
+        try {
+            preferencesManager.addProfile(newProfileName);
+            refresh();
+        } catch (IOException ex) {
+            log.error("adding new profile: {}", newProfileName, ex);
+            JOptionPane.showMessageDialog(
+                    SwingUtilities.getWindowAncestor(this),
+                    "Error adding new profile: " + ex.getMessage(),
+                    "Add profile failed",
+                    JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    private void deleteProfile() {
+        String selectedProfile = (String) profileSelector.getSelectedItem();
+        if (selectedProfile == null) {
+            return;
+        }
+        int result = JOptionPane.showConfirmDialog(
+                SwingUtilities.getWindowAncestor(this),
+                "Delete profile '" + selectedProfile + "'?",
+                "Delete Profile",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
+        if (result != JOptionPane.YES_OPTION) {
+            return;
+        }
+        ((DefaultComboBoxModel<String>) profileSelector.getModel()).removeElement(selectedProfile);
+        try {
+            preferencesManager.deleteSelectedProfile();
+            profileSelector.setSelectedItem(preferencesManager.getCurrentProfile());
+        } catch (IOException ex) {
+            log.error("removing profile: {}", selectedProfile, ex);
+            JOptionPane.showMessageDialog(
+                    SwingUtilities.getWindowAncestor(this),
+                    "Error deleting profile: " + ex.getMessage(),
+                    "Remove profile failed",
+                    JOptionPane.WARNING_MESSAGE);
+        }
+        refresh();
+    }
+
+    private void startPairing() {
         setPairingBusy(true);
         historyStatusLabel.setText("Getting pairing code…");
         executorService.execute(() -> {
@@ -462,7 +405,7 @@ public class PreferencesPanel extends JPanel {
                 String code = flipHistorySyncService.startPairing();
                 SwingUtilities.invokeLater(() -> {
                     setPairingBusy(false);
-                    showPairingCode(code, how);
+                    showPairingCode(code);
                 });
             } catch (Exception ex) {
                 log.warn("pairing start failed", ex);
@@ -473,14 +416,14 @@ public class PreferencesPanel extends JPanel {
                     JOptionPane.showMessageDialog(
                             SwingUtilities.getWindowAncestor(this),
                             "Could not get a pairing code. Check the server is reachable.",
-                            title,
+                            "Get pairing code",
                             JOptionPane.WARNING_MESSAGE);
                 });
             }
         });
     }
 
-    private void showPairingCode(String code, String how) {
+    private void showPairingCode(String code) {
         String trimmed = code == null ? "" : code.trim();
         if (trimmed.isEmpty() || looksLikeUrl(trimmed)) {
             pairingCodeField.setText("");
@@ -494,11 +437,11 @@ public class PreferencesPanel extends JPanel {
         pairingCodeField.setText(trimmed);
         pairingCodeField.setCaretPosition(0);
         pairingCodeField.selectAll();
-        pairingCodeHint.setText("<html><body style='width:" + statusWrapPx() + "px'>"
-                + how + " Expires in 10 minutes.</body></html>");
+        pairingCodeHint.setText(PrefsUi.wrapHtml(
+                "Enter this code on the other device or website. Expires in 10 minutes.", statusWrapPx()));
         pairingCodePanel.setVisible(true);
-        openLinkButton.setVisible(pairingIsWebLink);
-        stretchWidth(pairingCodePanel);
+        openLinkButton.setVisible(true);
+        PrefsUi.stretchWidth(pairingCodePanel);
         pairingCodePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE,
                 Math.max(96, pairingCodePanel.getPreferredSize().height)));
         refreshHistoryStatus();
@@ -528,13 +471,12 @@ public class PreferencesPanel extends JPanel {
         Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(code), null);
         copyCodeButton.setText("Copied");
         executorService.schedule(() -> SwingUtilities.invokeLater(() -> copyCodeButton.setText("Copy")),
-                2, java.util.concurrent.TimeUnit.SECONDS);
+                2, TimeUnit.SECONDS);
     }
 
     private void setPairingBusy(boolean busy) {
         linkDeviceBtn.setEnabled(!busy);
         redeemBtn.setEnabled(!busy);
-        linkWebBtn.setEnabled(!busy);
     }
 
     private void refreshHistoryStatus() {
@@ -542,12 +484,11 @@ public class PreferencesPanel extends JPanel {
             SwingUtilities.invokeLater(this::refreshHistoryStatus);
             return;
         }
-        historyStatusLabel.setText("<html><body style='width:" + statusWrapPx() + "px'>"
-                + flipHistorySyncService.statusMessage() + "</body></html>");
+        historyStatusLabel.setText(PrefsUi.wrapHtml(flipHistorySyncService.statusMessage(), statusWrapPx()));
         historyStatusLabel.setForeground(flipHistorySyncService.isLinked()
                 ? ColorScheme.GRAND_EXCHANGE_PRICE
                 : ColorScheme.LIGHT_GRAY_COLOR);
-        stretchWidth(historyStatusLabel);
+        PrefsUi.stretchWidth(historyStatusLabel);
         if (!hasPairingCode()) {
             pairingCodePanel.setVisible(false);
         }
@@ -586,24 +527,6 @@ public class PreferencesPanel extends JPanel {
         });
     }
 
-    private static JScrollPane scrollPreferences(JPanel content) {
-        JScrollPane scroll = new JScrollPane(content);
-        scroll.setBorder(BorderFactory.createEmptyBorder());
-        scroll.setOpaque(false);
-        scroll.getViewport().setOpaque(true);
-        scroll.getViewport().setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
-        scroll.getVerticalScrollBar().setUnitIncrement(12);
-        return scroll;
-    }
-
-    private static void stretchWidth(JComponent component) {
-        component.setAlignmentX(Component.LEFT_ALIGNMENT);
-        int height = Math.max(component.getPreferredSize().height, 16);
-        component.setMaximumSize(new Dimension(Integer.MAX_VALUE, height));
-    }
-
     public void refresh() {
         if (!ensureEdt(this::refresh)) return;
         CardLayout layout = (CardLayout) getLayout();
@@ -618,8 +541,11 @@ public class PreferencesPanel extends JPanel {
         timeBasedAbortToggleButton.setSelected(preferencesManager.isTimeBasedAbortEnabled());
         suppressTimeBasedAbortMinutesEvents = true;
         try {
-            timeBasedAbortMinutesDropdown.setSelectedItem(
-                    findTimeBasedAbortMinutesOption(preferencesManager.getTimeBasedAbortMinutes()));
+            timeBasedAbortMinutesDropdown.setSelectedItem(PrefsUi.findByLong(
+                    timeBasedAbortMinutesDropdown,
+                    preferencesManager.getTimeBasedAbortMinutes(),
+                    SuggestionPreferencesManager.DEFAULT_TIME_BASED_ABORT_MINUTES,
+                    1));
         } finally {
             suppressTimeBasedAbortMinutesEvents = false;
         }
@@ -627,17 +553,23 @@ public class PreferencesPanel extends JPanel {
         syncDumpAlerts(preferencesManager.isReceiveDumpSuggestions(), preferencesManager.getDumpMinPredictedProfit());
         syncMinPredictedProfit(preferencesManager.getMinPredictedProfit());
         deleteProfileButton.setVisible(!preferencesManager.isDefaultProfileSelected());
-        List<String> correctOptions = preferencesManager.getAvailableProfiles();
         DefaultComboBoxModel<String> model = (DefaultComboBoxModel<String>) profileSelector.getModel();
         model.removeAllElements();
-        model.addAll(correctOptions);
+        model.addAll(preferencesManager.getAvailableProfiles());
         model.setSelectedItem(preferencesManager.getCurrentProfile());
     }
 
     private void syncMinPredictedProfit(Long value) {
         try {
             suppressMinProfitEvents = true;
-            minPredictedProfitDropdown.setSelectedItem(findMinProfitOption(value));
+            long effective = value == null
+                    ? SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT
+                    : value;
+            minPredictedProfitDropdown.setSelectedItem(PrefsUi.findByLong(
+                    minPredictedProfitDropdown,
+                    effective,
+                    SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT,
+                    1));
         } finally {
             suppressMinProfitEvents = false;
         }
@@ -646,7 +578,9 @@ public class PreferencesPanel extends JPanel {
     private void syncDumpAlerts(boolean enabled, Long minProfit) {
         try {
             suppressDumpAlertsEvents = true;
-            dumpAlertsDropdown.setSelectedItem(findDumpAlertOption(enabled, minProfit));
+            dumpAlertsDropdown.setSelectedItem(enabled
+                    ? PrefsUi.findByValue(dumpAlertsDropdown, minProfit != null ? minProfit : 100_000L, 1)
+                    : dumpAlertsDropdown.getItemAt(0));
         } finally {
             suppressDumpAlertsEvents = false;
         }
@@ -655,69 +589,10 @@ public class PreferencesPanel extends JPanel {
     private void syncReservedSlots(Integer value) {
         try {
             suppressReservedSlotsEvents = true;
-            reservedSlotsDropdown.setSelectedItem(findReservedSlotsOption(value));
+            reservedSlotsDropdown.setSelectedItem(PrefsUi.findByValue(reservedSlotsDropdown, value, 0));
         } finally {
             suppressReservedSlotsEvents = false;
         }
-    }
-
-    private Option findMinProfitOption(Long value) {
-        long effective = value == null
-                ? SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT
-                : value;
-        Option fallback = null;
-        for (int i = 0; i < minPredictedProfitDropdown.getItemCount(); i++) {
-            Option option = minPredictedProfitDropdown.getItemAt(i);
-            if (option.value == null) {
-                continue;
-            }
-            if (option.value.longValue() == effective) {
-                return option;
-            }
-            if (option.value.longValue() == SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT) {
-                fallback = option;
-            }
-        }
-        return fallback != null ? fallback : minPredictedProfitDropdown.getItemAt(1);
-    }
-
-    private Option findDumpAlertOption(boolean enabled, Long minProfit) {
-        if (!enabled) {
-            return dumpAlertsDropdown.getItemAt(0);
-        }
-        Long effective = minProfit != null ? minProfit : 100_000L;
-        for (int i = 0; i < dumpAlertsDropdown.getItemCount(); i++) {
-            Option option = dumpAlertsDropdown.getItemAt(i);
-            if (Objects.equals(option.value, effective)) {
-                return option;
-            }
-        }
-        return dumpAlertsDropdown.getItemAt(1);
-    }
-
-    private Option findReservedSlotsOption(Integer value) {
-        for (int i = 0; i < reservedSlotsDropdown.getItemCount(); i++) {
-            Option option = reservedSlotsDropdown.getItemAt(i);
-            if (Objects.equals(option.value, value)) {
-                return option;
-            }
-        }
-        return reservedSlotsDropdown.getItemAt(0);
-    }
-
-    private Option findTimeBasedAbortMinutesOption(int minutes) {
-        Option fallback = null;
-        for (int i = 0; i < timeBasedAbortMinutesDropdown.getItemCount(); i++) {
-            Option option = timeBasedAbortMinutesDropdown.getItemAt(i);
-            if (option.value != null && option.value.intValue() == minutes) {
-                return option;
-            }
-            if (option.value != null
-                    && option.value.intValue() == SuggestionPreferencesManager.DEFAULT_TIME_BASED_ABORT_MINUTES) {
-                fallback = option;
-            }
-        }
-        return fallback != null ? fallback : timeBasedAbortMinutesDropdown.getItemAt(1);
     }
 
     private int statusWrapPx() {
@@ -726,53 +601,5 @@ public class PreferencesPanel extends JPanel {
             width = MainPanel.CONTENT_WIDTH;
         }
         return Math.max(140, width - 48);
-    }
-
-    private static final class PrefsBody extends JPanel implements Scrollable {
-        PrefsBody() {
-            setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-            setOpaque(true);
-            setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        }
-
-        @Override
-        public Dimension getPreferredScrollableViewportSize() {
-            return getPreferredSize();
-        }
-
-        @Override
-        public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
-            return 12;
-        }
-
-        @Override
-        public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
-            return Math.max(12, visible.height - 12);
-        }
-
-        @Override
-        public boolean getScrollableTracksViewportWidth() {
-            return true;
-        }
-
-        @Override
-        public boolean getScrollableTracksViewportHeight() {
-            return false;
-        }
-    }
-
-    private static final class Option {
-        private final String label;
-        private final Number value;
-
-        private Option(String label, Number value) {
-            this.label = label;
-            this.value = value;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
     }
 }
