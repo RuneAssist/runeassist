@@ -1,6 +1,7 @@
 package com.runeassist.flip;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import com.runeassist.flip.model.ComposeSuggestionMapper;
@@ -29,33 +30,30 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-    /** Thin Ares HTTP client for market data and suggestion composition. Flip <em>ranking</em> */
+/** Thin Ares HTTP client for market data and suggestion composition. */
 @Slf4j
 @Singleton
 public class AresMarketClient
 {
     private static final String UA = "RuneAssist-flip/1.0 (github.com/RuneAssist/runeassist)";
-    private static final String ARES_FLIPS = "https://runeassist.com/v1/flips";
-    private static final String ARES_SUGGESTION = "https://runeassist.com/v1/suggestion";
-    private static final String ARES_HEALTH = "https://runeassist.com/v1/market/health";
-    private static final String ARES_LIMITS = "https://runeassist.com/v1/market/limits";
-    private static final String ARES_QUOTE = "https://runeassist.com/v1/market/quote";
+    private static final String BASE = "https://runeassist.com";
+    private static final String ARES_FLIPS = BASE + "/v1/flips";
+    private static final String ARES_SUGGESTION = BASE + "/v1/suggestion";
+    private static final String ARES_HEALTH = BASE + "/v1/market/health";
+    private static final String ARES_LIMITS = BASE + "/v1/market/limits";
+    private static final String ARES_QUOTE = BASE + "/v1/market/quote";
     private static final long LIMITS_TTL = 6 * 60 * 60 * 1000L;
     private static final MediaType JSON = MediaType.parse("application/json");
-    private static final Type CANDIDATE_LIST = new TypeToken<List<Map<String, Object>>>(){}.getType();
+    private static final Type ROW_LIST = new TypeToken<List<Map<String, Object>>>(){}.getType();
 
     private final OkHttpClient httpClient;
     private final Gson gson;
 
     private volatile Map<Integer, Integer> geLimits = new ConcurrentHashMap<>();
     private volatile long limitsFetchedAt = 0;
-    /** True when the last {@link #topFlips} call returned a reachable Ares response. */
     private volatile boolean lastFromAres = false;
-    /** True when the last Ares {@code /v1/flips} call failed (HTTP/timeout/parse), not empty-ok. */
     private volatile boolean lastAresUnreachable = false;
-    /** True when the last {@link #composeSuggestion} call returned a usable suggestion. */
     private volatile boolean lastFromCompose = false;
-    /** True when the last {@link #composeSuggestion} call failed (HTTP/timeout/unusable body). */
     private volatile boolean lastComposeUnreachable = false;
 
     @Inject
@@ -65,31 +63,11 @@ public class AresMarketClient
         this.gson = gson;
     }
 
-    /** Whether the last ranked candidate list came from a reachable Ares response. */
-    public boolean lastFromAres()
-    {
-        return lastFromAres;
-    }
+    public boolean lastFromAres() { return lastFromAres; }
+    public boolean lastAresUnreachable() { return lastAresUnreachable; }
+    public boolean lastFromCompose() { return lastFromCompose; }
+    public boolean lastComposeUnreachable() { return lastComposeUnreachable; }
 
-    /** True when Ares {@code /v1/flips} failed; empty-but-reachable is {@code false}. */
-    public boolean lastAresUnreachable()
-    {
-        return lastAresUnreachable;
-    }
-
-    /** True when the last {@link #composeSuggestion} returned a mapped {@link Suggestion}. */
-    public boolean lastFromCompose()
-    {
-        return lastFromCompose;
-    }
-
-    /** True when the last {@link #composeSuggestion} failed; callers soft-fail to WAIT. */
-    public boolean lastComposeUnreachable()
-    {
-        return lastComposeUnreachable;
-    }
-
-    /** Ask Ares to compose the next typed suggestion from a live GE / held snapshot. */
     public Suggestion composeSuggestion(ComposeSuggestionRequest request)
     {
         lastFromCompose = false;
@@ -99,57 +77,30 @@ public class AresMarketClient
             lastComposeUnreachable = true;
             return null;
         }
-
-        Request req = new Request.Builder()
-            .url(ARES_SUGGESTION)
-            .header("User-Agent", UA)
-            .post(RequestBody.create(JSON, gson.toJson(request)))
-            .build();
-        try (Response r = httpClient.newBuilder()
-            .callTimeout(15, TimeUnit.SECONDS)
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .build()
-            .newCall(req)
-            .execute())
-        {
-            if (!r.isSuccessful() || r.body() == null)
-            {
-                lastComposeUnreachable = true;
-                log.warn("Ares /v1/suggestion HTTP {}", r.code());
-                return null;
-            }
-            ComposeSuggestionResponse parsed =
-                gson.fromJson(r.body().charStream(), ComposeSuggestionResponse.class);
-            Suggestion suggestion = ComposeSuggestionMapper.toSuggestion(parsed);
-            if (suggestion == null)
-            {
-                lastComposeUnreachable = true;
-                log.warn("Ares /v1/suggestion returned unusable body (ok={}, error={})",
-                    parsed != null && parsed.isOk(),
-                    parsed != null ? parsed.getError() : null);
-                return null;
-            }
-            lastFromCompose = true;
-            lastFromAres = true;
-            lastAresUnreachable = false;
-            lastComposeUnreachable = false;
-            log.debug("Ares /v1/suggestion composed {} {}",
-                suggestion.getType(), suggestion.getName());
-            return suggestion;
-        }
-        catch (Exception e)
+        JsonObject root = postJson(ARES_SUGGESTION, gson.toJson(request), "suggestion");
+        if (root == null)
         {
             lastComposeUnreachable = true;
-            log.warn("Ares /v1/suggestion failed: {}", e.getMessage());
             return null;
         }
+        ComposeSuggestionResponse parsed = gson.fromJson(root, ComposeSuggestionResponse.class);
+        Suggestion suggestion = ComposeSuggestionMapper.toSuggestion(parsed);
+        if (suggestion == null)
+        {
+            lastComposeUnreachable = true;
+            log.warn("Ares /v1/suggestion returned unusable body (ok={}, error={})",
+                parsed != null && parsed.isOk(),
+                parsed != null ? parsed.getError() : null);
+            return null;
+        }
+        lastFromCompose = true;
+        lastFromAres = true;
+        lastAresUnreachable = false;
+        lastComposeUnreachable = false;
+        log.debug("Ares /v1/suggestion composed {} {}", suggestion.getType(), suggestion.getName());
+        return suggestion;
     }
 
-    /**
-     * Ranked flip candidates from Ares {@code POST /v1/flips}, or empty when the server has
-     * none / is unreachable. There is no local ranking fallback.
-     */
     public List<Map<String, Object>> topFlips(long capital, int timeframeMinutes, RiskLevel riskLevel,
                                               boolean membersItemsAllowed, int remainingSlots,
                                               Map<Integer, Integer> remainingBuyLimit,
@@ -166,14 +117,10 @@ public class AresMarketClient
             return remote;
         }
         lastFromAres = remote != null;
-        if (remote != null)
-        {
-            log.info("Ares /v1/flips returned 0 candidates");
-        }
+        if (remote != null) log.info("Ares /v1/flips returned 0 candidates");
         return new ArrayList<>();
     }
 
-    /** Sell-side quote for a held item: {name, sell_at, ge_limit, tax_at_sell}, or null. */
     public Map<String, Object> sellQuote(int itemId)
     {
         Map<String, Object> q = quote(itemId);
@@ -186,57 +133,18 @@ public class AresMarketClient
         return out;
     }
 
-    /** Current market quote for one item, or null. Blocks on HTTP; call off the client thread. */
     public Map<String, Object> quote(int itemId)
     {
-        Map<Integer, Map<String, Object>> all = quotes(Arrays.asList(itemId));
-        return all.get(itemId);
+        return quotes(Arrays.asList(itemId)).get(itemId);
     }
 
-    /**
-     * Batch market quotes from {@code GET /v1/market/quote?ids=...}, keyed by item id.
-     * One request for many ids — used for held-stock sells and portfolio marks.
-     */
     public Map<Integer, Map<String, Object>> quotes(Collection<Integer> itemIds)
     {
-        Map<Integer, Map<String, Object>> out = new LinkedHashMap<>();
-        if (itemIds == null || itemIds.isEmpty()) return out;
-        StringBuilder ids = new StringBuilder();
-        for (Integer id : itemIds)
-        {
-            if (id == null || id <= 0) continue;
-            if (ids.length() > 0) ids.append(',');
-            ids.append(id.intValue());
-        }
-        if (ids.length() == 0) return out;
-
-        Request request = new Request.Builder()
-            .url(ARES_QUOTE + "?ids=" + ids)
-            .header("User-Agent", UA)
-            .get()
-            .build();
-        try (Response r = httpClient.newCall(request).execute())
-        {
-            if (!r.isSuccessful() || r.body() == null) return out;
-            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
-            if (root == null || !root.has("items")) return out;
-            List<Map<String, Object>> rows = gson.fromJson(root.get("items"), CANDIDATE_LIST);
-            if (rows == null) return out;
-            for (Map<String, Object> row : rows)
-            {
-                Object id = row.get("id");
-                if (id instanceof Number) out.put(((Number) id).intValue(), row);
-            }
-            return out;
-        }
-        catch (Exception e)
-        {
-            log.warn("Ares /v1/market/quote failed: {}", e.getMessage());
-            return out;
-        }
+        String ids = joinIds(itemIds);
+        if (ids == null) return new LinkedHashMap<>();
+        return itemsById(getJson(ARES_QUOTE + "?ids=" + ids, "market/quote"), "items");
     }
 
-    /** GE buy limit for an item from the cached Ares limits map, or 0 if unknown. */
     public int geLimit(int itemId)
     {
         ensureLimits();
@@ -250,81 +158,35 @@ public class AresMarketClient
         synchronized (this)
         {
             if (!geLimits.isEmpty() && System.currentTimeMillis() - limitsFetchedAt < LIMITS_TTL) return;
-            Request request = new Request.Builder().url(ARES_LIMITS).header("User-Agent", UA).get().build();
-            try (Response r = httpClient.newCall(request).execute())
+            JsonObject root = getJson(ARES_LIMITS, "market/limits");
+            if (root == null || !root.has("limits")) return;
+            Map<Integer, Integer> parsed = new ConcurrentHashMap<>();
+            for (Map.Entry<String, JsonElement> e : root.getAsJsonObject("limits").entrySet())
             {
-                if (!r.isSuccessful() || r.body() == null) return;
-                JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
-                if (root == null || !root.has("limits")) return;
-                Map<Integer, Integer> parsed = new ConcurrentHashMap<>();
-                for (Map.Entry<String, com.google.gson.JsonElement> e : root.getAsJsonObject("limits").entrySet())
-                {
-                    try { parsed.put(Integer.parseInt(e.getKey()), e.getValue().getAsInt()); }
-                    catch (Exception ignored) { }
-                }
-                if (!parsed.isEmpty())
-                {
-                    geLimits = parsed;
-                    limitsFetchedAt = System.currentTimeMillis();
-                }
+                try { parsed.put(Integer.parseInt(e.getKey()), e.getValue().getAsInt()); }
+                catch (Exception ignored) { }
             }
-            catch (Exception e)
+            if (!parsed.isEmpty())
             {
-                log.warn("Ares /v1/market/limits failed: {}", e.getMessage());
+                geLimits = parsed;
+                limitsFetchedAt = System.currentTimeMillis();
             }
         }
     }
 
-    /**
-     * Market health for a batch of items from Ares {@code GET /v1/market/health}.
-     * Empty map if unreachable — callers treat a missing entry as no health info.
-     */
     public Map<Integer, Map<String, Object>> evaluateItems(Collection<Integer> itemIds,
                                                            int timeframeMinutes, RiskLevel riskLevel,
                                                            boolean membersItemsAllowed)
     {
-        Map<Integer, Map<String, Object>> out = new LinkedHashMap<>();
-        if (itemIds == null || itemIds.isEmpty()) return out;
-        StringBuilder ids = new StringBuilder();
-        for (Integer id : itemIds)
-        {
-            if (id == null || id <= 0) continue;
-            if (ids.length() > 0) ids.append(',');
-            ids.append(id.intValue());
-        }
-        if (ids.length() == 0) return out;
-
+        String ids = joinIds(itemIds);
+        if (ids == null) return new LinkedHashMap<>();
         String url = ARES_HEALTH + "?ids=" + ids
             + "&timeframe=" + Math.max(1, timeframeMinutes)
             + "&risk=" + (riskLevel != null ? riskLevel.toApiValue() : "medium")
             + "&membersItemsAllowed=" + membersItemsAllowed;
-        Request request = new Request.Builder().url(url).header("User-Agent", UA).get().build();
-        try (Response r = httpClient.newCall(request).execute())
-        {
-            if (!r.isSuccessful() || r.body() == null)
-            {
-                log.warn("Ares /v1/market/health HTTP {}", r.code());
-                return out;
-            }
-            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
-            if (root == null || !root.has("items")) return out;
-            List<Map<String, Object>> rows = gson.fromJson(root.get("items"), CANDIDATE_LIST);
-            if (rows == null) return out;
-            for (Map<String, Object> row : rows)
-            {
-                Object id = row.get("id");
-                if (id instanceof Number) out.put(((Number) id).intValue(), row);
-            }
-            return out;
-        }
-        catch (Exception e)
-        {
-            log.warn("Ares /v1/market/health failed: {}", e.getMessage());
-            return out;
-        }
+        return itemsById(getJson(url, "market/health"), "items");
     }
 
-    /** POST /v1/flips. Returns candidates, or null if unreachable. */
     private List<Map<String, Object>> fetchFromAres(long capital, int timeframeMinutes, RiskLevel riskLevel,
                                                     boolean membersItemsAllowed, int remainingSlots,
                                                     Map<Integer, Integer> remainingBuyLimit,
@@ -347,48 +209,90 @@ public class AresMarketClient
         if (blockedIds != null && !blockedIds.isEmpty()) body.put("blockedIds", new ArrayList<>(blockedIds));
         if (skippedIds != null && !skippedIds.isEmpty()) body.put("skippedIds", new ArrayList<>(skippedIds));
 
+        JsonObject root = postJson(ARES_FLIPS, gson.toJson(body), "flips");
+        if (root == null || !root.has("candidates"))
+        {
+            lastAresUnreachable = true;
+            return null;
+        }
+        List<Map<String, Object>> rows = gson.fromJson(root.get("candidates"), ROW_LIST);
+        if (rows == null)
+        {
+            lastAresUnreachable = true;
+            return null;
+        }
+        lastAresUnreachable = false;
+        log.debug("Ares /v1/flips returned {} candidates ({})", rows.size(),
+            root.has("source") ? root.get("source").getAsString() : "unknown");
+        return excludeIds(rows, blockedIds, skippedIds);
+    }
+
+    /** GET JSON; null on HTTP/parse failure. */
+    private JsonObject getJson(String url, String label)
+    {
+        return execute(new Request.Builder().url(url).header("User-Agent", UA).get().build(),
+            httpClient, label);
+    }
+
+    /** POST JSON with compose/flips timeouts; null on HTTP/parse failure. */
+    private JsonObject postJson(String url, String body, String label)
+    {
         Request req = new Request.Builder()
-            .url(ARES_FLIPS)
+            .url(url)
             .header("User-Agent", UA)
-            .post(RequestBody.create(JSON, gson.toJson(body)))
+            .post(RequestBody.create(JSON, body))
             .build();
-        try (Response r = httpClient.newBuilder()
+        OkHttpClient timed = httpClient.newBuilder()
             .callTimeout(15, TimeUnit.SECONDS)
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
-            .build()
-            .newCall(req)
-            .execute())
+            .build();
+        return execute(req, timed, label);
+    }
+
+    private JsonObject execute(Request request, OkHttpClient client, String label)
+    {
+        try (Response r = client.newCall(request).execute())
         {
             if (!r.isSuccessful() || r.body() == null)
             {
-                lastAresUnreachable = true;
-                log.warn("Ares /v1/flips HTTP {}", r.code());
+                log.warn("Ares /v1/{} HTTP {}", label, r.code());
                 return null;
             }
-            JsonObject root = gson.fromJson(r.body().charStream(), JsonObject.class);
-            if (root == null || !root.has("candidates"))
-            {
-                lastAresUnreachable = true;
-                return null;
-            }
-            List<Map<String, Object>> rows = gson.fromJson(root.get("candidates"), CANDIDATE_LIST);
-            if (rows == null)
-            {
-                lastAresUnreachable = true;
-                return null;
-            }
-            lastAresUnreachable = false;
-            log.debug("Ares /v1/flips returned {} candidates ({})", rows.size(),
-                root.has("source") ? root.get("source").getAsString() : "unknown");
-            return excludeIds(rows, blockedIds, skippedIds);
+            return gson.fromJson(r.body().charStream(), JsonObject.class);
         }
         catch (Exception e)
         {
-            lastAresUnreachable = true;
-            log.warn("Ares /v1/flips failed: {}", e.getMessage());
+            log.warn("Ares /v1/{} failed: {}", label, e.getMessage());
             return null;
         }
+    }
+
+    private Map<Integer, Map<String, Object>> itemsById(JsonObject root, String arrayKey)
+    {
+        Map<Integer, Map<String, Object>> out = new LinkedHashMap<>();
+        if (root == null || !root.has(arrayKey)) return out;
+        List<Map<String, Object>> rows = gson.fromJson(root.get(arrayKey), ROW_LIST);
+        if (rows == null) return out;
+        for (Map<String, Object> row : rows)
+        {
+            Object id = row.get("id");
+            if (id instanceof Number) out.put(((Number) id).intValue(), row);
+        }
+        return out;
+    }
+
+    private static String joinIds(Collection<Integer> itemIds)
+    {
+        if (itemIds == null || itemIds.isEmpty()) return null;
+        StringBuilder ids = new StringBuilder();
+        for (Integer id : itemIds)
+        {
+            if (id == null || id <= 0) continue;
+            if (ids.length() > 0) ids.append(',');
+            ids.append(id.intValue());
+        }
+        return ids.length() == 0 ? null : ids.toString();
     }
 
     private static Map<String, Integer> stringifyKeys(Map<Integer, Integer> in)
