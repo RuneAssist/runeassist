@@ -14,7 +14,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-    /** This class is essentially a cache of user flips that facilitates efficient access to the flips and statistics for */
+/** Cache of user flips for efficient access and interval statistics. */
 @Slf4j
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
@@ -41,8 +41,7 @@ public class FlipManager {
     final Map<Integer, Map<Integer, FlipV2>> lastOpenFlipByItemId = new HashMap<>();
     final Map<UUID, Integer> existingCloseTimes = new HashMap<>();
     final List<WeekAggregate> weeks = new ArrayList<>(365*5);
-    // Non-deleted flips with portfolio_id in {-1, -2, -3, -4} (ghost + disappeared buckets),
-    // kept separately from week aggregates because mergeFlip_ excludes them via isInPortfolio.
+    // Ghost/disappeared portfolio buckets kept outside week aggregates.
     final Map<Integer, Map<UUID, FlipV2>> missedFlipsByAccount = new HashMap<>();
 
 
