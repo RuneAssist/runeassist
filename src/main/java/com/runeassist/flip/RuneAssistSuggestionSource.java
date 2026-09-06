@@ -8,6 +8,7 @@ import com.runeassist.flip.model.RiskLevel;
 import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.model.SuggestionPreferencesManager;
 import com.runeassist.flip.model.SuggestionType;
+import com.runeassist.flip.controller.BugReportClient;
 import com.runeassist.flip.util.ProfitCalculator;
 import net.runelite.api.Client;
 import net.runelite.api.GrandExchangeOffer;
@@ -16,6 +17,7 @@ import net.runelite.api.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.plugins.PluginManager;
 
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +47,7 @@ public class RuneAssistSuggestionSource
     @Inject private AccountStatusManager accountStatusManager;
     @Inject private OsrsLoginManager osrsLoginManager;
     @Inject private PluginManager pluginManager;
+    @Inject private ConfigManager configManager;
     @Inject private com.runeassist.flip.model.SuggestionManager suggestionManager;
     @Inject private com.runeassist.flip.controller.GrandExchange grandExchange;
     @Inject private ExecutorService executor;
@@ -115,7 +118,9 @@ public class RuneAssistSuggestionSource
             ComposeSuggestionRequest composeReq = buildComposeRequest(
                 coins, timeframe, risk, f2pOnly, maxSlots, remainingSlots, minProfit,
                 remainingHint, usedLimit, blocked, skipped, skipOffers, protectAbort,
-                offersBySlot, held, ownedModifySnap, includeGraph);
+                offersBySlot, held, ownedModifySnap, includeGraph,
+                clientDeviceId(), preferences.isTimeBasedAbortEnabled(),
+                preferences.getTimeBasedAbortMinutes());
             try
             {
                 suggestion = market.composeSuggestion(composeReq);
@@ -410,7 +415,8 @@ public class RuneAssistSuggestionSource
             Map<Integer, Integer> remainingHint, Map<Integer, Integer> usedLimit,
             Set<Integer> blocked, Set<Integer> skipped, Set<Integer> skipOffers,
             Set<Integer> protectAbort, long[][] offersBySlot, Map<Integer, long[]> held,
-            OwnedModifySnapshot ownedModifySnap, boolean includeGraph)
+            OwnedModifySnapshot ownedModifySnap, boolean includeGraph,
+            String clientDeviceId, boolean timeBasedAbortEnabled, int timeBasedAbortMinutes)
     {
         ComposeSuggestionRequest req = new ComposeSuggestionRequest();
         req.setCapital(coins > 0 ? coins : 0L);
@@ -422,6 +428,9 @@ public class RuneAssistSuggestionSource
         req.setRemainingSlots(Math.max(0, remainingSlots));
         req.setMinPredictedProfit(minProfit);
         req.setIncludeGraph(includeGraph);
+        req.setClientDeviceId(clientDeviceId != null ? clientDeviceId : "");
+        req.setTimeBasedAbortEnabled(timeBasedAbortEnabled);
+        req.setTimeBasedAbortMinutes(timeBasedAbortMinutes > 0 ? timeBasedAbortMinutes : 15);
         req.setRemainingBuyLimit(stringifyKeys(remainingHint));
         req.setUsedBuyLimit(stringifyKeys(usedLimit));
         if (blocked != null) req.setBlockedIds(new ArrayList<>(blocked));
@@ -445,6 +454,19 @@ public class RuneAssistSuggestionSource
         }
         req.setNowMs(System.currentTimeMillis());
         return req;
+    }
+
+    /** Stable id for server top-K jitter: pairing device token, else account hash. */
+    private String clientDeviceId()
+    {
+        String token = configManager.getConfiguration(
+            BugReportClient.CONFIG_GROUP, BugReportClient.KEY_DEVICE_TOKEN);
+        if (token != null && !token.isEmpty())
+        {
+            return token;
+        }
+        Long hash = osrsLoginManager.getAccountHash();
+        return hash != null ? String.valueOf(hash) : "";
     }
 
     private static Map<String, Integer> stringifyKeys(Map<Integer, Integer> in)
