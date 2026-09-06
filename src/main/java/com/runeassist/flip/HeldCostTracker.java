@@ -11,65 +11,42 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * FIFO cost-basis tracker for held GE stock. Persisted per OSRS display name
- * in RuneLite config; also tracks a rolling 4h buy-limit window.
- */
+/** FIFO cost-basis tracker for held GE stock; persisted per OSRS display name. */
 @Slf4j
 @Singleton
 public class HeldCostTracker
 {
     private static final String GROUP = "runeassistflip";
-    // ConfigManager rejects keys containing ':'.
-    private static final String KEY_PREFIX = "heldcost_";
-    private static final long LIMIT_WINDOW_MS = 4L * 60 * 60 * 1000; // GE buy limit resets every 4h
+    private static final String KEY_PREFIX = "heldcost_"; // ConfigManager rejects ':' in keys
+    private static final long LIMIT_WINDOW_MS = 4L * 60 * 60 * 1000;
 
     @Inject private ConfigManager configManager;
     @Inject private Gson gson;
 
-    private static final class Lot { int qty; long unit; Lot(int q, long u){ qty=q; unit=u; } }
-    private static final class Slot { int itemId; boolean buy; int qty; long spent;
-        long listedMs; long lastProgressMs;
-        Slot(int i, boolean b, int q, long s, long listed, long progress) {
-            itemId=i; buy=b; qty=q; spent=s; listedMs=listed; lastProgressMs=progress;
-        } }
+    private final Map<String, HeldCostLots.Account> accounts = new HashMap<>();
 
-    /** Per-account state — never shared across accounts, even under one RuneLite profile. */
-    private static final class Account
-    {
-        final Map<Integer, Deque<Lot>> positions = new LinkedHashMap<>();
-        final Map<Integer, Slot> slots = new HashMap<>();
-        final Map<Integer, List<long[]>> limitBuys = new LinkedHashMap<>(); // itemId -> [qty, time]
-        boolean loaded = false;
-    }
-
-    private final Map<String, Account> accounts = new HashMap<>(); // hashed displayName -> state
-
-    private synchronized Account account(String displayName)
+    private synchronized HeldCostLots.Account account(String displayName)
     {
         String key = Persistance.hashDisplayName(displayName == null ? "" : displayName);
-        return accounts.computeIfAbsent(key, k -> new Account());
+        return accounts.computeIfAbsent(key, k -> new HeldCostLots.Account());
     }
-
-    // ── ingest ──────────────────────────────────────────────────────────────────
 
     public synchronized void onOffer(String displayName, int slot, GrandExchangeOfferState state, int itemId,
                                      int price, int totalQty, int qtySold, int spent)
     {
-        Account acc = account(displayName);
+        HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
         if (state == null || state == GrandExchangeOfferState.EMPTY || itemId <= 0) return;
         boolean buy = state == GrandExchangeOfferState.BUYING || state == GrandExchangeOfferState.BOUGHT
             || state == GrandExchangeOfferState.CANCELLED_BUY;
 
-        Slot prev = acc.slots.get(slot);
+        HeldCostLots.Slot prev = acc.slots.get(slot);
         int baseQty = 0; long baseSpent = 0;
         boolean sameInstance = prev != null && prev.itemId == itemId && prev.buy == buy
             && qtySold >= prev.qty && spent >= prev.spent;
@@ -77,135 +54,76 @@ public class HeldCostTracker
         {
             baseQty = prev.qty; baseSpent = prev.spent;
         }
-        int  dQty   = qtySold - baseQty;
+        int dQty = qtySold - baseQty;
         long dSpent = spent - baseSpent;
         long now = System.currentTimeMillis();
         long listed = sameInstance && prev.listedMs > 0L ? prev.listedMs : now;
-        long lastProgress;
-        if (dQty > 0)
-        {
-            lastProgress = now;
-        }
-        else if (sameInstance && prev.lastProgressMs > 0L)
-        {
-            lastProgress = prev.lastProgressMs;
-        }
-        else
-        {
-            lastProgress = now;
-        }
-        acc.slots.put(slot, new Slot(itemId, buy, qtySold, spent, listed, lastProgress));
+        long lastProgress = dQty > 0 ? now
+            : (sameInstance && prev.lastProgressMs > 0L ? prev.lastProgressMs : now);
+        acc.slots.put(slot, new HeldCostLots.Slot(itemId, buy, qtySold, spent, listed, lastProgress));
 
         if (dQty > 0)
         {
             long unit = dSpent > 0 ? Math.max(1, dSpent / dQty) : price;
             if (buy)
             {
-                acc.positions.computeIfAbsent(itemId, k -> new ArrayDeque<>()).add(new Lot(dQty, unit));
+                HeldCostLots.addLot(acc, itemId, dQty, unit);
                 acc.limitBuys.computeIfAbsent(itemId, k -> new ArrayList<>())
                     .add(new long[]{ dQty, System.currentTimeMillis() });
             }
-            else consumeSell(acc, itemId, dQty);
+            else HeldCostLots.consumeSell(acc, itemId, dQty);
         }
         save(displayName, acc);
     }
 
-    private void consumeSell(Account acc, int itemId, int qty)
-    {
-        Deque<Lot> lots = acc.positions.get(itemId);
-        int remaining = qty;
-        while (remaining > 0 && lots != null && !lots.isEmpty())
-        {
-            Lot lot = lots.peekFirst();
-            int take = Math.min(remaining, lot.qty);
-            lot.qty -= take;
-            remaining -= take;
-            if (lot.qty == 0) lots.pollFirst();
-        }
-        if (lots != null && lots.isEmpty()) acc.positions.remove(itemId);
-    }
-
-    /**
-     * A bank decant just converted {@code fromQty} units of {@code fromItemId} into
-     * {@code toQty} units of {@code toItemId} (potion doses conserved, e.g. 4x 1-dose ->
-     * 1x 4-dose). This never touches the Grand Exchange, so {@link #onOffer} never sees it —
-     * this is the fork's alternative entry point, called from live inventory/bank diffing
-     * (see {@code RuneAssistSuggestionSource}'s decant detection) once a dose-conserving qty
-     * shift between the two items is observed.
-     *
-     * <p>Carries the real (not estimated) blended FIFO cost of whatever tracked
-     * {@code fromItemId} lots are actually consumed into a new {@code toItemId} lot. If only
-     * part of {@code fromQty} has a tracked cost basis (e.g. some of it predates this
-     * tracker), the produced lot is scaled down proportionally rather than fabricating a cost
-     * for the untracked portion — the untracked slice simply stays untracked, same as it
-     * would if it had been decanted before this existed.</p>
-     */
+    /** Dose-conserving bank decant: carry FIFO cost from {@code fromItemId} into {@code toItemId}. */
     public synchronized void applyDecant(String displayName, int fromItemId, int fromQty, int toItemId, int toQty)
     {
         if (fromQty <= 0 || toQty <= 0 || fromItemId <= 0 || toItemId <= 0) return;
-        Account acc = account(displayName);
+        HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
-        long[] consumed = consumeUpTo(acc, fromItemId, fromQty); // {qtyConsumed, costConsumed}
+        long[] consumed = HeldCostLots.consumeUpTo(acc, fromItemId, fromQty);
         long qtyConsumed = consumed[0], costConsumed = consumed[1];
-        if (qtyConsumed <= 0) return; // nothing tracked to carry over
-        long producedQty = Math.max(1, (toQty * qtyConsumed) / fromQty); // proportional to what we could cost
+        if (qtyConsumed <= 0) return;
+        long producedQty = Math.max(1, (toQty * qtyConsumed) / fromQty);
         long unit = Math.max(1, costConsumed / producedQty);
-        acc.positions.computeIfAbsent(toItemId, k -> new ArrayDeque<>()).add(new Lot((int) producedQty, unit));
+        HeldCostLots.addLot(acc, toItemId, (int) producedQty, unit);
         save(displayName, acc);
     }
 
-    /**
-     * Manually register held stock this tracker never saw bought — a bank/inventory item the
-     * player already had before RuneAssist was tracking, or one bought outside a tracked GE
-     * offer. Right-click "Add to portfolio" in the game (see {@code MenuHandler}) feeds this,
-     * so previously-untracked ("forgotten") items start showing up in sell suggestions and
-     * portfolio value the same as anything bought through the GE while tracked.
-     *
-     * <p>{@code unitCost} is whatever the caller supplies as the cost basis (typically the
-     * current market buy quote, since the real historical price paid is unknown) — this is
-     * an estimate, not a tracked fact, same caveat as the decant carry-over cost.</p>
-     */
+    /** Manual held lot (Add to portfolio); {@code unitCost} is typically a market quote estimate. */
     public synchronized void addManualLot(String displayName, int itemId, int qty, long unitCost)
     {
         if (itemId <= 0 || qty <= 0 || unitCost < 0) return;
-        Account acc = account(displayName);
+        HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
-        acc.positions.computeIfAbsent(itemId, k -> new ArrayDeque<>()).add(new Lot(qty, unitCost));
+        HeldCostLots.addLot(acc, itemId, qty, unitCost);
         save(displayName, acc);
     }
 
-    /**
-     * Drop tracked held stock for {@code itemId} (portfolio panel "Remove from portfolio").
-     * {@code qty <= 0} removes every lot for the item; otherwise oldest lots go first (FIFO).
-     * Returns the quantity removed.
-     *
-     * <p>This forgets a cost basis; it does not sell, bank or otherwise touch the item in
-     * game. Units still filling on a live buy offer are re-floored back into the portfolio on
-     * the next suggestion cycle (see {@code mergeHeldWithOfferFills} in the suggestion
-     * source), so removing those only sticks once the offer is collected.</p>
-     */
+    /** Drop held stock for item; {@code qty <= 0} clears all lots. Returns qty removed. */
     public synchronized int removeLots(String displayName, int itemId, int qty)
     {
         if (itemId <= 0) return 0;
-        Account acc = account(displayName);
+        HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
-        int before = heldQty(acc, itemId);
+        int before = HeldCostLots.heldQty(acc, itemId);
         if (before <= 0) return 0;
         if (qty <= 0) acc.positions.remove(itemId);
-        else consumeSell(acc, itemId, qty);
+        else HeldCostLots.consumeSell(acc, itemId, qty);
         save(displayName, acc);
-        return before - heldQty(acc, itemId);
+        return before - HeldCostLots.heldQty(acc, itemId);
     }
 
-    /** Drop every tracked lot for this account -- "Remove everything from portfolio". */
+    /** Drop every tracked lot for this account. */
     public synchronized int clearLots(String displayName)
     {
-        Account acc = account(displayName);
+        HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
         int removed = 0;
-        for (Deque<Lot> lots : acc.positions.values())
+        for (Deque<HeldCostLots.Lot> lots : acc.positions.values())
         {
-            for (Lot l : lots) removed += l.qty;
+            for (HeldCostLots.Lot l : lots) removed += l.qty;
         }
         acc.positions.clear();
         save(displayName, acc);
@@ -213,16 +131,12 @@ public class HeldCostTracker
     }
 
     /**
-     * Replace cost-basis lots from the server portfolio/held snapshot.
-     * Once the client is linked, server state wins across restarts; live GE fills
-     * may still update lots optimistically until the next sync. Slots and 4h
-     * limit trackers are left alone (session-local offer progress).
-     *
-     * @param held itemId -&gt; [qty, avgBuy]; null or empty clears positions
+     * Replace cost-basis lots from server held snapshot. Slots / 4h limit trackers unchanged.
+     * @param held itemId -&gt; [qty, avgBuy]; null/empty clears positions
      */
     public synchronized void replaceServerHeld(String displayName, Map<Integer, long[]> held)
     {
-        Account acc = account(displayName);
+        HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
         acc.positions.clear();
         if (held != null)
@@ -235,90 +149,43 @@ public class HeldCostTracker
                 }
                 int qty = (int) e.getValue()[0];
                 long unit = e.getValue()[1];
-                if (qty <= 0 || unit < 0)
-                {
-                    continue;
-                }
-                Deque<Lot> q = new ArrayDeque<>();
-                q.add(new Lot(qty, unit));
+                if (qty <= 0 || unit < 0) continue;
+                Deque<HeldCostLots.Lot> q = new ArrayDeque<>();
+                q.add(new HeldCostLots.Lot(qty, unit));
                 acc.positions.put(e.getKey(), q);
             }
         }
         save(displayName, acc);
     }
 
-    private static int heldQty(Account acc, int itemId)
-    {
-        Deque<Lot> lots = acc.positions.get(itemId);
-        if (lots == null) return 0;
-        int qty = 0;
-        for (Lot l : lots) qty += l.qty;
-        return qty;
-    }
-
-    /** Like {@link #consumeSell}, but returns {qtyActuallyConsumed, totalCostOfThat}. */
-    private long[] consumeUpTo(Account acc, int itemId, int qty)
-    {
-        Deque<Lot> lots = acc.positions.get(itemId);
-        int remaining = qty;
-        long cost = 0, taken = 0;
-        while (remaining > 0 && lots != null && !lots.isEmpty())
-        {
-            Lot lot = lots.peekFirst();
-            int take = Math.min(remaining, lot.qty);
-            cost += (long) take * lot.unit;
-            taken += take;
-            lot.qty -= take;
-            remaining -= take;
-            if (lot.qty == 0) lots.pollFirst();
-        }
-        if (lots != null && lots.isEmpty()) acc.positions.remove(itemId);
-        return new long[]{ taken, cost };
-    }
-
-    // ── read ────────────────────────────────────────────────────────────────────
-
-    /** itemId -&gt; {qty, avgBuy} for stock currently held with a known cost basis. */
     public synchronized Map<Integer, long[]> held(String displayName)
     {
-        Account acc = account(displayName);
+        HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
-        Map<Integer, long[]> out = new HashMap<>();
-        for (Map.Entry<Integer, Deque<Lot>> e : acc.positions.entrySet())
-        {
-            long qty = 0, cost = 0;
-            for (Lot l : e.getValue()) { qty += l.qty; cost += (long) l.qty * l.unit; }
-            if (qty > 0) out.put(e.getKey(), new long[]{ qty, cost / qty });
-        }
-        return out;
+        return HeldCostLots.summarize(acc);
     }
 
-    /** Epoch millis of last {@code quantitySold} increase (or listing time if never filled). 0 if unknown. */
     public synchronized long lastProgressMs(String displayName, int slot, int itemId)
     {
         if (itemId <= 0) return 0L;
-        Account acc = account(displayName);
+        HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
-        Slot s = acc.slots.get(slot);
-        if (s == null || s.itemId != itemId) return 0L;
-        return s.lastProgressMs;
+        HeldCostLots.Slot s = acc.slots.get(slot);
+        return s == null || s.itemId != itemId ? 0L : s.lastProgressMs;
     }
 
-    /** Epoch millis this slot's current offer instance was first listed. 0 if unknown. */
     public synchronized long listedMs(String displayName, int slot, int itemId)
     {
         if (itemId <= 0) return 0L;
-        Account acc = account(displayName);
+        HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
-        Slot s = acc.slots.get(slot);
-        if (s == null || s.itemId != itemId) return 0L;
-        return s.listedMs;
+        HeldCostLots.Slot s = acc.slots.get(slot);
+        return s == null || s.itemId != itemId ? 0L : s.listedMs;
     }
 
-    /** Units of {@code itemId} bought in the last 4h (GE buy-limit window). */
     public synchronized int boughtInWindow(String displayName, int itemId)
     {
-        Account acc = account(displayName);
+        HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
         pruneLimitBuys(acc);
         List<long[]> list = acc.limitBuys.get(itemId);
@@ -328,10 +195,9 @@ public class HeldCostTracker
         return sum;
     }
 
-    /** itemId -> units bought in the last 4h, for items with any window usage. */
     public synchronized Map<Integer, Integer> boughtInWindowAll(String displayName)
     {
-        Account acc = account(displayName);
+        HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
         pruneLimitBuys(acc);
         Map<Integer, Integer> out = new HashMap<>();
@@ -344,24 +210,7 @@ public class HeldCostTracker
         return out;
     }
 
-    /**
-     * Remaining 4h GE buy-limit for an item. Returns {@code geLimit} minus live fills we
-     * observed this window. {@code geLimit <= 0} → {@code -1} (unknown wiki limit).
-     * This is not reconstructed from GE history (those rows usually have no timestamps).
-     * When there are no live fills, this returns the full wiki cap — use
-     * {@link #remainingLimitOrUnknown(String, int, int)} for display so that is not implied known.
-     */
-    public synchronized int limitRemaining(String displayName, int itemId, int geLimit)
-    {
-        if (geLimit <= 0) return -1;
-        return Math.max(0, geLimit - boughtInWindow(displayName, itemId));
-    }
-
-    /**
-     * Remaining we can honestly show on the card: wiki limit minus live fills this window.
-     * {@code -1} if the wiki limit is unknown or we have no live-fill tracker data
-     * (do not treat an unused tracker as "full 4h limit left").
-     */
+    /** Remaining for card display; -1 if wiki limit unknown or no live-fill tracker data. */
     public synchronized int remainingLimitOrUnknown(String displayName, int itemId, int geLimit)
     {
         if (geLimit <= 0) return -1;
@@ -369,20 +218,17 @@ public class HeldCostTracker
         return Math.max(0, geLimit - boughtInWindow(displayName, itemId));
     }
 
-    /** True when we have observed at least one buy fill of this item in the current 4h window. */
     public synchronized boolean hasLimitTrackerData(String displayName, int itemId)
     {
-        Account acc = account(displayName);
+        HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
         pruneLimitBuys(acc);
         List<long[]> list = acc.limitBuys.get(itemId);
         return list != null && !list.isEmpty();
     }
 
-    // ── persistence ─────────────────────────────────────────────────────────────
-
     @SuppressWarnings("unchecked")
-    private void ensureLoaded(String displayName, Account acc)
+    private void ensureLoaded(String displayName, HeldCostLots.Account acc)
     {
         if (acc.loaded) return;
         acc.loaded = true;
@@ -395,11 +241,11 @@ public class HeldCostTracker
             Map<String, Object> pos = (Map<String, Object>) saved.get("positions");
             if (pos != null) for (Map.Entry<String, Object> e : pos.entrySet())
             {
-                Deque<Lot> q = new ArrayDeque<>();
+                Deque<HeldCostLots.Lot> q = new ArrayDeque<>();
                 for (Object o : (List<Object>) e.getValue())
                 {
                     List<Object> a = (List<Object>) o;
-                    q.add(new Lot(((Number) a.get(0)).intValue(), ((Number) a.get(1)).longValue()));
+                    q.add(new HeldCostLots.Lot(((Number) a.get(0)).intValue(), ((Number) a.get(1)).longValue()));
                 }
                 acc.positions.put(Integer.parseInt(e.getKey()), q);
             }
@@ -407,7 +253,7 @@ public class HeldCostTracker
             if (sl != null) for (Map.Entry<String, Object> e : sl.entrySet())
             {
                 List<Object> a = (List<Object>) e.getValue();
-                acc.slots.put(Integer.parseInt(e.getKey()), new Slot(((Number) a.get(0)).intValue(),
+                acc.slots.put(Integer.parseInt(e.getKey()), new HeldCostLots.Slot(((Number) a.get(0)).intValue(),
                     Boolean.TRUE.equals(a.get(1)), ((Number) a.get(2)).intValue(), ((Number) a.get(3)).longValue(),
                     a.size() > 4 ? ((Number) a.get(4)).longValue() : 0L,
                     a.size() > 5 ? ((Number) a.get(5)).longValue() : 0L));
@@ -428,23 +274,23 @@ public class HeldCostTracker
         catch (Exception e) { log.warn("held-cost load failed: {}", e.getMessage()); }
     }
 
-    private void save(String displayName, Account acc)
+    private void save(String displayName, HeldCostLots.Account acc)
     {
         try
         {
             Map<String, Object> out = new LinkedHashMap<>();
             Map<String, Object> pos = new LinkedHashMap<>();
-            for (Map.Entry<Integer, Deque<Lot>> e : acc.positions.entrySet())
+            for (Map.Entry<Integer, Deque<HeldCostLots.Lot>> e : acc.positions.entrySet())
             {
-                List<long[]> list = new java.util.ArrayList<>();
-                for (Lot l : e.getValue()) list.add(new long[]{ l.qty, l.unit });
+                List<long[]> list = new ArrayList<>();
+                for (HeldCostLots.Lot l : e.getValue()) list.add(new long[]{ l.qty, l.unit });
                 if (!list.isEmpty()) pos.put(String.valueOf(e.getKey()), list);
             }
             out.put("positions", pos);
             Map<String, Object> sl = new LinkedHashMap<>();
-            for (Map.Entry<Integer, Slot> e : acc.slots.entrySet())
+            for (Map.Entry<Integer, HeldCostLots.Slot> e : acc.slots.entrySet())
             {
-                Slot s = e.getValue();
+                HeldCostLots.Slot s = e.getValue();
                 sl.put(String.valueOf(e.getKey()), new Object[]{
                     s.itemId, s.buy, s.qty, s.spent, s.listedMs, s.lastProgressMs });
             }
@@ -466,7 +312,7 @@ public class HeldCostTracker
         return KEY_PREFIX + Persistance.hashDisplayName(displayName == null ? "" : displayName);
     }
 
-    private void pruneLimitBuys(Account acc)
+    private void pruneLimitBuys(HeldCostLots.Account acc)
     {
         long cutoff = System.currentTimeMillis() - LIMIT_WINDOW_MS;
         acc.limitBuys.entrySet().removeIf(e ->

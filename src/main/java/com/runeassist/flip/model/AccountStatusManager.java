@@ -155,20 +155,13 @@ public class AccountStatusManager {
         skipSuggestion = -1;
     }
 
-    /**
-     * Skip button: record the current suggestion's item and request a new pick.
-     * Must not touch {@link Client} — the button runs on the Swing EDT, and Client
-     * access from the wrong thread is swallowed by {@code buildButton}.
-     */
+    /** Skip button: record item and refresh. EDT-safe — must not touch {@link Client}. */
     public synchronized boolean skipCurrentSuggestion() {
         Suggestion suggestion = suggestionManager.getSuggestion();
         if (suggestion == null) {
             return false;
         }
-
-        // 0 is always in the past vs the live tick, so a GE slot being open does not
-        // block the follow-up fetch for a full tick.
-        suggestion.actionedTick = 0;
+        suggestion.actionedTick = 0; // past vs live tick so GE slot open does not block fetch
         int itemId = suggestion.getItemId();
         if (itemId <= 0) {
             itemId = suggestion.getId();
@@ -187,11 +180,7 @@ public class AccountStatusManager {
         return true;
     }
 
-    /**
-     * Session-skip an item so BUY/SELL will not re-pick it until the TTL expires.
-     * Used by the Skip button and when we suggest ABORT, so aborting a dead offer
-     * does not immediately list the same item again.
-     */
+    /** Session-skip item until TTL (Skip button / ABORT follow-up). */
     public synchronized void skipItem(int itemId) {
         if (itemId <= 0) {
             return;
@@ -199,10 +188,7 @@ public class AccountStatusManager {
         skippedItemUntil.put(itemId, System.currentTimeMillis() + SKIP_TTL_MS);
     }
 
-    /**
-     * User Skip (not auto-abort): do not ABORT/MODIFY this item either — leave the
-     * offer and suggest something else.
-     */
+    /** User Skip: also suppress ABORT/MODIFY for this item. */
     public synchronized void skipOffer(int itemId) {
         if (itemId <= 0) {
             return;
@@ -210,19 +196,12 @@ public class AccountStatusManager {
         skipOfferUntil.put(itemId, System.currentTimeMillis() + SKIP_TTL_MS);
     }
 
-    /**
-     * User is acting on a MODIFY (clicked the highlight / offer editor open).
-     * Keep this listing owned until {@link #clearOwnedModify()}.
-     */
+    /** Own a MODIFY listing until {@link #clearOwnedModify()}. */
     public synchronized void beginOwnedModify(Suggestion s) {
         beginOwnedModify(s, -1);
     }
 
-    /**
-     * @param slotHint clicked / currently open GE slot. Needed because modify
-     *                 cancels first — the live offer may already be gone, and
-     *                 {@link Suggestion#getBoxId()} can be stale.
-     */
+    /** @param slotHint clicked/open GE slot (boxId can be stale after cancel-first modify). */
     public synchronized void beginOwnedModify(Suggestion s, int slotHint) {
         if (s == null || !s.isModifySuggestion() || s.getItemId() <= 0) {
             return;
@@ -289,7 +268,7 @@ public class AccountStatusManager {
         ownedModify = null;
     }
 
-    /** Drop a MODIFY lock that is no longer being acted on. Cancel-then-relist */
+    /** Drop a MODIFY lock that is no longer being acted on. */
     public synchronized boolean releaseStaleOwnedModify(GrandExchangeOffer[] offers, boolean editorOpen) {
         if (ownedModify == null || ownedModify.itemId <= 0) {
             return false;
@@ -318,11 +297,7 @@ public class AccountStatusManager {
         return false;
     }
 
-    /**
-     * Slot went EMPTY and the offer editor is not open for this modify.
-     *
-     * @return true if a lock was released
-     */
+    /** Release MODIFY lock when slot emptied and editor closed. */
     public synchronized boolean releaseOwnedModifyIfSlotEmpty(int slot, boolean editorOpen) {
         if (ownedModify == null || ownedModify.itemId <= 0) {
             return false;
@@ -348,10 +323,7 @@ public class AccountStatusManager {
         return ownedModify;
     }
 
-    /**
-     * We suggested BUY/SELL/MODIFY for this item — do not ABORT it for ~10 min
-     * (list-then-abort, including leftover qty after a GE modify).
-     */
+    /** Protect a just-suggested listing from immediate ABORT (~10 min). */
     public synchronized void protectListing(int itemId) {
         if (itemId <= 0) {
             return;
