@@ -41,13 +41,15 @@ public class Suggestion {
     /** Wiki GE buy-limit; 0 if unknown. */
     private int geLimit;
     /**
-     * Remaining 4h buy-limit from live fills observed this window.
-     * {@code -1} if unknown — do not treat as a reconstructed full limit.
+     * Remaining 4h buy-limit for display/scoring.
+     * {@code -1} only when the wiki GE buy-limit itself is unknown.
+     * When no live fills are tracked yet, this is the full wiki cap.
      */
     private int remainingLimit = -1;
     /**
-     * True only when {@link #geLimit} is known and remaining comes from live fills
-     * (or pending offers already exhaust the wiki cap). False = guessing / unknown.
+     * True when {@link #geLimit} is known and {@link #remainingLimit} is usable
+     * (live fills, or assumed full wiki cap when no fills tracked yet).
+     * False only when the wiki GE buy-limit itself is unknown.
      */
     private boolean limitKnown;
     /** {@code ares} or {@code local} — which scorer produced this pick. Telemetry only. */

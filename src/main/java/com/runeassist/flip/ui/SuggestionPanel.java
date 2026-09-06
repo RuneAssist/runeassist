@@ -679,8 +679,12 @@ public class SuggestionPanel extends JPanel {
     private String formatLimitLine(Suggestion suggestion) {
         int ge = suggestion.getGeLimit();
         int left = suggestion.getRemainingLimit();
-        if (!suggestion.isLimitKnown() || ge <= 0 || left < 0) {
+        if (ge <= 0) {
             return "<br>limit unknown";
+        }
+        if (!suggestion.isLimitKnown() || left < 0) {
+            // Wiki cap known; live remaining not tracked yet.
+            return "<br>limit " + UIUtilities.quantityToRSDecimalStack(ge, false);
         }
         return "<br>limit " + UIUtilities.quantityToRSDecimalStack(left, false)
                 + " / " + UIUtilities.quantityToRSDecimalStack(ge, false) + " left";
