@@ -29,6 +29,8 @@ public class SuggestionPreferencesManager {
     public static final long DEFAULT_DUMP_MIN_PROFIT = 100_000;
     /** Default total projected-GP floor on BUY. Auto (off) is stored as {@code 0}. */
     public static final long DEFAULT_MIN_PREDICTED_PROFIT = 20_000L;
+    /** Default age (minutes) for opt-in time-based abort/modify when enabled. */
+    public static final int DEFAULT_TIME_BASED_ABORT_MINUTES = 15;
 
     public static final Path DEFAULT_PROFILE_PATH = Paths.get(Persistance.PLUGIN_DIR.getPath(), "Default profile.profile.json");
     public static final String PROFILE_SUFFIX = ".profile.json";
@@ -169,6 +171,27 @@ public class SuggestionPreferencesManager {
 
     public synchronized boolean isReceiveDumpSuggestions() {
         return osrsAccountPreferences.get().isReceiveDumpSuggestions();
+    }
+
+    public synchronized void setTimeBasedAbortEnabled(boolean enabled) {
+        AccountSuggestionPreferences preferences = osrsAccountPreferences.get();
+        preferences.setTimeBasedAbortEnabled(enabled);
+        osrsAccountPreferences.updateAndPersist(preferences);
+    }
+
+    public synchronized boolean isTimeBasedAbortEnabled() {
+        return osrsAccountPreferences.get().isTimeBasedAbortEnabled();
+    }
+
+    public synchronized void setTimeBasedAbortMinutes(int minutes) {
+        AccountSuggestionPreferences preferences = osrsAccountPreferences.get();
+        preferences.setTimeBasedAbortMinutes(minutes > 0 ? minutes : DEFAULT_TIME_BASED_ABORT_MINUTES);
+        osrsAccountPreferences.updateAndPersist(preferences);
+    }
+
+    public synchronized int getTimeBasedAbortMinutes() {
+        int m = osrsAccountPreferences.get().getTimeBasedAbortMinutes();
+        return m > 0 ? m : DEFAULT_TIME_BASED_ABORT_MINUTES;
     }
 
     public synchronized void setBlockedItems(Set<Integer> blockedItems) {

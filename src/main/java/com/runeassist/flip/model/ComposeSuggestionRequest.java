@@ -58,6 +58,21 @@ public class ComposeSuggestionRequest
     private boolean includeGraph = true;
 
     /**
+     * Stable device/account id for anti-grouping top-K jitter on the server.
+     * Prefer the cloud pairing device token; fall back to account hash string.
+     */
+    private String clientDeviceId = "";
+
+    /**
+     * Opt-in time-based abort/modify when a live offer ages past
+     * {@link #timeBasedAbortMinutes} and the market has moved away. Default false.
+     */
+    private boolean timeBasedAbortEnabled = false;
+
+    /** Minutes threshold for {@link #timeBasedAbortEnabled} (default 15). */
+    private int timeBasedAbortMinutes = 15;
+
+    /**
      * Client clock ms. Optional — server normally uses its own clock; tests may pin this.
      */
     private long nowMs;
