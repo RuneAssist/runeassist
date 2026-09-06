@@ -210,11 +210,15 @@ public class HeldCostTracker
         return out;
     }
 
-    /** Remaining for card display; -1 if wiki limit unknown or no live-fill tracker data. */
+    /**
+     * Remaining for card display; -1 only if wiki limit unknown.
+     * With no local fill samples for this item, assume the full wiki limit remains
+     * (same assumption the server scorer uses when remainingBuyLimit is omitted).
+     */
     public synchronized int remainingLimitOrUnknown(String displayName, int itemId, int geLimit)
     {
         if (geLimit <= 0) return -1;
-        if (!hasLimitTrackerData(displayName, itemId)) return -1;
+        if (!hasLimitTrackerData(displayName, itemId)) return geLimit;
         return Math.max(0, geLimit - boughtInWindow(displayName, itemId));
     }
 
