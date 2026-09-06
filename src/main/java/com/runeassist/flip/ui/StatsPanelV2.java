@@ -13,8 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
-import net.runelite.client.util.ImageUtil;
-
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -22,30 +20,18 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.image.BufferedImage;
-
-import static com.runeassist.flip.ui.UIUtilities.BUTTON_HOVER_LUMINANCE;
+import java.util.Collections;
+import java.util.List;
 
 @Slf4j
 @Singleton
 public class StatsPanelV2 extends JPanel {
-    private static final int SUB_INFO_ROW_VERTICAL_PADDING = 3;
-    private static final int SUB_INFO_ROW_HEIGHT = 18;
-
-    public final BufferedImage ARROW_ICON = ImageUtil.loadImageResource(getClass(),"/small_open_arrow.png");
-    public final Icon OPEN_ICON = new ImageIcon(ARROW_ICON);
-    public final Icon CLOSE_ICON = new ImageIcon(ImageUtil.rotateImage(ARROW_ICON, Math.toRadians(90)));
-    public final BufferedImage FLIPS_DIALOG_ICON = ImageUtil.recolorImage(ImageUtil.resizeImage(ImageUtil.loadImageResource(getClass(),"/popout-flips.png"), 20, 20),ColorScheme.LIGHT_GRAY_COLOR);
-    public final Icon FLIPS_DIALOG = new ImageIcon(FLIPS_DIALOG_ICON);
-    public final Icon HIGHLIGHTED_FLIPS_DIALOG = new ImageIcon(ImageUtil.luminanceScale(FLIPS_DIALOG_ICON, BUTTON_HOVER_LUMINANCE));
-    public final BufferedImage WEB_ANALYTICS_ICON = ImageUtil.recolorImage(ImageUtil.resizeImage(ImageUtil.loadImageResource(getClass(),"/internet.png"), 20, 20),ColorScheme.LIGHT_GRAY_COLOR);
-    public final Icon WEB_ANALYTICS = new ImageIcon(WEB_ANALYTICS_ICON);
-    public final Icon HIGHLIGHTED_WEB_ANALYTICS = new ImageIcon(ImageUtil.luminanceScale(WEB_ANALYTICS_ICON, BUTTON_HOVER_LUMINANCE));
+    private final StatsUi.IconPair flipsDialogIcons = StatsUi.toolbarIcon(getClass(), "/popout-flips.png");
+    private final StatsUi.IconPair webAnalyticsIcons = StatsUi.toolbarIcon(getClass(), "/internet.png");
 
     private JPanel sessionTimeRow;
     private JPanel hourlyProfitRow;
 
-    // dependencies
     private final AccountLoginRS accountLoginRS;
     private final OsrsLoginManager osrsLoginManager;
     private final RuneAssistConfig config;
@@ -57,12 +43,10 @@ public class StatsPanelV2 extends JPanel {
     private final PortfolioStateRS portfolioStateRS;
     private final FlipHistorySyncService flipHistorySyncService;
 
-    // state
     private IntervalDropdown intervalDropdown;
     private final AccountDropdown accountDropdown;
     private final JButton sessionResetButton = new JButton("  Reset session ");
     private JPanel profitAndSubInfoPanel;
-    private JPanel subInfoPanel;
     private final JPanel flipsPanel = new JPanel();
     private final JLabel totalProfitVal = new JLabel("0 gp");
     private final JLabel roiVal = new JLabel("-0.00%");
@@ -78,7 +62,6 @@ public class StatsPanelV2 extends JPanel {
 
     private volatile boolean lastValidState = false;
 
-    // Modified constructor
     @Inject
     public StatsPanelV2(AccountLoginRS accountLoginRS,
                         OsrsLoginManager osrsLoginManager,
@@ -112,8 +95,16 @@ public class StatsPanelV2 extends JPanel {
         );
         accountDropdown.setMaximumSize(new Dimension(Integer.MAX_VALUE, accountDropdown.getPreferredSize().height));
         setupProfitAndSubInfoPanel();
-        setupFlipsDialogButton();
-        setupWebAnalyticsButton();
+        StatsUi.shellIconButton(flipsDialogButton, flipsDialogIcons, "Open flips dialog", 5,
+                e -> flipsDialogController.showPortfolioTab());
+        StatsUi.shellIconButton(webAnalyticsButton, webAnalyticsIcons,
+                "Open web analytics (profit / flips / items)", 2, e -> {
+                    if (e.isShiftDown()) {
+                        flipsDialogController.showWebAnalyticsTab();
+                    } else {
+                        flipsDialogController.openWebAnalytics(null);
+                    }
+                });
 
         flipsPanel.setLayout(new BoxLayout(flipsPanel, BoxLayout.Y_AXIS));
         flipsPanel.setBackground(RuneAssistColors.CARD);
@@ -126,7 +117,6 @@ public class StatsPanelV2 extends JPanel {
         scrollPane.setBorder(null);
 
         JPanel mainPanel = UIUtilities.verticalPanel(RuneAssistColors.SHELL);
-
         mainPanel.add(profitAndSubInfoPanel);
 
         JPanel flipsHeader = new JPanel(new BorderLayout());
@@ -136,7 +126,6 @@ public class StatsPanelV2 extends JPanel {
         flipsHeader.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
         mainPanel.add(flipsHeader);
         mainPanel.add(scrollPane);
-
         add(mainPanel, BorderLayout.CENTER);
 
         paginator = new Paginator((i) -> refresh(true, lastValidState));
@@ -150,7 +139,6 @@ public class StatsPanelV2 extends JPanel {
         bottomPanel.setBackground(RuneAssistColors.SHELL);
         bottomPanel.add(paginator, BorderLayout.CENTER);
         bottomPanel.add(bottomButtons, BorderLayout.EAST);
-
         add(bottomPanel, BorderLayout.SOUTH);
 
         flipManager.setFlipsChangedCallback(() -> refresh(true, osrsLoginManager.isValidLoginState()));
@@ -159,80 +147,45 @@ public class StatsPanelV2 extends JPanel {
         }
     }
 
-    private void setupFlipsDialogButton() {
-        flipsDialogButton.setIcon(FLIPS_DIALOG);
-        flipsDialogButton.setOpaque(true);
-        flipsDialogButton.setEnabled(true);
-        flipsDialogButton.setFocusable(true);
-        flipsDialogButton.setBorder(BorderFactory.createEmptyBorder(0,0,0,5));
-        flipsDialogButton.setBackground(RuneAssistColors.SHELL);
-        flipsDialogButton.setToolTipText("Open flips dialog");
-
-        flipsDialogButton.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                log.debug("opening flips dialog");
-                flipsDialogController.showPortfolioTab();
-            }
-        });
-        UIUtilities.addHoverIcons(flipsDialogButton, () -> FLIPS_DIALOG, () -> HIGHLIGHTED_FLIPS_DIALOG);
-    }
-
-    private void setupWebAnalyticsButton() {
-        webAnalyticsButton.setIcon(WEB_ANALYTICS);
-        webAnalyticsButton.setOpaque(true);
-        webAnalyticsButton.setEnabled(true);
-        webAnalyticsButton.setFocusable(true);
-        webAnalyticsButton.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 2));
-        webAnalyticsButton.setBackground(RuneAssistColors.SHELL);
-        webAnalyticsButton.setToolTipText("Open web analytics (profit / flips / items)");
-        webAnalyticsButton.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                if (e.isShiftDown()) {
-                    flipsDialogController.showWebAnalyticsTab();
-                } else {
-                    flipsDialogController.openWebAnalytics(null);
-                }
-            }
-        });
-        UIUtilities.addHoverIcons(webAnalyticsButton, () -> WEB_ANALYTICS, () -> HIGHLIGHTED_WEB_ANALYTICS);
-    }
-
     private void setupSessionResetButton() {
         sessionResetButton.setBorder(BorderFactory.createEmptyBorder());
         sessionResetButton.addActionListener((l) -> {
-            final int result = JOptionPane.showOptionDialog(SwingUtilities.getWindowAncestor(this), "<html>Are you sure you want to reset the session?</html>",
+            final int result = JOptionPane.showOptionDialog(SwingUtilities.getWindowAncestor(this),
+                    "<html>Are you sure you want to reset the session?</html>",
                     "Are you sure?", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE,
                     null, new String[]{"Yes", "No"}, "No");
-            if (result == JOptionPane.YES_OPTION) {
-                // send discord message before resetting session stats
-                clientThread.invoke(() -> {
-                    if (osrsLoginManager.isValidLoginState()) {
-                        String displayName = osrsLoginManager.getPlayerDisplayName();
-                        Integer accountId = displayName == null
-                                ? null
-                                : accountLoginRS.get().getAccountId(displayName);
-                        if (accountId == null || accountId == -1) {
-                            accountId = displayName == null ? null : FlipHistorySyncService.accountIdFor(displayName);
-                        }
-                        if (accountId != null && accountId != -1 && displayName != null) {
-                            webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, true);
-                        }
-                        sessionManager.resetSession();
-                        if (IntervalTimeUnit.SESSION.equals(intervalDropdown.getSelectedIntervalTimeUnit())) {
-                            flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
-                        }
-                        refresh(true, osrsLoginManager.isValidLoginState());
-                    }
-                });
+            if (result != JOptionPane.YES_OPTION) {
+                return;
             }
+            clientThread.invoke(() -> {
+                if (!osrsLoginManager.isValidLoginState()) {
+                    return;
+                }
+                String displayName = osrsLoginManager.getPlayerDisplayName();
+                Integer accountId = displayName == null
+                        ? null
+                        : accountLoginRS.get().getAccountId(displayName);
+                if (accountId == null || accountId == -1) {
+                    accountId = displayName == null ? null : FlipHistorySyncService.accountIdFor(displayName);
+                }
+                if (accountId != null && accountId != -1 && displayName != null) {
+                    webHookController.sendMessage(
+                            flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId),
+                            sessionManager.getCachedSessionData(), displayName, true);
+                }
+                sessionManager.resetSession();
+                if (IntervalTimeUnit.SESSION.equals(intervalDropdown.getSelectedIntervalTimeUnit())) {
+                    flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
+                }
+                refresh(true, osrsLoginManager.isValidLoginState());
+            });
         });
     }
 
     private void setupTimeIntervalDropdown() {
         intervalDropdown = new IntervalDropdown((intervalTimeUnit, intervalValue) -> {
-            long startTime = IntervalDropdown.calculateStartTime(intervalTimeUnit, intervalValue, sessionManager.getCachedSessionData().startTime);
+            long startTime = IntervalDropdown.calculateStartTime(
+                    intervalTimeUnit, intervalValue, sessionManager.getCachedSessionData().startTime);
             flipManager.setIntervalStartTime((int) startTime);
         }, IntervalDropdown.ALL_TIME, true);
     }
@@ -241,66 +194,28 @@ public class StatsPanelV2 extends JPanel {
         intervalDropdown.resetToSession();
     }
 
-    private JPanel metricCell(String caption, JLabel value, Color valueColor) {
-        JPanel cell = UIUtilities.verticalPanel(RuneAssistColors.CARD);
-        cell.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
-        JLabel cap = RuneAssistColors.caption(caption);
-        value.setFont(FontManager.getRunescapeSmallFont());
-        value.setForeground(valueColor);
-        cell.add(cap);
-        cell.add(value);
-        cell.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
-        return cell;
-    }
-
-    private JPanel metricCell(String caption, JLabel value, Color valueColor, Runnable onClick) {
-        JPanel cell = metricCell(caption, value, valueColor);
-        if (onClick == null) {
-            return cell;
-        }
-        cell.setToolTipText("Open portfolio");
-        MouseAdapter clickListener = new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                onClick.run();
-            }
-
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                cell.setBackground(RuneAssistColors.CARD.brighter());
-                cell.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-                cell.setBackground(RuneAssistColors.CARD);
-                cell.setCursor(Cursor.getDefaultCursor());
-            }
-        };
-        cell.addMouseListener(clickListener);
-        return cell;
-    }
-
     private JPanel buildSubInfoPanel() {
         JPanel columns = new JPanel(new GridLayout(1, 2, 6, 0));
         columns.setBackground(RuneAssistColors.CARD);
 
         JPanel realized = UIUtilities.verticalPanel(RuneAssistColors.CARD);
         realized.add(RuneAssistColors.kicker("REALIZED"));
-        realized.add(metricCell("Flips", flipsMadeVal, ColorScheme.LIGHT_GRAY_COLOR,
+        realized.add(StatsUi.metricCell("Flips", flipsMadeVal, ColorScheme.LIGHT_GRAY_COLOR,
                 () -> flipsDialogController.openWebAnalytics(WebAnalyticsLinks.SECTION_FLIPS)));
-        realized.add(metricCell("ROI", roiVal, UIUtilities.TOMATO,
+        realized.add(StatsUi.metricCell("ROI", roiVal, UIUtilities.TOMATO,
                 () -> flipsDialogController.openWebAnalytics(WebAnalyticsLinks.SECTION_PROFIT)));
-        hourlyProfitRow = metricCell("Per hour", hourlyProfitVal, Color.WHITE,
+        hourlyProfitRow = StatsUi.metricCell("Per hour", hourlyProfitVal, Color.WHITE,
                 () -> flipsDialogController.openWebAnalytics(WebAnalyticsLinks.SECTION_PROFIT));
         realized.add(hourlyProfitRow);
 
         JPanel unrealized = UIUtilities.verticalPanel(RuneAssistColors.CARD);
         unrealized.add(RuneAssistColors.kicker("UNREALIZED"));
-        unrealized.add(metricCell("Unrealized", unrealizedProfitVal, ColorScheme.LIGHT_GRAY_COLOR, flipsDialogController::showPortfolioTab));
-        unrealized.add(metricCell("Open", openFlipsVal, ColorScheme.LIGHT_GRAY_COLOR,
+        unrealized.add(StatsUi.metricCell("Unrealized", unrealizedProfitVal, ColorScheme.LIGHT_GRAY_COLOR,
+                flipsDialogController::showPortfolioTab));
+        unrealized.add(StatsUi.metricCell("Open", openFlipsVal, ColorScheme.LIGHT_GRAY_COLOR,
                 () -> flipsDialogController.openWebAnalytics(WebAnalyticsLinks.SECTION_ATTENTION)));
-        unrealized.add(metricCell("Portfolio", portfolioValueVal, ColorScheme.LIGHT_GRAY_COLOR, flipsDialogController::showPortfolioTab));
+        unrealized.add(StatsUi.metricCell("Portfolio", portfolioValueVal, ColorScheme.LIGHT_GRAY_COLOR,
+                flipsDialogController::showPortfolioTab));
 
         columns.add(realized);
         columns.add(unrealized);
@@ -348,23 +263,10 @@ public class StatsPanelV2 extends JPanel {
         profitAndSubInfoPanel.add(profitKicker);
         UIUtilities.addVerticalGap(profitAndSubInfoPanel, 2);
         profitAndSubInfoPanel.add(totalProfitVal);
-
-        subInfoPanel = buildSubInfoPanel();
-        profitAndSubInfoPanel.add(subInfoPanel);
+        profitAndSubInfoPanel.add(buildSubInfoPanel());
         profitAndSubInfoPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 240));
     }
 
-
-    // called when:
-    //
-    // - time interval drop down changed (Swing EDT thread)
-    // - session reset button pressed (Swing EDT thread)
-    // - transaction processing downstream (ScheduledExecutorService)
-    // - FlipTrackerV2 initialisation (ScheduledExecutorService)
-    // - session stats updated (ScheduledExecutorService)
-    // - plugin config changed (Client thread)
-    // - page changed (Swing EDT thread)
-    //
     public void refresh() {
         refresh(true, lastValidState);
     }
@@ -373,18 +275,7 @@ public class StatsPanelV2 extends JPanel {
         if (!UIUtilities.ensureEdt(() -> refresh(flipsMaybeChanged, validLoginState))) return;
         lastValidState = validLoginState;
         if (!validLoginState) {
-            totalProfitVal.setText("0 gp");
-            roiVal.setText("-0.00%");
-            flipsMadeVal.setText("0");
-            openFlipsVal.setText("0");
-            unrealizedProfitVal.setText("0 gp");
-            sessionTimeVal.setText("00:00:00");
-            hourlyProfitVal.setText("0 gp/hr");
-            portfolioValueVal.setText("0 gp");
-            flipsPanel.removeAll();
-            paginator.setTotalPages(1);
-            setSessionStatsVisible(false);
-            accountDropdown.setVisible(false);
+            clearLoggedOut();
             return;
         }
 
@@ -399,23 +290,18 @@ public class StatsPanelV2 extends JPanel {
         if (flipsMaybeChanged) {
             flipsPanel.removeAll();
             String displayName = osrsLoginManager.getPlayerDisplayName();
-            java.util.List<FlipV2> page = flipManager.getPageFlips(paginator.getPageNumber(), 50);
+            List<FlipV2> page = flipManager.getPageFlips(paginator.getPageNumber(), 50);
             if (page.isEmpty() && flipHistorySyncService != null && !flipHistorySyncService.isLinked()) {
-                flipsPanel.add(historyLinkPrompt());
+                flipsPanel.add(StatsUi.historyLinkPrompt());
             } else {
-                page.forEach(f -> flipsPanel.add(new FlipPanel(
-                            f,
-                            config,
-                            () -> flipsDialogController.showVisualizeFlip(f),
-                            menu -> FlipRepairMenus.addStandardActions(
-                                    menu, this, f, displayName, flipHistorySyncService, true, false))));
+                page.forEach(f -> addFlipRow(f, displayName, true, false));
             }
             Integer accountId = flipManager.getIntervalAccount();
             if (accountId == null && displayName != null) {
                 accountId = FlipHistorySyncService.accountIdFor(displayName);
             }
-            java.util.List<FlipV2> missed = accountId == null
-                    ? java.util.Collections.emptyList()
+            List<FlipV2> missed = accountId == null
+                    ? Collections.emptyList()
                     : flipManager.getMissedFlipsForAccount(accountId);
             if (!missed.isEmpty()) {
                 JLabel missedHeader = RuneAssistColors.kicker("MISSED / GHOST");
@@ -426,22 +312,14 @@ public class StatsPanelV2 extends JPanel {
                     if (shown >= 20) {
                         break;
                     }
-                    boolean disappeared = PortfolioId.isDisappeared(f.getPortfolioId());
-                    flipsPanel.add(new FlipPanel(
-                            f,
-                            config,
-                            () -> flipsDialogController.showVisualizeFlip(f),
-                            menu -> FlipRepairMenus.addStandardActions(
-                                    menu, this, f, displayName, flipHistorySyncService, disappeared, true)));
+                    addFlipRow(f, displayName, PortfolioId.isDisappeared(f.getPortfolioId()), true);
                     shown++;
                 }
             }
-            // labels displayed to the user
             roiVal.setText(String.format("%.3f%%", stats.calculateRoi() * 100));
             roiVal.setForeground(UIUtilities.getProfitColor(stats.profit, config));
             int openCount = flipManager.countOpenInInterval();
-            int closedCount = Math.max(0, stats.flipsMade - openCount);
-            flipsMadeVal.setText(String.format("%d", closedCount));
+            flipsMadeVal.setText(String.format("%d", Math.max(0, stats.flipsMade - openCount)));
             openFlipsVal.setText(String.format("%d", openCount));
             totalProfitVal.setText(UIUtilities.formatProfit(stats.profit));
             totalProfitVal.setForeground(UIUtilities.getProfitColor(stats.profit, config));
@@ -456,13 +334,36 @@ public class StatsPanelV2 extends JPanel {
         unrealizedProfitVal.setText(UIUtilities.formatProfit(unrealizedProfit));
         unrealizedProfitVal.setForeground(UIUtilities.getProfitColor(unrealizedProfit, config));
 
-        long seconds = Math.max(0L, sd.durationMillis / 1000);
-        sessionTimeVal.setText(String.format("%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60));
-        float hoursFloat = (((float) seconds) / 3600.0f);
+        sessionTimeVal.setText(StatsUi.sessionClock(sd.durationMillis));
+        float hoursFloat = Math.max(0L, sd.durationMillis / 1000) / 3600.0f;
         long hourlyProfit = hoursFloat == 0 ? 0 : (long) (stats.profit / hoursFloat);
         hourlyProfitVal.setText(UIUtilities.formatProfitWithoutGp(hourlyProfit) + " gp/hr");
         hourlyProfitVal.setForeground(UIUtilities.getProfitColor(hourlyProfit, config));
         setSessionStatsVisible(true);
+    }
+
+    private void addFlipRow(FlipV2 f, String displayName, boolean allowGhostRepair, boolean missed) {
+        flipsPanel.add(new FlipPanel(
+                f,
+                config,
+                () -> flipsDialogController.showVisualizeFlip(f),
+                menu -> FlipRepairMenus.addStandardActions(
+                        menu, this, f, displayName, flipHistorySyncService, allowGhostRepair, missed)));
+    }
+
+    private void clearLoggedOut() {
+        totalProfitVal.setText("0 gp");
+        roiVal.setText("-0.00%");
+        flipsMadeVal.setText("0");
+        openFlipsVal.setText("0");
+        unrealizedProfitVal.setText("0 gp");
+        sessionTimeVal.setText("00:00:00");
+        hourlyProfitVal.setText("0 gp/hr");
+        portfolioValueVal.setText("0 gp");
+        flipsPanel.removeAll();
+        paginator.setTotalPages(1);
+        setSessionStatsVisible(false);
+        accountDropdown.setVisible(false);
     }
 
     private void setSessionStatsVisible(boolean visible) {
@@ -472,18 +373,5 @@ public class StatsPanelV2 extends JPanel {
         if (hourlyProfitRow != null) {
             hourlyProfitRow.setVisible(visible);
         }
-    }
-
-    private JPanel historyLinkPrompt() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setOpaque(false);
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 4, 10, 4));
-        JLabel label = new JLabel("<html><body style='width:180px'>"
-                + "Link this client in Settings to enable Recent Flips history "
-                + "(device register + OSRS character).</body></html>");
-        label.setForeground(RuneAssistColors.MUTED);
-        label.setFont(FontManager.getRunescapeSmallFont());
-        panel.add(label, BorderLayout.CENTER);
-        return panel;
     }
 }
