@@ -1,10 +1,10 @@
 package com.runeassist.flip.controller;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.runeassist.flip.HeldCostTracker;
+import com.runeassist.flip.controller.history.AccountHttp;
 import com.runeassist.flip.model.FlipManager;
 import com.runeassist.flip.model.FlipStatus;
 import com.runeassist.flip.model.FlipV2;
@@ -16,19 +16,16 @@ import com.runeassist.flip.model.Transaction;
 import com.runeassist.flip.model.VisualizeFlipResponse;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.config.ConfigManager;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
 import javax.swing.SwingUtilities;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -42,7 +39,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-    /** Server-owned flip history. GE fills persist to an unacked JSONL queue until */
+/** Server-owned flip history: unacked GE outbox, pairing, delta, portfolio/flip mutations. */
 @Slf4j
 @Singleton
 public class FlipHistorySyncService {
@@ -51,16 +48,12 @@ public class FlipHistorySyncService {
     public static final String KEY_DEVICE_TOKEN = BugReportClient.KEY_DEVICE_TOKEN;
     public static final String KEY_USER_ID = BugReportClient.KEY_USER_ID;
     public static final String DEFAULT_ORIGIN = BugReportClient.DEFAULT_ORIGIN;
+    public static final int PLUGIN_USER_ID = 0;
 
-    private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private static final int FLUSH_SEC = 45;
     private static final int BATCH = 200;
 
-    /** Matches FlipManager default pluginUserId. */
-    public static final int PLUGIN_USER_ID = 0;
-
-    private final OkHttpClient http;
-    private final Gson gson;
+    private final AccountHttp api;
     private final ConfigManager configManager;
     private final FlipManager flipManager;
     private final OsrsLoginManager osrsLoginManager;
@@ -68,7 +61,6 @@ public class FlipHistorySyncService {
     private final SuggestionManager suggestionManager;
     private final ScheduledExecutorService executor;
 
-    /** Display-name → unacked GE fills (backed by {@link Persistance} JSONL). */
     private final ConcurrentMap<String, List<Transaction>> unackedByDisplay = new ConcurrentHashMap<>();
     private final List<Runnable> statusListeners = new CopyOnWriteArrayList<>();
     private volatile boolean started;
@@ -77,16 +69,14 @@ public class FlipHistorySyncService {
 
     @Inject
     public FlipHistorySyncService(
-            OkHttpClient http,
-            Gson gson,
+            AccountHttp api,
             ConfigManager configManager,
             FlipManager flipManager,
             OsrsLoginManager osrsLoginManager,
             HeldCostTracker heldCostTracker,
             SuggestionManager suggestionManager,
             @Named("runeAssistExecutor") ScheduledExecutorService executor) {
-        this.http = http;
-        this.gson = gson;
+        this.api = api;
         this.configManager = configManager;
         this.flipManager = flipManager;
         this.osrsLoginManager = osrsLoginManager;
@@ -108,23 +98,16 @@ public class FlipHistorySyncService {
             }
         }, FLUSH_SEC, FLUSH_SEC, TimeUnit.SECONDS);
         if (!isLinked()) {
-            executor.execute(() -> {
-                try {
-                    ensureRegistered();
-                } catch (Exception e) {
-                    log.warn("flip history sync register: {}", e.getMessage());
-                }
-            });
+            async("register", this::ensureRegistered);
         } else {
             fireStatus();
         }
     }
 
     public boolean isLinked() {
-        return deviceToken() != null && userId() != null;
+        return api.isLinked();
     }
 
-    /** True when this install has cached an OSRS account id for the given display name. */
     public boolean isOsrsLinked(String displayName) {
         if (displayName == null || displayName.isEmpty() || !isLinked()) {
             return false;
@@ -133,19 +116,14 @@ public class FlipHistorySyncService {
         return cached != null && !cached.isEmpty();
     }
 
-    /** Compact account id for UI (first 8 of UUID). */
     public String shortUserId() {
-        String id = userId();
+        String id = api.userId();
         if (id == null || id.isEmpty()) {
             return null;
         }
         return id.length() <= 8 ? id : id.substring(0, 8);
     }
 
-    /**
-     * Compact top-bar label: linked / registering / not linked.
-     * Prefer OSRS RSN when that character is already attached.
-     */
     public String identityLabel() {
         if (isLinked()) {
             String rsn = osrsLoginManager.getPlayerDisplayName();
@@ -155,13 +133,9 @@ public class FlipHistorySyncService {
             String shortId = shortUserId();
             return shortId != null ? "Linked · " + shortId : "Linked";
         }
-        if (registering) {
-            return "Linking…";
-        }
-        return "Not linked";
+        return registering ? "Linking…" : "Not linked";
     }
 
-    /** Tooltip / secondary line for the identity control. */
     public String identityDetail() {
         if (isLinked()) {
             String rsn = osrsLoginManager.getPlayerDisplayName();
@@ -185,7 +159,6 @@ public class FlipHistorySyncService {
         return "Link this client to enable Recent Flips history. Click for account settings.";
     }
 
-    /** Longer copy for Preferences → Account. */
     public String statusMessage() {
         if (isLinked()) {
             String rsn = osrsLoginManager.getPlayerDisplayName();
@@ -209,7 +182,6 @@ public class FlipHistorySyncService {
             return "Not linked yet (" + lastError + "). Use a pairing code below, or wait for auto-register.";
         }
         return "Not linked yet. This client will auto-register, or enter a pairing code from another device / the website.";
-
     }
 
     public void addStatusListener(Runnable listener) {
@@ -222,47 +194,28 @@ public class FlipHistorySyncService {
         return "https://runeassist.com/app/";
     }
 
-    /** Dashboard account page (website → plugin pairing lives here). */
     public String websiteAccountsUrl() {
         return websiteUrl() + "#/accounts";
     }
 
-    /** Open pairing panel on the website (requires an existing website session). */
     public String websitePairUrl() {
         return websiteUrl() + "#/pair";
     }
 
-    /** Login page with plugin-issued pairing code prefilled (attach email to this device's account). */
     public String websiteLoginWithCodeUrl(String code) {
         if (code == null || code.isEmpty()) {
             return websiteUrl() + "#/login";
         }
-        String encoded;
-        try {
-            encoded = java.net.URLEncoder.encode(code, StandardCharsets.UTF_8.name());
-        } catch (java.io.UnsupportedEncodingException ex) {
-            encoded = code;
-        }
-        return websiteUrl() + "#/login?code=" + encoded;
+        return websiteUrl() + "#/login?code=" + URLEncoder.encode(code, StandardCharsets.UTF_8);
     }
 
     public void onLogin(String displayName) {
         if (displayName == null || displayName.isEmpty()) {
             return;
         }
-        executor.execute(() -> {
-            try {
-                syncOnLogin(displayName);
-            } catch (Exception e) {
-                log.warn("flip history sync on login failed: {}", e.getMessage());
-            }
-        });
+        async("on login", () -> syncOnLogin(displayName));
     }
 
-    /**
-     * Persist a GE fill to the unacked JSONL queue (crash-safe), then schedule upload.
-     * Safe to call before the device is linked — rows stay on disk until {@code ackedIds}.
-     */
     public void enqueue(Transaction transaction, String displayName) {
         if (transaction == null || transaction.getId() == null || displayName == null || displayName.isEmpty()) {
             return;
@@ -282,16 +235,9 @@ public class FlipHistorySyncService {
                 Persistance.storeUnackedTransactions(unacked, displayName);
             }
         }
-        executor.execute(() -> {
-            try {
-                flushDisplay(displayName);
-            } catch (Exception e) {
-                log.debug("flip history enqueue flush: {}", e.getMessage());
-            }
-        });
+        async("enqueue flush", () -> flushDisplay(displayName));
     }
 
-    /** Snapshot of unacked GE fills for session ledger replay / account status. */
     public List<Transaction> listUnacked(String displayName) {
         if (displayName == null || displayName.isEmpty()) {
             return new ArrayList<>();
@@ -306,37 +252,29 @@ public class FlipHistorySyncService {
     }
 
     public void flushNow() {
-        executor.execute(() -> {
-            try {
-                flush();
-            } catch (Exception e) {
-                log.debug("flip history flushNow: {}", e.getMessage());
-            }
-        });
+        async("flushNow", this::flush);
     }
 
-    /** Blocking. Returns pairing code for another device or website email link. */
     public String startPairing() throws Exception {
         ensureRegistered();
-        JsonObject body = post("/v1/account/pair/start", new JsonObject(), true);
+        JsonObject body = api.post("/v1/account/pair/start", new JsonObject(), true);
         if (body == null || !body.has("code")) {
             throw new IllegalStateException("no pairing code from server");
         }
         return body.get("code").getAsString();
     }
 
-    /** Blocking. Redeem a website-issued (or other device) pairing code onto this install. */
     public void redeemPairing(String code) throws Exception {
         if (code == null || code.trim().isEmpty()) {
             throw new IllegalArgumentException("empty code");
         }
         JsonObject req = new JsonObject();
         req.addProperty("code", code.trim().toUpperCase());
-        JsonObject body = post("/v1/account/pair/redeem", req, false);
+        JsonObject body = api.post("/v1/account/pair/redeem", req, false);
         if (body == null || !body.has("deviceToken")) {
             throw new IllegalStateException("pairing redeem failed");
         }
-        storeToken(body.get("userId").getAsString(), body.get("deviceToken").getAsString());
+        api.storeToken(body.get("userId").getAsString(), body.get("deviceToken").getAsString());
         lastError = null;
         fireStatus();
         String name = osrsLoginManager.getPlayerDisplayName();
@@ -344,6 +282,284 @@ public class FlipHistorySyncService {
             configManager.unsetConfiguration(CONFIG_GROUP, osrsKey(name));
             ensureOsrsAccount(name);
             flushDisplay(name);
+        }
+    }
+
+    public void refreshAccount(String displayName) {
+        if (displayName == null || displayName.isEmpty()) {
+            return;
+        }
+        async("refresh", () -> {
+            String osrsAccountId = ensureOsrsAccount(displayName);
+            if (osrsAccountId == null) {
+                return;
+            }
+            refreshDelta(displayName, osrsAccountId);
+        });
+    }
+
+    public boolean clearPortfolio(String displayName) {
+        if (displayName == null || !isLinked()) {
+            return false;
+        }
+        heldCostTracker.clearLots(displayName);
+        suggestionManager.setSuggestionNeeded(true);
+        async("clear-portfolio", () -> {
+            String osrsAccountId = ensureOsrsAccount(displayName);
+            if (osrsAccountId == null) {
+                return;
+            }
+            JsonObject req = new JsonObject();
+            req.addProperty("osrsAccountId", osrsAccountId);
+            applyHeldFromBody(displayName, api.post("/v1/account/clear-portfolio", req, true));
+            refreshDelta(displayName, osrsAccountId);
+        });
+        return true;
+    }
+
+    public boolean toggleItemPortfolio(String displayName, int itemId, int quantity, long unitCost, boolean remove) {
+        if (displayName == null || itemId <= 0 || !isLinked()) {
+            return false;
+        }
+        if (remove) {
+            heldCostTracker.removeLots(displayName, itemId, quantity);
+        } else if (quantity > 0) {
+            heldCostTracker.addManualLot(displayName, itemId, quantity, unitCost);
+        }
+        suggestionManager.setSuggestionNeeded(true);
+        async("toggle-item-portfolio", () -> {
+            String osrsAccountId = ensureOsrsAccount(displayName);
+            if (osrsAccountId == null) {
+                return;
+            }
+            JsonObject req = new JsonObject();
+            req.addProperty("osrsAccountId", osrsAccountId);
+            req.addProperty("itemId", itemId);
+            req.addProperty("quantity", quantity);
+            req.addProperty("unitCost", unitCost);
+            req.addProperty("remove", remove);
+            req.addProperty("portfolioId", remove ? -1 : PortfolioId.COFLIP_PORTFOLIO);
+            applyHeldFromBody(displayName, api.post("/v1/account/toggle-item-portfolio", req, true));
+            refreshDelta(displayName, osrsAccountId);
+        });
+        return true;
+    }
+
+    public boolean deleteFlip(String displayName, UUID flipId) {
+        return enqueueFlipMut(displayName, flipId, "/v1/account/delete-flip", null, "delete-flip");
+    }
+
+    public boolean orphanFlip(String displayName, UUID flipId) {
+        return enqueueFlipMut(displayName, flipId, "/v1/account/orphan-flip", null, "orphan-flip");
+    }
+
+    public boolean reviveFlip(String displayName, UUID flipId) {
+        return enqueueFlipMut(displayName, flipId, "/v1/account/revive-ghost-flip", null, "revive-ghost-flip");
+    }
+
+    public boolean addMissedSale(String displayName, UUID flipId, int quantity, long price) {
+        if (displayName == null || flipId == null || quantity <= 0 || price < 0 || !isLinked()) {
+            return false;
+        }
+        JsonObject extra = new JsonObject();
+        extra.addProperty("quantity", quantity);
+        extra.addProperty("price", price);
+        return enqueueFlipMut(displayName, flipId, "/v1/account/add-missed-sale", extra, "add-missed-sale");
+    }
+
+    public boolean orphanTransaction(String displayName, UUID transactionId) {
+        return mutateTransaction(displayName, transactionId, "/v1/account/orphan-transaction", "orphan-transaction");
+    }
+
+    public boolean deleteTransaction(String displayName, UUID transactionId) {
+        return mutateTransaction(displayName, transactionId, "/v1/account/delete-transaction", "delete-transaction");
+    }
+
+    public List<Transaction> listTransactions(String displayName) {
+        if (displayName == null || !isLinked()) {
+            return Collections.emptyList();
+        }
+        try {
+            String osrsAccountId = ensureOsrsAccount(displayName);
+            if (osrsAccountId == null) {
+                return Collections.emptyList();
+            }
+            JsonObject body = api.get("/v1/account/transactions?osrsAccountId=" + AccountHttp.urlEnc(osrsAccountId), true);
+            if (body == null || !body.has("transactions") || !body.get("transactions").isJsonArray()) {
+                return Collections.emptyList();
+            }
+            List<Transaction> out = new ArrayList<>();
+            for (JsonElement el : body.getAsJsonArray("transactions")) {
+                if (el == null || !el.isJsonObject()) {
+                    continue;
+                }
+                Transaction t = txFromJson(el.getAsJsonObject());
+                if (t != null) {
+                    out.add(t);
+                }
+            }
+            return out;
+        } catch (Exception e) {
+            log.warn("list transactions failed: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    public void asyncVisualizeFlip(
+            String displayName,
+            UUID flipId,
+            Consumer<VisualizeFlipResponse> onSuccess,
+            Consumer<String> onFailure) {
+        if (onSuccess == null) {
+            return;
+        }
+        if (displayName == null || displayName.isEmpty() || flipId == null || !isLinked()) {
+            if (onFailure != null) {
+                onFailure.accept("not linked");
+            }
+            return;
+        }
+        executor.execute(() -> {
+            try {
+                String osrsAccountId = ensureOsrsAccount(displayName);
+                if (osrsAccountId == null) {
+                    if (onFailure != null) {
+                        onFailure.accept("OSRS account not linked");
+                    }
+                    return;
+                }
+                String path = "/v1/account/visualize-flip?osrsAccountId=" + AccountHttp.urlEnc(osrsAccountId)
+                        + "&flipId=" + AccountHttp.urlEnc(flipId.toString());
+                JsonObject body = api.get(path, true);
+                if (body == null) {
+                    if (onFailure != null) {
+                        onFailure.accept("visualize-flip request failed");
+                    }
+                    return;
+                }
+                if (body.has("error") && !body.get("error").isJsonNull()) {
+                    if (onFailure != null) {
+                        onFailure.accept(body.get("error").getAsString());
+                    }
+                    return;
+                }
+                onSuccess.accept(VisualizeFlipResponse.fromJson(body, api.gson()));
+            } catch (Exception e) {
+                log.warn("visualize-flip failed: {}", e.getMessage());
+                if (onFailure != null) {
+                    onFailure.accept(e.getMessage() != null ? e.getMessage() : "visualize-flip failed");
+                }
+            }
+        });
+    }
+
+    public static int accountIdFor(String displayName) {
+        int h = Persistance.hashDisplayName(displayName == null ? "" : displayName).hashCode();
+        if (h == Integer.MIN_VALUE || h == 0) {
+            return 1;
+        }
+        return Math.abs(h);
+    }
+
+    public static Transaction copyTransaction(Transaction src) {
+        if (src == null) {
+            return null;
+        }
+        Transaction t = new Transaction();
+        t.setId(src.getId());
+        t.setType(src.getType());
+        t.setItemId(src.getItemId());
+        t.setPrice(src.getPrice());
+        t.setQuantity(src.getQuantity());
+        t.setBoxId(src.getBoxId());
+        t.setAmountSpent(src.getAmountSpent());
+        t.setTimestamp(src.getTimestamp());
+        t.setLogin(src.isLogin());
+        t.setConsistent(src.isConsistent());
+        return t;
+    }
+
+    static JsonObject txToJson(Transaction t) {
+        if (t == null || t.getId() == null || t.getType() == null) {
+            return null;
+        }
+        JsonObject o = new JsonObject();
+        o.addProperty("id", t.getId().toString());
+        o.addProperty("type", OfferStatus.BUY.equals(t.getType()) ? "BUY" : "SELL");
+        o.addProperty("itemId", t.getItemId());
+        o.addProperty("price", t.getPrice());
+        o.addProperty("quantity", t.getQuantity());
+        o.addProperty("boxId", t.getBoxId());
+        o.addProperty("amountSpent", t.getAmountSpent());
+        Instant ts = t.getTimestamp() != null ? t.getTimestamp() : Instant.now();
+        o.addProperty("timestamp", ts.toString());
+        return o;
+    }
+
+    static Transaction txFromJson(JsonObject o) {
+        if (o == null || !o.has("id")) {
+            return null;
+        }
+        try {
+            Transaction t = new Transaction();
+            t.setId(UUID.fromString(o.get("id").getAsString()));
+            String type = o.has("type") ? o.get("type").getAsString() : "BUY";
+            t.setType("SELL".equalsIgnoreCase(type) ? OfferStatus.SELL : OfferStatus.BUY);
+            t.setItemId(o.has("itemId") ? o.get("itemId").getAsInt() : 0);
+            t.setPrice(o.has("price") ? o.get("price").getAsLong() : 0L);
+            t.setQuantity(o.has("quantity") ? o.get("quantity").getAsInt() : 0);
+            t.setBoxId(o.has("boxId") ? o.get("boxId").getAsInt() : 0);
+            t.setAmountSpent(o.has("amountSpent") ? o.get("amountSpent").getAsLong() : 0L);
+            if (o.has("timestamp") && !o.get("timestamp").isJsonNull()) {
+                t.setTimestamp(Instant.parse(o.get("timestamp").getAsString()));
+            }
+            t.setConsistent(true);
+            return t;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    static FlipV2 flipFromJson(JsonObject o, int accountId) {
+        if (o == null || !o.has("id")) {
+            return null;
+        }
+        try {
+            FlipV2 f = new FlipV2();
+            f.setId(UUID.fromString(o.get("id").getAsString()));
+            f.setAccountId(accountId);
+            f.setItemId(o.has("itemId") ? o.get("itemId").getAsInt() : 0);
+            f.setOpenedTime(o.has("openedTime") ? o.get("openedTime").getAsInt() : 0);
+            f.setOpenedQuantity(o.has("openedQuantity") ? o.get("openedQuantity").getAsInt() : 0);
+            f.setSpent(o.has("spent") ? o.get("spent").getAsLong() : 0L);
+            f.setClosedTime(o.has("closedTime") ? o.get("closedTime").getAsInt() : 0);
+            f.setClosedQuantity(o.has("closedQuantity") ? o.get("closedQuantity").getAsInt() : 0);
+            f.setReceivedPostTax(o.has("receivedPostTax") ? o.get("receivedPostTax").getAsLong() : 0L);
+            f.setProfit(o.has("profit") ? o.get("profit").getAsLong() : 0L);
+            f.setTaxPaid(o.has("taxPaid") ? o.get("taxPaid").getAsLong() : 0L);
+            f.setStatus(parseStatus(o.has("status") ? o.get("status").getAsString() : "FINISHED"));
+            f.setUpdatedTime(o.has("updatedTime") ? o.get("updatedTime").getAsInt() : 0);
+            f.setDeleted(o.has("deleted") && o.get("deleted").getAsBoolean());
+            f.setPortfolioId(o.has("portfolioId") ? o.get("portfolioId").getAsInt() : 1);
+            f.setSeqNo(o.has("seqNo") ? o.get("seqNo").getAsLong() : 1L);
+            f.setUserId(PLUGIN_USER_ID);
+            return f;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static FlipStatus parseStatus(String status) {
+        if (status == null) {
+            return FlipStatus.FINISHED;
+        }
+        switch (status.toUpperCase()) {
+            case "BUYING":
+                return FlipStatus.BUYING;
+            case "SELLING":
+                return FlipStatus.SELLING;
+            default:
+                return FlipStatus.FINISHED;
         }
     }
 
@@ -359,27 +575,16 @@ public class FlipHistorySyncService {
 
     private void pullFlipsDelta(String displayName, String osrsAccountId) {
         String cursor = configManager.getConfiguration(CONFIG_GROUP, flipsCursorKey(displayName));
-        String path = "/v1/account/client-flips-delta?osrsAccountId=" + urlEnc(osrsAccountId);
+        String path = "/v1/account/client-flips-delta?osrsAccountId=" + AccountHttp.urlEnc(osrsAccountId);
         if (cursor != null && !cursor.isEmpty() && !"0".equals(cursor)) {
-            path += "&sinceUpdatedTime=" + urlEnc(cursor);
+            path += "&sinceUpdatedTime=" + AccountHttp.urlEnc(cursor);
         }
-        JsonObject body = get(path, true);
+        JsonObject body = api.get(path, true);
         if (body == null) {
             return;
         }
         if (body.has("flips")) {
-            JsonArray arr = body.getAsJsonArray("flips");
-            List<FlipV2> flips = new ArrayList<>();
-            int accountId = accountIdFor(displayName);
-            for (JsonElement el : arr) {
-                if (el == null || !el.isJsonObject()) {
-                    continue;
-                }
-                FlipV2 flip = flipFromJson(el.getAsJsonObject(), accountId);
-                if (flip != null) {
-                    flips.add(flip);
-                }
-            }
+            List<FlipV2> flips = parseFlips(body.getAsJsonArray("flips"), accountIdFor(displayName));
             if (!flips.isEmpty()) {
                 flipManager.setPluginUserId(PLUGIN_USER_ID);
                 flipManager.mergeFlips(flips, PLUGIN_USER_ID);
@@ -427,276 +632,30 @@ public class FlipHistorySyncService {
         }
     }
 
-    /** Force a full flips+held refresh for the logged-in account (after mutations). */
-    public void refreshAccount(String displayName) {
-        if (displayName == null || displayName.isEmpty()) {
-            return;
-        }
-        executor.execute(() -> {
-            try {
-                String osrsAccountId = ensureOsrsAccount(displayName);
-                if (osrsAccountId == null) {
-                    return;
-                }
-                // Drop cursor so delete/ghost mutations are not filtered out.
-                configManager.unsetConfiguration(CONFIG_GROUP, flipsCursorKey(displayName));
-                pullFlipsDelta(displayName, osrsAccountId);
-            } catch (Exception e) {
-                log.warn("flip history refresh failed: {}", e.getMessage());
-            }
-        });
-    }
-
-    /**
-     * Server clear-portfolio (FC clear-account-portfolio). Optimistic local clear, then sync.
-     * @return true if the request was accepted / queued
-     */
-    public boolean clearPortfolio(String displayName) {
-        if (displayName == null || !isLinked()) {
-            return false;
-        }
-        heldCostTracker.clearLots(displayName);
-        suggestionManager.setSuggestionNeeded(true);
-        executor.execute(() -> {
-            try {
-                String osrsAccountId = ensureOsrsAccount(displayName);
-                if (osrsAccountId == null) {
-                    return;
-                }
-                JsonObject req = new JsonObject();
-                req.addProperty("osrsAccountId", osrsAccountId);
-                JsonObject body = post("/v1/account/clear-portfolio", req, true);
-                if (body != null) {
-                    applyHeldFromBody(displayName, body);
-                }
-                configManager.unsetConfiguration(CONFIG_GROUP, flipsCursorKey(displayName));
-                pullFlipsDelta(displayName, osrsAccountId);
-            } catch (Exception e) {
-                log.warn("clear-portfolio failed: {}", e.getMessage());
-            }
-        });
-        return true;
-    }
-
-    /**
-     * Server toggle-item-portfolio. {@code remove=true} forgets cost basis; otherwise adds a manual lot.
-     */
-    public boolean toggleItemPortfolio(String displayName, int itemId, int quantity, long unitCost, boolean remove) {
-        if (displayName == null || itemId <= 0 || !isLinked()) {
-            return false;
-        }
-        if (remove) {
-            heldCostTracker.removeLots(displayName, itemId, quantity);
-        } else if (quantity > 0) {
-            heldCostTracker.addManualLot(displayName, itemId, quantity, unitCost);
-        }
-        suggestionManager.setSuggestionNeeded(true);
-        executor.execute(() -> {
-            try {
-                String osrsAccountId = ensureOsrsAccount(displayName);
-                if (osrsAccountId == null) {
-                    return;
-                }
-                JsonObject req = new JsonObject();
-                req.addProperty("osrsAccountId", osrsAccountId);
-                req.addProperty("itemId", itemId);
-                req.addProperty("quantity", quantity);
-                req.addProperty("unitCost", unitCost);
-                req.addProperty("remove", remove);
-                // FC shape: add → COFLIP (0); remove → -1
-                req.addProperty("portfolioId", remove ? -1 : PortfolioId.COFLIP_PORTFOLIO);
-                JsonObject body = post("/v1/account/toggle-item-portfolio", req, true);
-                if (body != null) {
-                    applyHeldFromBody(displayName, body);
-                }
-                configManager.unsetConfiguration(CONFIG_GROUP, flipsCursorKey(displayName));
-                pullFlipsDelta(displayName, osrsAccountId);
-            } catch (Exception e) {
-                log.warn("toggle-item-portfolio failed: {}", e.getMessage());
-            }
-        });
-        return true;
-    }
-
-    /** Soft-delete a flip on the server (FC delete-flip), then refresh FlipManager. */
-    public boolean deleteFlip(String displayName, UUID flipId) {
-        if (displayName == null || flipId == null || !isLinked()) {
-            return false;
-        }
-        executor.execute(() -> {
-            try {
-                mutateFlip(displayName, "/v1/account/delete-flip", flipId, null);
-            } catch (Exception e) {
-                log.warn("delete-flip failed: {}", e.getMessage());
-            }
-        });
-        return true;
-    }
-
-    /** Move a flip into the disappeared/ghost portfolio bucket (FC orphan). */
-    public boolean orphanFlip(String displayName, UUID flipId) {
-        if (displayName == null || flipId == null || !isLinked()) {
-            return false;
-        }
-        executor.execute(() -> {
-            try {
-                mutateFlip(displayName, "/v1/account/orphan-flip", flipId, null);
-            } catch (Exception e) {
-                log.warn("orphan-flip failed: {}", e.getMessage());
-            }
-        });
-        return true;
-    }
-
-    /** Revive a ghost/disappeared flip into the personal portfolio. */
-    public boolean reviveFlip(String displayName, UUID flipId) {
-        if (displayName == null || flipId == null || !isLinked()) {
-            return false;
-        }
-        executor.execute(() -> {
-            try {
-                mutateFlip(displayName, "/v1/account/revive-ghost-flip", flipId, null);
-            } catch (Exception e) {
-                log.warn("revive-ghost-flip failed: {}", e.getMessage());
-            }
-        });
-        return true;
-    }
-
-    /** Record a missed sale (synthetic sell) against an open flip. */
-    public boolean addMissedSale(String displayName, UUID flipId, int quantity, long price) {
-        if (displayName == null || flipId == null || quantity <= 0 || price < 0 || !isLinked()) {
-            return false;
-        }
-        executor.execute(() -> {
-            try {
-                JsonObject extra = new JsonObject();
-                extra.addProperty("quantity", quantity);
-                extra.addProperty("price", price);
-                mutateFlip(displayName, "/v1/account/add-missed-sale", flipId, extra);
-            } catch (Exception e) {
-                log.warn("add-missed-sale failed: {}", e.getMessage());
-            }
-        });
-        return true;
-    }
-
-    /** Orphan a GE transaction so it is excluded from ledger replay. */
-    public boolean orphanTransaction(String displayName, UUID transactionId) {
-        return mutateTransaction(displayName, transactionId, "/v1/account/orphan-transaction", "orphan-transaction");
-    }
-
-    /** Soft-delete a GE transaction (FC delete-transaction). */
-    public boolean deleteTransaction(String displayName, UUID transactionId) {
-        return mutateTransaction(displayName, transactionId, "/v1/account/delete-transaction", "delete-transaction");
-    }
-
-    /** List GE transactions for the linked OSRS account (server chronological order). */
-    public List<Transaction> listTransactions(String displayName) {
-        if (displayName == null || !isLinked()) {
-            return java.util.Collections.emptyList();
-        }
-        try {
-            String osrsAccountId = ensureOsrsAccount(displayName);
-            if (osrsAccountId == null) {
-                return java.util.Collections.emptyList();
-            }
-            JsonObject body = get("/v1/account/transactions?osrsAccountId=" + urlEnc(osrsAccountId), true);
-            if (body == null || !body.has("transactions") || !body.get("transactions").isJsonArray()) {
-                return java.util.Collections.emptyList();
-            }
-            List<Transaction> out = new ArrayList<>();
-            for (JsonElement el : body.getAsJsonArray("transactions")) {
-                if (el == null || !el.isJsonObject()) {
-                    continue;
-                }
-                Transaction t = txFromJson(el.getAsJsonObject());
-                if (t != null) {
-                    out.add(t);
-                }
-            }
-            return out;
-        } catch (Exception e) {
-            log.warn("list transactions failed: {}", e.getMessage());
-            return java.util.Collections.emptyList();
-        }
-    }
-
     private boolean mutateTransaction(String displayName, UUID transactionId, String path, String logLabel) {
         if (displayName == null || transactionId == null || !isLinked()) {
             return false;
         }
-        executor.execute(() -> {
-            try {
-                String osrsAccountId = ensureOsrsAccount(displayName);
-                if (osrsAccountId == null) {
-                    return;
-                }
-                JsonObject req = new JsonObject();
-                req.addProperty("osrsAccountId", osrsAccountId);
-                req.addProperty("transactionId", transactionId.toString());
-                JsonObject body = post(path, req, true);
-                mergeFlipsFromMutation(displayName, body);
-                configManager.unsetConfiguration(CONFIG_GROUP, flipsCursorKey(displayName));
-                pullFlipsDelta(displayName, osrsAccountId);
-            } catch (Exception e) {
-                log.warn("{} failed: {}", logLabel, e.getMessage());
+        async(logLabel, () -> {
+            String osrsAccountId = ensureOsrsAccount(displayName);
+            if (osrsAccountId == null) {
+                return;
             }
+            JsonObject req = new JsonObject();
+            req.addProperty("osrsAccountId", osrsAccountId);
+            req.addProperty("transactionId", transactionId.toString());
+            mergeFlipsFromMutation(displayName, api.post(path, req, true));
+            refreshDelta(displayName, osrsAccountId);
         });
         return true;
     }
 
-    /**
-     * Server lots + graph for one flip ({@code GET /v1/account/visualize-flip}).
-     * Invokes {@code onSuccess} on the worker thread (caller should hop to EDT for UI).
-     */
-    public void asyncVisualizeFlip(
-            String displayName,
-            UUID flipId,
-            Consumer<VisualizeFlipResponse> onSuccess,
-            Consumer<String> onFailure) {
-        if (onSuccess == null) {
-            return;
+    private boolean enqueueFlipMut(String displayName, UUID flipId, String path, JsonObject extra, String logLabel) {
+        if (displayName == null || flipId == null || !isLinked()) {
+            return false;
         }
-        if (displayName == null || displayName.isEmpty() || flipId == null || !isLinked()) {
-            if (onFailure != null) {
-                onFailure.accept("not linked");
-            }
-            return;
-        }
-        executor.execute(() -> {
-            try {
-                String osrsAccountId = ensureOsrsAccount(displayName);
-                if (osrsAccountId == null) {
-                    if (onFailure != null) {
-                        onFailure.accept("OSRS account not linked");
-                    }
-                    return;
-                }
-                String path = "/v1/account/visualize-flip?osrsAccountId=" + urlEnc(osrsAccountId)
-                        + "&flipId=" + urlEnc(flipId.toString());
-                JsonObject body = get(path, true);
-                if (body == null) {
-                    if (onFailure != null) {
-                        onFailure.accept("visualize-flip request failed");
-                    }
-                    return;
-                }
-                if (body.has("error") && !body.get("error").isJsonNull()) {
-                    if (onFailure != null) {
-                        onFailure.accept(body.get("error").getAsString());
-                    }
-                    return;
-                }
-                VisualizeFlipResponse rsp = VisualizeFlipResponse.fromJson(body, gson);
-                onSuccess.accept(rsp);
-            } catch (Exception e) {
-                log.warn("visualize-flip failed: {}", e.getMessage());
-                if (onFailure != null) {
-                    onFailure.accept(e.getMessage() != null ? e.getMessage() : "visualize-flip failed");
-                }
-            }
-        });
+        async(logLabel, () -> mutateFlip(displayName, path, flipId, extra));
+        return true;
     }
 
     private void mutateFlip(String displayName, String path, UUID flipId, JsonObject extra) throws Exception {
@@ -708,23 +667,32 @@ public class FlipHistorySyncService {
         req.addProperty("osrsAccountId", osrsAccountId);
         req.addProperty("flipId", flipId.toString());
         if (extra != null) {
-            for (java.util.Map.Entry<String, JsonElement> e : extra.entrySet()) {
+            for (Map.Entry<String, JsonElement> e : extra.entrySet()) {
                 req.add(e.getKey(), e.getValue());
             }
         }
-        JsonObject body = post(path, req, true);
-        mergeFlipsFromMutation(displayName, body);
-        configManager.unsetConfiguration(CONFIG_GROUP, flipsCursorKey(displayName));
-        pullFlipsDelta(displayName, osrsAccountId);
+        mergeFlipsFromMutation(displayName, api.post(path, req, true));
+        refreshDelta(displayName, osrsAccountId);
     }
 
     private void mergeFlipsFromMutation(String displayName, JsonObject body) {
         if (body == null || !body.has("flips") || !body.get("flips").isJsonArray()) {
             return;
         }
-        int accountId = accountIdFor(displayName);
+        List<FlipV2> flips = parseFlips(body.getAsJsonArray("flips"), accountIdFor(displayName));
+        if (!flips.isEmpty()) {
+            flipManager.setPluginUserId(PLUGIN_USER_ID);
+            flipManager.mergeFlips(flips, PLUGIN_USER_ID);
+        }
+        applyHeldFromBody(displayName, body);
+    }
+
+    private List<FlipV2> parseFlips(JsonArray arr, int accountId) {
         List<FlipV2> flips = new ArrayList<>();
-        for (JsonElement el : body.getAsJsonArray("flips")) {
+        if (arr == null) {
+            return flips;
+        }
+        for (JsonElement el : arr) {
             if (el == null || !el.isJsonObject()) {
                 continue;
             }
@@ -733,15 +701,16 @@ public class FlipHistorySyncService {
                 flips.add(flip);
             }
         }
-        if (!flips.isEmpty()) {
-            flipManager.setPluginUserId(PLUGIN_USER_ID);
-            flipManager.mergeFlips(flips, PLUGIN_USER_ID);
-        }
-        applyHeldFromBody(displayName, body);
+        return flips;
     }
 
-    private void flush() {
-        if (deviceToken() == null) {
+    private void refreshDelta(String displayName, String osrsAccountId) {
+        configManager.unsetConfiguration(CONFIG_GROUP, flipsCursorKey(displayName));
+        pullFlipsDelta(displayName, osrsAccountId);
+    }
+
+    private void flush() throws Exception {
+        if (api.deviceToken() == null) {
             return;
         }
         Set<String> names = new HashSet<>(unackedByDisplay.keySet());
@@ -759,7 +728,7 @@ public class FlipHistorySyncService {
     }
 
     private void flushDisplay(String displayName) throws Exception {
-        if (displayName == null || displayName.isEmpty() || deviceToken() == null) {
+        if (displayName == null || displayName.isEmpty() || api.deviceToken() == null) {
             return;
         }
         String osrsAccountId = ensureOsrsAccount(displayName);
@@ -780,20 +749,13 @@ public class FlipHistorySyncService {
                 }
             }
             List<UUID> acked = postTransactions(osrsAccountId, batch);
-            if (acked == null) {
-                return;
-            }
-            if (acked.isEmpty()) {
-                // Server accepted nothing usable — avoid tight retry loop on bad rows.
+            if (acked == null || acked.isEmpty()) {
                 return;
             }
             removeAcked(displayName, acked);
         }
     }
 
-    /**
-     * Upload a batch. Returns acked transaction ids on success, or {@code null} on transport/HTTP failure.
-     */
     private List<UUID> postTransactions(String osrsAccountId, List<Transaction> txs) {
         if (txs == null || txs.isEmpty()) {
             return new ArrayList<>();
@@ -808,7 +770,7 @@ public class FlipHistorySyncService {
             }
         }
         req.add("transactions", arr);
-        JsonObject body = post("/v1/account/transactions", req, true);
+        JsonObject body = api.post("/v1/account/transactions", req, true);
         if (body == null) {
             return null;
         }
@@ -821,11 +783,10 @@ public class FlipHistorySyncService {
                 try {
                     acked.add(UUID.fromString(el.getAsString()));
                 } catch (Exception ignored) {
-                    // skip malformed ids
+                    // skip
                 }
             }
         } else {
-            // Older servers without ackedIds: treat uploaded ids as acked on 200.
             for (Transaction t : txs) {
                 if (t.getId() != null) {
                     acked.add(t.getId());
@@ -850,18 +811,18 @@ public class FlipHistorySyncService {
     }
 
     private synchronized void ensureRegistered() throws Exception {
-        if (deviceToken() != null && userId() != null) {
+        if (api.deviceToken() != null && api.userId() != null) {
             registering = false;
             return;
         }
         registering = true;
         fireStatus();
         try {
-            JsonObject body = post("/v1/account/register", new JsonObject(), false);
+            JsonObject body = api.post("/v1/account/register", new JsonObject(), false);
             if (body == null || !body.has("deviceToken") || !body.has("userId")) {
                 throw new IllegalStateException("register failed");
             }
-            storeToken(body.get("userId").getAsString(), body.get("deviceToken").getAsString());
+            api.storeToken(body.get("userId").getAsString(), body.get("deviceToken").getAsString());
             lastError = null;
             log.info("flip history sync registered user {}", body.get("userId").getAsString());
         } catch (Exception e) {
@@ -891,7 +852,7 @@ public class FlipHistorySyncService {
         }
         JsonObject req = new JsonObject();
         req.addProperty("displayName", displayName);
-        JsonObject body = post("/v1/account/link-osrs", req, true);
+        JsonObject body = api.post("/v1/account/link-osrs", req, true);
         if (body == null || !body.has("osrsAccountId")) {
             return null;
         }
@@ -900,22 +861,7 @@ public class FlipHistorySyncService {
         return id;
     }
 
-    private void storeToken(String userId, String token) {
-        configManager.setConfiguration(CONFIG_GROUP, KEY_USER_ID, userId);
-        configManager.setConfiguration(CONFIG_GROUP, KEY_DEVICE_TOKEN, token);
-    }
-
-    private String deviceToken() {
-        String t = configManager.getConfiguration(CONFIG_GROUP, KEY_DEVICE_TOKEN);
-        return t == null || t.isEmpty() ? null : t;
-    }
-
-    private String userId() {
-        return configManager.getConfiguration(CONFIG_GROUP, KEY_USER_ID);
-    }
-
     private String osrsKey(String displayName) {
-        // Config key prefix kept for install continuity (not a product "cloud sync" toggle).
         return "cloudOsrs." + Persistance.hashDisplayName(displayName);
     }
 
@@ -923,174 +869,18 @@ public class FlipHistorySyncService {
         return "cloudFlipsCursor." + Persistance.hashDisplayName(displayName);
     }
 
-    private String origin() {
-        return DEFAULT_ORIGIN;
-    }
-
-    public static int accountIdFor(String displayName) {
-        int h = Persistance.hashDisplayName(displayName == null ? "" : displayName).hashCode();
-        if (h == Integer.MIN_VALUE || h == 0) {
-            return 1;
-        }
-        return Math.abs(h);
-    }
-
-    public static Transaction copyTransaction(Transaction src) {
-        if (src == null) {
-            return null;
-        }
-        Transaction t = new Transaction();
-        t.setId(src.getId());
-        t.setType(src.getType());
-        t.setItemId(src.getItemId());
-        t.setPrice(src.getPrice());
-        t.setQuantity(src.getQuantity());
-        t.setBoxId(src.getBoxId());
-        t.setAmountSpent(src.getAmountSpent());
-        t.setTimestamp(src.getTimestamp());
-        t.setLogin(src.isLogin());
-        t.setConsistent(src.isConsistent());
-        return t;
-    }
-
-    private JsonObject get(String path, boolean authed) {
-        Request.Builder b = new Request.Builder()
-                .url(origin() + path)
-                .header("User-Agent", "RuneAssist-flip/1.0")
-                .get();
-        if (authed) {
-            String token = deviceToken();
-            if (token == null) {
-                return null;
+    private void async(String label, Work work) {
+        executor.execute(() -> {
+            try {
+                work.run();
+            } catch (Exception e) {
+                log.warn("{} failed: {}", label, e.getMessage());
             }
-            b.header("Authorization", "Bearer " + token);
-        }
-        return execute(b.build());
+        });
     }
 
-    private JsonObject post(String path, JsonObject json, boolean authed) {
-        Request.Builder b = new Request.Builder()
-                .url(origin() + path)
-                .header("User-Agent", "RuneAssist-flip/1.0")
-                .header("Content-Type", "application/json")
-                .post(RequestBody.create(JSON, gson.toJson(json)));
-        if (authed) {
-            String token = deviceToken();
-            if (token == null) {
-                return null;
-            }
-            b.header("Authorization", "Bearer " + token);
-        }
-        return execute(b.build());
-    }
-
-    private JsonObject execute(Request request) {
-        try (Response response = http.newCall(request).execute()) {
-            String raw = response.body() != null ? response.body().string() : "";
-            if (!response.isSuccessful()) {
-                log.warn("flip history sync {} {} → {}", request.method(), request.url().encodedPath(), response.code());
-                return null;
-            }
-            if (raw.isEmpty()) {
-                return new JsonObject();
-            }
-            return gson.fromJson(raw, JsonObject.class);
-        } catch (Exception e) {
-            log.debug("flip history sync {} failed: {}", request.url().encodedPath(), e.getMessage());
-            return null;
-        }
-    }
-
-    private static String urlEnc(String s) {
-        try {
-            return java.net.URLEncoder.encode(s, StandardCharsets.UTF_8.name());
-        } catch (Exception e) {
-            return s;
-        }
-    }
-
-    static JsonObject txToJson(Transaction t) {
-        if (t == null || t.getId() == null || t.getType() == null) {
-            return null;
-        }
-        JsonObject o = new JsonObject();
-        o.addProperty("id", t.getId().toString());
-        o.addProperty("type", OfferStatus.BUY.equals(t.getType()) ? "BUY" : "SELL");
-        o.addProperty("itemId", t.getItemId());
-        o.addProperty("price", t.getPrice());
-        o.addProperty("quantity", t.getQuantity());
-        o.addProperty("boxId", t.getBoxId());
-        o.addProperty("amountSpent", t.getAmountSpent());
-        Instant ts = t.getTimestamp() != null ? t.getTimestamp() : Instant.now();
-        o.addProperty("timestamp", ts.toString());
-        return o;
-    }
-
-    static Transaction txFromJson(JsonObject o) {
-        if (o == null || !o.has("id")) {
-            return null;
-        }
-        try {
-            Transaction t = new Transaction();
-            t.setId(UUID.fromString(o.get("id").getAsString()));
-            String type = o.has("type") ? o.get("type").getAsString() : "BUY";
-            t.setType("SELL".equalsIgnoreCase(type) ? OfferStatus.SELL : OfferStatus.BUY);
-            t.setItemId(o.has("itemId") ? o.get("itemId").getAsInt() : 0);
-            t.setPrice(o.has("price") ? o.get("price").getAsLong() : 0L);
-            t.setQuantity(o.has("quantity") ? o.get("quantity").getAsInt() : 0);
-            t.setBoxId(o.has("boxId") ? o.get("boxId").getAsInt() : 0);
-            t.setAmountSpent(o.has("amountSpent") ? o.get("amountSpent").getAsLong() : 0L);
-            if (o.has("timestamp") && !o.get("timestamp").isJsonNull()) {
-                t.setTimestamp(Instant.parse(o.get("timestamp").getAsString()));
-            }
-            t.setConsistent(true);
-            return t;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-        static FlipV2 flipFromJson(JsonObject o, int accountId) {
-        if (o == null || !o.has("id")) {
-            return null;
-        }
-        try {
-            FlipV2 f = new FlipV2();
-            f.setId(UUID.fromString(o.get("id").getAsString()));
-            f.setAccountId(accountId);
-            f.setItemId(o.has("itemId") ? o.get("itemId").getAsInt() : 0);
-            f.setOpenedTime(o.has("openedTime") ? o.get("openedTime").getAsInt() : 0);
-            f.setOpenedQuantity(o.has("openedQuantity") ? o.get("openedQuantity").getAsInt() : 0);
-            f.setSpent(o.has("spent") ? o.get("spent").getAsLong() : 0L);
-            f.setClosedTime(o.has("closedTime") ? o.get("closedTime").getAsInt() : 0);
-            f.setClosedQuantity(o.has("closedQuantity") ? o.get("closedQuantity").getAsInt() : 0);
-            f.setReceivedPostTax(o.has("receivedPostTax") ? o.get("receivedPostTax").getAsLong() : 0L);
-            f.setProfit(o.has("profit") ? o.get("profit").getAsLong() : 0L);
-            f.setTaxPaid(o.has("taxPaid") ? o.get("taxPaid").getAsLong() : 0L);
-            String status = o.has("status") ? o.get("status").getAsString() : "FINISHED";
-            f.setStatus(parseStatus(status));
-            f.setUpdatedTime(o.has("updatedTime") ? o.get("updatedTime").getAsInt() : 0);
-            f.setDeleted(o.has("deleted") && o.get("deleted").getAsBoolean());
-            f.setPortfolioId(o.has("portfolioId") ? o.get("portfolioId").getAsInt() : 1);
-            f.setSeqNo(o.has("seqNo") ? o.get("seqNo").getAsLong() : 1L);
-            f.setUserId(PLUGIN_USER_ID);
-            return f;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static FlipStatus parseStatus(String status) {
-        if (status == null) {
-            return FlipStatus.FINISHED;
-        }
-        switch (status.toUpperCase()) {
-            case "BUYING":
-                return FlipStatus.BUYING;
-            case "SELLING":
-                return FlipStatus.SELLING;
-            default:
-                return FlipStatus.FINISHED;
-        }
+    @FunctionalInterface
+    private interface Work {
+        void run() throws Exception;
     }
 }
