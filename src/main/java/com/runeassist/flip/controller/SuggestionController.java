@@ -31,7 +31,6 @@ public class SuggestionController {
 
     private static final String DUMP_ALERT_SOUND = "/alert-sound.wav";
 
-    // dependencies
     private final PausedManager pausedManager;
     private final Client client;
     private final AudioPlayer audioPlayer;
@@ -49,7 +48,6 @@ public class SuggestionController {
     private final PortfolioStateRS portfolioStateRS;
     private final FlipsDialogController flipDialogController;
     private final GePreviousSearch gePreviousSearch;
-    // Suggestions come from RuneAssistSuggestionSource (Ares compose).
     private final com.runeassist.flip.RuneAssistSuggestionSource runeAssistSource;
     private final ApiRequestHandler apiRequestHandler;
 
@@ -95,15 +93,12 @@ public class SuggestionController {
         if(suggestionManager.isSuggestionRequestInProgress() || suggestionManager.isGraphDataReadingInProgress()) {
             return;
         }
-        // There is a race condition when the collect button is hit at the same time as offers fill.
-        // In such a case we can end up with the uncollectedManager falsely thinking there is items to collect.
-        // We identify if this has happened here by checking if the collect button is actually visible.
+        // Collect-button race can leave uncollectedManager falsely non-empty.
         if(isUncollectedOutOfSync()) {
             log.warn("uncollected is out of sync, it thinks there are items to collect but the GE is open and the Collect button not visible");
             uncollectedManager.clearAllUncollected(osrsLoginManager.getAccountHash());
             suggestionManager.setSuggestionNeeded(true);
         }
-        // on initial login the state of the GE offers isn't correct we need to wait a couple ticks before requesting a suggestion
         if (osrsLoginManager.hasJustLoggedIn()) {
             return;
         }
@@ -117,9 +112,7 @@ public class SuggestionController {
             return false;
         }
         Suggestion p = suggestionManager.getSuggestion();
-        // Dump alerts highlight Back while a sell setup is open. Leaving that
-        // screen used to look like "account state changed" and fetch a SELL of
-        // inventory, overwriting the dump. Hold until Confirm or Skip.
+        // Hold dump alerts until Confirm/Skip so backing out of sell setup can't overwrite them.
         if (p != null && p.isRecentUnActionedDumpAlert()) {
             return false;
         }
@@ -131,12 +124,7 @@ public class SuggestionController {
                 return false;
             }
             if (liveOfferItemId(grandExchange.getOpenSlot()) != -1) {
-                // The "very out of date" path exists to un-freeze a ghost editor (left open
-                // with nothing behind it) so the card doesn't lock up forever -- see
-                // isModifyInProgress's comment. But a live offer behind the open slot (e.g.
-                // the player manually re-listing leftover stock after a partial fill/cancel,
-                // unrelated to any suggestion) means they're actively using this screen; do
-                // not yank the card to an unrelated item's suggestion out from under them.
+                // Live offer behind open slot: don't yank the card while the player is using it.
                 return false;
             }
         }
@@ -144,13 +132,7 @@ public class SuggestionController {
         return suggestionManager.isSuggestionNeeded() || suggestionManager.suggestionOutOfDate();
     }
 
-    /**
-     * Click-to-modify / offer editor open for the current MODIFY card. Do not fetch
-     * a replacement (the 60s "very out of date" path used to bypass isSlotOpen and
-     * then treat the cancelled slot as empty, emitting BUY). A leftover lock with
-     * the editor closed (logout, hop, GE home) must not freeze the card — empty
-     * slots should get BUY.
-     */
+    /** Offer editor open for the current MODIFY card — do not fetch a replacement. */
     private boolean isModifyInProgress(Suggestion p) {
         if (p != null && p.actionedTick != -1 && p.actionedTick <= client.getTickCount()) {
             return false;
@@ -158,11 +140,6 @@ public class SuggestionController {
         return isEditorOnModify(p);
     }
 
-    /**
-     * Set up offer is open for this modify — including after cancel-then-relist,
-     * when the slot is EMPTY and {@code boxId} may be stale. Used so the panel
-     * and price highlight are not dropped as a ghost.
-     */
     private boolean isEditorOnModify(Suggestion p) {
         if (!grandExchange.isSlotOpen()) {
             return false;
@@ -170,42 +147,24 @@ public class SuggestionController {
         int open = grandExchange.getOpenSlot();
         int currentItem = grandExchange.getCurrentItemId();
         AccountStatusManager.OwnedModify owned = accountStatusManager.getOwnedModify();
-        if (owned != null && owned.itemId > 0) {
-            if (slotIsForOwnedModify(open, currentItem, owned)) {
-                return true;
-            }
-        }
-        if (p != null && p.isModifySuggestion()) {
-            return slotIsForSuggestionModify(open, currentItem, p);
-        }
-        return false;
-    }
-
-    private boolean slotIsForOwnedModify(int open, int currentItem, AccountStatusManager.OwnedModify owned) {
-        if (open < 0 || owned == null) {
-            return false;
-        }
-        if (ModifyStep.editorMatches(open, currentItem, owned.itemId, owned.slot)) {
+        if (owned != null && owned.itemId > 0 && slotMatchesModify(open, currentItem, owned.itemId, owned.slot)) {
             return true;
         }
-        return liveOfferItemId(open) == owned.itemId;
+        return p != null && p.isModifySuggestion()
+                && slotMatchesModify(open, currentItem, p.getItemId(), p.getBoxId());
     }
 
-    private boolean slotIsForSuggestionModify(int open, int currentItem, Suggestion p) {
-        if (open < 0 || p == null) {
+    private boolean slotMatchesModify(int open, int currentItem, int itemId, int boxId) {
+        if (open < 0 || itemId <= 0) {
             return false;
         }
-        if (ModifyStep.editorMatches(open, currentItem, p.getItemId(), p.getBoxId())) {
+        if (ModifyStep.editorMatches(open, currentItem, itemId, boxId)) {
             return true;
         }
-        return liveOfferItemId(open) == p.getItemId();
+        return liveOfferItemId(open) == itemId;
     }
 
-    /**
-     * Filling BUYING/SELLING only. CANCELLED_* still reports an itemId after
-     * modify cancels, which used to block a replacement fetch and leave the
-     * panel stuck on "Getting the next flip…".
-     */
+    /** Filling BUYING/SELLING only — CANCELLED_* still reports itemId after modify cancel. */
     private int liveOfferItemId(int slot) {
         GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
         if (offers == null || slot < 0 || slot >= offers.length || offers[slot] == null) {
@@ -219,7 +178,6 @@ public class SuggestionController {
         return itemId > 0 ? itemId : -1;
     }
 
-    /** Stale MODIFY card: allow replacement and do not re-arm the lock on the next slot click. */
     private void markGhostModifyActioned() {
         Suggestion p = suggestionManager.getSuggestion();
         if (p != null && p.isModifySuggestion() && p.actionedTick == -1) {
@@ -244,13 +202,8 @@ public class SuggestionController {
         if(!grandExchange.isHomeScreenOpen() || grandExchange.isCollectButtonVisible()) {
             return false;
         }
-        if(uncollectedManager.HasUncollected(osrsLoginManager.getAccountHash())) {
-            return true;
-        }
-        if(suggestionPanel.isCollectItemsSuggested()) {
-            return true;
-        }
-        return false;
+        return uncollectedManager.HasUncollected(osrsLoginManager.getAccountHash())
+                || suggestionPanel.isCollectItemsSuggested();
     }
 
     public void getSuggestionAsync() {
@@ -259,15 +212,11 @@ public class SuggestionController {
             return;
         }
         suggestionManager.setSuggestionNeeded(false);
-        // Only the OSRS login must be valid.
         if (!osrsLoginManager.isValidLoginState()) {
             suggestionManager.setSuggestionRefreshPending(false);
             if (suggestionPanel != null) {
                 suggestionPanel.refresh();
             }
-            return;
-        }
-        if (suggestionManager.isSuggestionRequestInProgress()) {
             return;
         }
         AccountStatus accountStatus = accountStatusManager.getAccountStatus();
@@ -292,7 +241,6 @@ public class SuggestionController {
                 handleSuggestionReceived(oldSuggestion, newSuggestion, accountStatus, !skipGraphData);
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
-        // Typed suggestion from Ares POST /v1/suggestion; graph may be bundled or fetched.
         runeAssistSource.getSuggestionAsync(suggestionConsumer, !skipGraphData);
     }
 
@@ -318,7 +266,6 @@ public class SuggestionController {
     private synchronized void handleSuggestionReceived(Suggestion oldSuggestion, Suggestion newSuggestion,
                                                        AccountStatus accountStatus, boolean loadGraph) {
         if (!newSuggestion.isDumpAlert && !suggestionManager.isSuggestionRequestInProgress()) {
-            // this is the edge case when a dump suggestion is received whilst a standard request is in progress
             log.info("discarding suggestion as not dump alert and no request in progress {}", newSuggestion);
             return;
         }
@@ -367,32 +314,26 @@ public class SuggestionController {
         offerManager.setOfferJustPlaced(false);
         suggestionPanel.refresh();
         showNotifications(oldSuggestion, newSuggestion, accountStatus);
-        if (!newSuggestion.isWaitSuggestion()) {
-            SwingUtilities.invokeLater(() -> {
-                if (flipDialogController.priceGraphPanel != null) {
-                    flipDialogController.priceGraphPanel.newSuggestedItemId(
-                            newSuggestion.getItemId(),
-                            buildPriceLine(newSuggestion)
-                    );
-                }
-            });
-        } else {
-            SwingUtilities.invokeLater(() -> {
-                if (flipDialogController.priceGraphPanel != null) {
-                    flipDialogController.priceGraphPanel.suggestedPriceLine = null;
-                }
-            });
-        }
+        SwingUtilities.invokeLater(() -> {
+            if (flipDialogController.priceGraphPanel == null) {
+                return;
+            }
+            if (!newSuggestion.isWaitSuggestion()) {
+                flipDialogController.priceGraphPanel.newSuggestedItemId(
+                        newSuggestion.getItemId(),
+                        buildPriceLine(newSuggestion)
+                );
+            } else {
+                flipDialogController.priceGraphPanel.suggestedPriceLine = null;
+            }
+        });
         if (client.getVarcIntValue(VarClientInt.INPUT_TYPE) == 14) {
             clientThread.invokeLater(gePreviousSearch::showSuggestedItemInSearch);
         }
         feedSuggestionGraph(newSuggestion, loadGraph);
     }
 
-    /**
-     * Populate the suggestion price graph from a bundled compose {@code graph} and/or
-     * {@code GET /v1/graph}, feeding the same consumer FC used with /v2/suggestion.
-     */
+    /** Bundled compose graph and/or GET /v1/graph. */
     private void feedSuggestionGraph(Suggestion suggestion, boolean loadGraph) {
         if (!loadGraph) {
             suggestionManager.setGraphDataReadingInProgress(false);
@@ -433,36 +374,22 @@ public class SuggestionController {
                 });
     }
 
-    /**
-     * While the user is acting on a MODIFY, a refresh that would switch the card to
-     * BUY/SELL/MODIFY of a different item is dropped. Same-item MODIFY is allowed
-     * (repriced quote). Editor closed / leftover lock must not keep a ghost card.
-     */
+    /** Drop refreshes that would switch away from an in-progress MODIFY of a different item. */
     private boolean shouldKeepOwnedModify(Suggestion oldSuggestion, Suggestion newSuggestion) {
         if (oldSuggestion == null || !oldSuggestion.isModifySuggestion()) {
             return false;
         }
-        if (oldSuggestion.actionedTick != -1) {
-            return false;
-        }
-        if (!isModifyInProgress(oldSuggestion)) {
+        if (oldSuggestion.actionedTick != -1 || !isModifyInProgress(oldSuggestion)) {
             return false;
         }
         if (newSuggestion == null) {
             return true;
         }
-        if (newSuggestion.isModifySuggestion()
-                && newSuggestion.getItemId() == oldSuggestion.getItemId()) {
-            return false;
-        }
-        return true;
+        return !(newSuggestion.isModifySuggestion()
+                && newSuggestion.getItemId() == oldSuggestion.getItemId());
     }
 
-    /**
-     * MODIFY with no filling offer and the editor closed — a leftover lock after
-     * logout/collect/empty slot. Do not show it; fetch BUY into empty slots.
-     * Cancel-then-relist (Set up offer still showing this item) is not a ghost.
-     */
+    /** MODIFY with no filling offer and editor closed — leftover lock after logout/collect. */
     public boolean isGhostModify(Suggestion s) {
         if (s == null || !s.isModifySuggestion() || s.getItemId() <= 0) {
             return false;
@@ -484,18 +411,10 @@ public class SuggestionController {
 
     private PriceLine buildPriceLine(Suggestion suggestion) {
         if (suggestion.isBuySuggestion()) {
-            return new PriceLine(
-                    suggestion.getPrice(),
-                    "Suggested buy price",
-                    false
-            );
+            return new PriceLine(suggestion.getPrice(), "Suggested buy price", false);
         }
         if (suggestion.isSellSuggestion()) {
-            return new PriceLine(
-                    suggestion.getPrice(),
-                    "Suggested sell price",
-                    true
-            );
+            return new PriceLine(suggestion.getPrice(), "Suggested sell price", true);
         }
         return null;
     }
@@ -516,10 +435,7 @@ public class SuggestionController {
         if (newSuggestion.isWaitSuggestion()) {
             return false;
         }
-        if (oldSuggestion != null && newSuggestion.equals(oldSuggestion)) {
-            return false;
-        }
-        return true;
+        return oldSuggestion == null || !newSuggestion.equals(oldSuggestion);
     }
 
     private void showChatNotifications(Suggestion newSuggestion, AccountStatus accountStatus) {
