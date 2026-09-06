@@ -27,7 +27,7 @@ public class BugReportClient {
     public static final String CONFIG_GROUP = "runeassistflip";
     public static final String KEY_DEVICE_TOKEN = "cloudDeviceToken";
     public static final String KEY_USER_ID = "cloudUserId";
-    public static final String DEFAULT_ORIGIN = "https://runeassist.ares-server.co.uk";
+    public static final String DEFAULT_ORIGIN = "https://runeassist.com";
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
     private final OkHttpClient http;

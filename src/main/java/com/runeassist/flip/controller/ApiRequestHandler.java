@@ -31,7 +31,7 @@ import java.util.function.Consumer;
 public class ApiRequestHandler {
 
     private static final String UA = "RuneAssist-flip/1.0";
-    private static final String ARES_ORIGIN = "https://runeassist.ares-server.co.uk";
+    private static final String ARES_ORIGIN = "https://runeassist.com";
     private static final String DUMP_ALERTS = ARES_ORIGIN + "/v1/dump-alerts";
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
