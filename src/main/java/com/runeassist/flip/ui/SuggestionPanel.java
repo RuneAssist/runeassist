@@ -33,14 +33,12 @@ import static com.runeassist.flip.util.Constants.MIN_GP_NEEDED_TO_FLIP;
 @Slf4j
 public class SuggestionPanel extends JPanel {
     private static final int DEFAULT_PANEL_HEIGHT = 168;
-    /** Tall enough for a 9pt chip plus its border and the row's own bottom padding. */
     private static final int FLAGS_ROW_HEIGHT = 18;
     private static final int HEADER_TRAILING_INSET = 52;
     private static final String CARD_STRUCTURED = "structured";
     private static final String CARD_MESSAGE = "message";
     private static final String CARD_SPINNER = "spinner";
 
-    // dependencies
     private final RuneAssistConfig config;
     private final SuggestionManager suggestionManager;
     private final SuggestionPreferencesManager suggestionPreferencesManager;
@@ -176,9 +174,7 @@ public class SuggestionPanel extends JPanel {
         flagsRow.setBackground(RuneAssistColors.CARD);
         flagsRow.setAlignmentX(LEFT_ALIGNMENT);
         flagsRow.setBorder(BorderFactory.createEmptyBorder(0, 0, 2, 0));
-        // The card has a fixed preferred height, so the vertical BoxLayout shrinks whatever has no
-        // minimum. This row had none and collapsed to a few pixels: the chips rendered as slivers
-        // of their own gold border with no text. Pinning the height keeps them legible.
+        // Pin height so BoxLayout doesn't collapse chips to border-only slivers.
         Dimension flagsSize = new Dimension(MainPanel.CONTENT_WIDTH - 20, FLAGS_ROW_HEIGHT);
         flagsRow.setMinimumSize(flagsSize);
         flagsRow.setPreferredSize(flagsSize);
@@ -381,34 +377,21 @@ public class SuggestionPanel extends JPanel {
         }
         String whyHtml = hasWhy ? htmlEscape(why) : "";
         if (suggestion.isBuySuggestion()) {
-            String text = whyHtml;
-            String profit = formatExpectedProfitAndDuration(suggestion.getExpectedProfit(), suggestion.getExpectedDuration());
-            if (!profit.isEmpty()) {
-                text = text.isEmpty() ? profit : text + "<br>" + profit;
-            }
-            if (!hasWhy) {
-                text += additionalInfoMessage;
-            }
+            String profit = formatProfitAndDuration(
+                    suggestion.getExpectedProfit(), suggestion.getExpectedDuration(), false, true);
+            String text = joinInfoLines(whyHtml, profit, hasWhy, additionalInfoMessage);
             if (!containsIgnoreCase(why, "limit")) {
                 text += formatLimitLine(suggestion);
             }
-            setAdditionalInfoText(
-                    text,
-                    formatSuggestionTooltip(suggestion, suggestion.getExpectedProfit())
-            );
+            setAdditionalInfoText(text, formatSuggestionTooltip(suggestion, suggestion.getExpectedProfit()));
         } else if (suggestion.isSellSuggestion()) {
-            String text = whyHtml;
             Long profit = profitCalculator.calculateSuggestionProfit(suggestion);
             if (profit == null && suggestion.getExpectedProfit() != null) {
                 profit = Math.round(suggestion.getExpectedProfit());
             }
-            if (profit != null) {
-                String profitText = formatSellProfitLossAndDuration((double) profit, suggestion.getExpectedDuration());
-                text = text.isEmpty() ? profitText : text + "<br>" + profitText;
-            }
-            if (!hasWhy) {
-                text += additionalInfoMessage;
-            }
+            String profitText = profit == null ? ""
+                    : formatProfitAndDuration((double) profit, suggestion.getExpectedDuration(), true, false);
+            String text = joinInfoLines(whyHtml, profitText, hasWhy, additionalInfoMessage);
             setAdditionalInfoText(
                     text,
                     formatSuggestionTooltip(suggestion, profit == null ? null : (double) profit)
@@ -424,16 +407,22 @@ public class SuggestionPanel extends JPanel {
         showStructuredCard();
     }
 
-    /** WAIT must always show a pill + why. Never a blank RUNEASSIST header. */
+    private static String joinInfoLines(String whyHtml, String profitHtml, boolean hasWhy, String additional) {
+        String text = whyHtml == null ? "" : whyHtml;
+        if (profitHtml != null && !profitHtml.isEmpty()) {
+            text = text.isEmpty() ? profitHtml : text + "<br>" + profitHtml;
+        }
+        if (!hasWhy && additional != null) {
+            text += additional;
+        }
+        return text;
+    }
+
     private void paintWait(Suggestion suggestion) {
         setHeadline("Wait");
         suggestionIcon.setVisible(false);
         populateFlags(null);
         String message = suggestion.getMessage();
-        if (HubPluginConflict.WAIT_MESSAGE.equals(message)) {
-            showCenteredMessage("<FONT COLOR=gray>" + HubPluginConflict.WAIT_MESSAGE + "</FONT>");
-            return;
-        }
         if (Strings.isNullOrEmpty(message)) {
             message = "Wait";
         }
@@ -456,57 +445,39 @@ public class SuggestionPanel extends JPanel {
         return accountStatus != null && accountStatus.shouldSellFromBank(suggestion);
     }
 
-    public void suggestHubConflict() {
-        setHeadline("Wait");
+    private void showStaticSuggestion(String headline, String message) {
+        setHeadline(headline);
         populateFlags(null);
-        setMessage("<FONT COLOR=gray>" + HubPluginConflict.WAIT_MESSAGE + "</FONT>");
-        setButtonsVisible(false);
+        setMessage(message);
+    }
+
+    public void suggestHubConflict() {
+        showStaticSuggestion("Wait",
+                "<FONT COLOR=gray>" + HubPluginConflict.WAIT_MESSAGE + "</FONT>");
     }
 
     public void suggestCollect() {
-        setHeadline("Collect");
-        populateFlags(null);
-        setMessage("Collect items");
-        setButtonsVisible(false);
+        showStaticSuggestion("Collect", "Collect items");
     }
 
     public void suggestAddGp() {
         NumberFormat formatter = NumberFormat.getNumberInstance();
-        setHeadline("Add gp");
-        populateFlags(null);
-        setMessage("Add at least <FONT COLOR=" + RuneAssistColors.hex(RuneAssistColors.ACCENT) + ">" + formatter.format(MIN_GP_NEEDED_TO_FLIP)
-                + "</FONT> gp to your inventory to get a flip suggestion");
-        setButtonsVisible(false);
+        showStaticSuggestion("Add gp",
+                "Add at least <FONT COLOR=" + RuneAssistColors.hex(RuneAssistColors.ACCENT) + ">"
+                        + formatter.format(MIN_GP_NEEDED_TO_FLIP)
+                        + "</FONT> gp to your inventory to get a flip suggestion");
     }
 
     public void suggestScanningForDumps() {
-        setHeadline("Scan");
-        populateFlags(null);
-        setMessage("Waiting for dumps...");
-        setButtonsVisible(false);
+        showStaticSuggestion("Scan", "Waiting for dumps...");
     }
 
     public void suggestOpenGe() {
-        setHeadline("Open GE");
-        populateFlags(null);
-        setMessage("Open the Grand Exchange to get a flip suggestion");
-        setButtonsVisible(false);
+        showStaticSuggestion("Open GE", "Open the Grand Exchange to get a flip suggestion");
     }
 
     public void setIsPausedMessage() {
-        setHeadline("Paused");
-        populateFlags(null);
-        setMessage("Suggestions are paused");
-        setButtonsVisible(false);
-    }
-
-    private void showCenteredMessage(String message) {
-        innerSuggestionMessage = message;
-        setButtonsVisible(false);
-        suggestionText.setText("<html><center>" + message + "<br>" + serverMessage + "</center></html>");
-        showMessageCard();
-        suggestionTextContainer.revalidate();
-        suggestionTextContainer.repaint();
+        showStaticSuggestion("Paused", "Suggestions are paused");
     }
 
     public void setMessage(String message) {
@@ -515,9 +486,8 @@ public class SuggestionPanel extends JPanel {
         innerSuggestionMessage = message;
         setButtonsVisible(false);
 
-        String displayMessage = message;
         suggestionText.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
-        suggestionText.setText("<html><center>" + displayMessage + "<br>" + serverMessage + "</center></html>");
+        suggestionText.setText("<html><center>" + message + "<br>" + serverMessage + "</center></html>");
         showMessageCard();
         suggestionTextContainer.revalidate();
         suggestionTextContainer.repaint();
@@ -606,9 +576,7 @@ public class SuggestionPanel extends JPanel {
     }
 
     private void showFetchingWait() {
-        setHeadline("Wait");
-        populateFlags(null);
-        setMessage("Getting the next flip…");
+        showStaticSuggestion("Wait", "Getting the next flip…");
     }
 
     public void refresh() {
@@ -624,9 +592,7 @@ public class SuggestionPanel extends JPanel {
         if (errorMessage != null) {
             hideLoading();
             setServerMessage("");
-            setHeadline("Login");
-            populateFlags(null);
-            setMessage(errorMessage);
+            showStaticSuggestion("Login", errorMessage);
             return;
         }
 
@@ -663,34 +629,20 @@ public class SuggestionPanel extends JPanel {
         flagsRow.repaint();
     }
 
-    private String formatSellProfitLossAndDuration(Double expectedProfit, Double expectedDuration) {
-        String formattedProfit = formatProfit(expectedProfit);
-        Color color = config.profitAmountColor();
-        if(expectedProfit < 0) {
-            color = config.lossAmountColor();
-        }
-        String text = boldColor(formattedProfit, color) + " profit";
-        if (expectedDuration != null) {
-            String formattedDuration = formatSuggestionDuration(expectedDuration);
-            text += " in <b>" + formattedDuration + "</b>";
-        }
-        return text;
-    }
-
-    private String formatExpectedProfitAndDuration(Double expectedProfit, Double expectedDuration) {
+    private String formatProfitAndDuration(Double expectedProfit, Double expectedDuration,
+                                           boolean lossColor, boolean requirePositiveDuration) {
         if (expectedProfit == null) {
             return "";
         }
-        String formattedProfit = formatProfit(expectedProfit);
-        String text = boldColor(formattedProfit, config.profitAmountColor()) + " profit";
-        if (expectedDuration != null && expectedDuration > 0) {
-            String formattedDuration = formatSuggestionDuration(expectedDuration);
-            text += " in <b>" + formattedDuration + "</b>";
+        Color color = lossColor && expectedProfit < 0
+                ? config.lossAmountColor() : config.profitAmountColor();
+        String text = boldColor(formatProfit(expectedProfit), color) + " profit";
+        if (expectedDuration != null && (!requirePositiveDuration || expectedDuration > 0)) {
+            text += " in <b>" + formatSuggestionDuration(expectedDuration) + "</b>";
         }
         return text;
     }
 
-    /** Slot counts when Wait has no engine why — the south card should still show numbers. */
     private String formatWaitSlotStatus() {
         AccountStatus status = accountStatusManager.getAccountStatus();
         if (status == null || status.getOffers() == null) {
@@ -720,13 +672,10 @@ public class SuggestionPanel extends JPanel {
     }
 
     private static boolean containsIgnoreCase(String s, String needle) {
-        if (s == null || needle == null || s.isEmpty()) {
-            return false;
-        }
-        return s.toLowerCase(Locale.ROOT).contains(needle.toLowerCase(Locale.ROOT));
+        return s != null && needle != null && !s.isEmpty()
+                && s.toLowerCase(Locale.ROOT).contains(needle.toLowerCase(Locale.ROOT));
     }
 
-    /** Remaining 4h buy-limit vs wiki GE limit, or an honest "unknown" when we have no live fills. */
     private String formatLimitLine(Suggestion suggestion) {
         int ge = suggestion.getGeLimit();
         int left = suggestion.getRemainingLimit();

@@ -34,7 +34,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
-    /** Source of the next flip {@link Suggestion}. Composes via Ares {@code POST /v1/suggestion} */
+/** Next flip {@link Suggestion} via Ares {@code POST /v1/suggestion}. */
 @Slf4j
 @Singleton
 public class RuneAssistSuggestionSource
@@ -52,28 +52,20 @@ public class RuneAssistSuggestionSource
     @Inject private com.runeassist.flip.controller.GrandExchange grandExchange;
     @Inject private ExecutorService executor;
 
-    /** Compute the next suggestion and hand it to {@code consumer} on the client thread. */
     public void getSuggestionAsync(Consumer<Suggestion> consumer)
     {
         getSuggestionAsync(consumer, true);
     }
 
-    /**
-     * @param includeGraph when true, ask Ares to bundle {@code /v1/graph}-shaped data on
-     *                     the compose response (skipped in low-data mode).
-     */
+    /** @param includeGraph ask Ares to bundle graph data (skip in low-data mode). */
     public void getSuggestionAsync(Consumer<Suggestion> consumer, boolean includeGraph)
     {
-        // HeldCostTracker is scoped per account (display name) -- a RuneLite profile is not
-        // the same thing as an OSRS account, and this must not mix two accounts' cost basis.
         final net.runelite.api.Player localPlayer = client.getLocalPlayer();
         final String displayName = localPlayer != null ? localPlayer.getName() : null;
         final long[][] offersBySlot = readOffers(displayName);
-        // Real held stock with cost basis (FIFO from actual GE buys), so sells are profit-aware.
         final Map<Integer, long[]> held = heldCostTracker.held(displayName);
         final long coins = inventoryCoins();
-        // grandExchange.isSlotOpen()/getOpenSlot() hit client.getVarbitValue(...), which is
-        // client-thread-only — snapshot here before the background compose thread runs.
+        // grandExchange slot helpers are client-thread-only — snapshot before background work.
         final OwnedModifySnapshot ownedModifySnap = computeOwnedModify();
         final boolean membersWorld = osrsLoginManager.isMembersWorld();
         final boolean accountMember = osrsLoginManager.isAccountMember();
@@ -131,13 +123,7 @@ public class RuneAssistSuggestionSource
                 suggestion = null;
             }
 
-            if (suggestion != null
-                    && (suggestion.getPickSource() == null || suggestion.getPickSource().isEmpty()))
-            {
-                suggestion.setPickSource(market.lastFromCompose()
-                    ? "ares-compose"
-                    : (market.lastFromAres() ? "ares" : "none"));
-            }
+            ensurePickSource(suggestion);
             if (suggestion != null && suggestion.getItemId() > 0)
             {
                 int id = suggestion.getItemId();
@@ -154,12 +140,9 @@ public class RuneAssistSuggestionSource
                 else if (t == SuggestionType.BUY || t == SuggestionType.SELL
                         || t == SuggestionType.MODIFY_BUY || t == SuggestionType.MODIFY_SELL)
                 {
-                    // Own this listing / reprice for ~10 min so leftover qty is not aborted.
                     accountStatusManager.protectListing(id);
                 }
             }
-            // Aborting an item (buy or sell) session-skips it so the next pick is not
-            // immediately BUY/SELL the same item (ruby necklace abort/list loop).
             if (suggestion != null && suggestion.isAbortSuggestion())
             {
                 int abortId = suggestion.getItemId();
@@ -174,22 +157,14 @@ public class RuneAssistSuggestionSource
             Suggestion result;
             try {
                 if (suggestion == null) {
-                    boolean slotsFull = remainingSlots <= 0;
-                    String waitMsg;
-                    if (slotsFull) {
-                        waitMsg = WaitSuggestions.WAIT_SLOTS_FULL;
-                    } else if (market.lastComposeUnreachable() || market.lastAresUnreachable()) {
-                        waitMsg = WaitSuggestions.WAIT_ARES_DOWN;
-                    } else {
-                        waitMsg = WaitSuggestions.WAIT_NO_CANDIDATES;
-                    }
-                    suggestion = WaitSuggestions.waitFallback(waitMsg, offersBySlot, maxSlots);
+                    suggestion = WaitSuggestions.waitFallback(
+                        softFailWaitMessage(remainingSlots), offersBySlot, maxSlots);
                 }
                 if (suggestion.isWaitSuggestion()) {
                     if (suggestion.getMessage() == null || suggestion.getMessage().isEmpty()) {
                         suggestion.setMessage(WaitSuggestions.WAIT_NO_MARGIN);
                     }
-                    if ((market.lastComposeUnreachable() || market.lastAresUnreachable())
+                    if (aresUnreachable()
                             && WaitSuggestions.WAIT_NO_CANDIDATES.equals(suggestion.getMessage())) {
                         suggestion.setMessage(WaitSuggestions.WAIT_ARES_DOWN);
                     }
@@ -200,12 +175,7 @@ public class RuneAssistSuggestionSource
                     log.warn("portfolio items failed", e);
                 }
                 suggestion.setTimeIssued(Instant.now());
-                if (suggestion.getPickSource() == null || suggestion.getPickSource().isEmpty())
-                {
-                    suggestion.setPickSource(market.lastFromCompose()
-                        ? "ares-compose"
-                        : (market.lastFromAres() ? "ares" : "none"));
-                }
+                ensurePickSource(suggestion);
                 try { stampLimitFields(displayName, suggestion, offersBySlot); }
                 catch (Exception e) { log.warn("limit stamp failed", e); }
                 result = suggestion;
@@ -220,7 +190,27 @@ public class RuneAssistSuggestionSource
         });
     }
 
-    /** Stamp GE limit + remaining 4h buy-limit onto a built suggestion for the card. */
+    private boolean aresUnreachable()
+    {
+        return market.lastComposeUnreachable() || market.lastAresUnreachable();
+    }
+
+    private String softFailWaitMessage(int remainingSlots)
+    {
+        if (remainingSlots <= 0) return WaitSuggestions.WAIT_SLOTS_FULL;
+        if (aresUnreachable()) return WaitSuggestions.WAIT_ARES_DOWN;
+        return WaitSuggestions.WAIT_NO_CANDIDATES;
+    }
+
+    private void ensurePickSource(Suggestion suggestion)
+    {
+        if (suggestion == null) return;
+        if (suggestion.getPickSource() != null && !suggestion.getPickSource().isEmpty()) return;
+        suggestion.setPickSource(market.lastFromCompose()
+            ? "ares-compose"
+            : (market.lastFromAres() ? "ares" : "none"));
+    }
+
     private void stampLimitFields(String displayName, Suggestion suggestion, long[][] offers)
     {
         if (suggestion == null) return;
@@ -268,7 +258,6 @@ public class RuneAssistSuggestionSource
         return pending;
     }
 
-    /** Held stock as portfolio items so unrealized profit / portfolio value update. */
     private List<Suggestion.PortfolioItem> portfolioItems(Map<Integer, long[]> held, long[][] offers)
     {
         Map<Integer, long[]> merged = mergeHeldWithOfferFills(held, offers);
@@ -301,11 +290,7 @@ public class RuneAssistSuggestionSource
         return out;
     }
 
-    /**
-     * Floor held qty with units already filled on live buy offers. Relogs can persist slot
-     * counters without lots, which otherwise leaves unrealized at 0 while portfolio cash
-     * still counts locked GE offers.
-     */
+    /** Floor held qty with units already filled on live buy offers. */
     private static Map<Integer, long[]> mergeHeldWithOfferFills(Map<Integer, long[]> held, long[][] offers)
     {
         Map<Integer, long[]> merged = new HashMap<>();
@@ -317,11 +302,11 @@ public class RuneAssistSuggestionSource
             }
         }
         if (offers == null) return merged;
-        Map<Integer, long[]> fills = new HashMap<>(); // qty, cost
+        Map<Integer, long[]> fills = new HashMap<>();
         for (long[] o : offers)
         {
             if (o == null || o.length < 6) continue;
-            if (o[1] != 1L) continue; // not a buy
+            if (o[1] != 1L) continue;
             int sold = (int) Math.max(0L, o[3]);
             if (sold <= 0) continue;
             int id = (int) o[0];
@@ -343,7 +328,6 @@ public class RuneAssistSuggestionSource
         return merged;
     }
 
-    /** Units already counting against the 4h GE buy-limit: fills in-window + pending buy remainder. */
     private Map<Integer, Integer> usedBuyLimit(String displayName, long[][] offers)
     {
         Map<Integer, Integer> used = new HashMap<>(heldCostTracker.boughtInWindowAll(displayName));
@@ -358,7 +342,6 @@ public class RuneAssistSuggestionSource
         return used;
     }
 
-    /** Client-thread-only snapshot of owned-modify state for the compose request. */
     private static final class OwnedModifySnapshot
     {
         int slot = -1;
@@ -370,7 +353,6 @@ public class RuneAssistSuggestionSource
         long offerPrice;
     }
 
-    /** Reads GE-slot state (client-thread-only: {@code grandExchange.isSlotOpen()}/ */
     private OwnedModifySnapshot computeOwnedModify()
     {
         OwnedModifySnapshot snap = new OwnedModifySnapshot();
@@ -456,7 +438,6 @@ public class RuneAssistSuggestionSource
         return req;
     }
 
-    /** Stable id for server top-K jitter: pairing device token, else account hash. */
     private String clientDeviceId()
     {
         String token = configManager.getConfiguration(
@@ -540,7 +521,7 @@ public class RuneAssistSuggestionSource
                 && offers[open].getItemId() == itemId;
     }
 
-    /** offersBySlot[i] = null (empty) or {itemId, buyIs1, price, sold, total, fillingIs1, lastProgressMs, listedMs}. */
+    /** offersBySlot[i] = null or {itemId, buyIs1, price, sold, total, fillingIs1, lastProgressMs, listedMs}. */
     private long[][] readOffers(String displayName)
     {
         long[][] out = new long[8][];
