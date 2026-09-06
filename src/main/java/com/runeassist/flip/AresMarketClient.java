@@ -35,11 +35,11 @@ import java.util.concurrent.TimeUnit;
 public class AresMarketClient
 {
     private static final String UA = "RuneAssist-flip/1.0 (github.com/RuneAssist/runeassist)";
-    private static final String ARES_FLIPS = "https://runeassist.ares-server.co.uk/v1/flips";
-    private static final String ARES_SUGGESTION = "https://runeassist.ares-server.co.uk/v1/suggestion";
-    private static final String ARES_HEALTH = "https://runeassist.ares-server.co.uk/v1/market/health";
-    private static final String ARES_LIMITS = "https://runeassist.ares-server.co.uk/v1/market/limits";
-    private static final String ARES_QUOTE = "https://runeassist.ares-server.co.uk/v1/market/quote";
+    private static final String ARES_FLIPS = "https://runeassist.com/v1/flips";
+    private static final String ARES_SUGGESTION = "https://runeassist.com/v1/suggestion";
+    private static final String ARES_HEALTH = "https://runeassist.com/v1/market/health";
+    private static final String ARES_LIMITS = "https://runeassist.com/v1/market/limits";
+    private static final String ARES_QUOTE = "https://runeassist.com/v1/market/quote";
     private static final long LIMITS_TTL = 6 * 60 * 60 * 1000L;
     private static final MediaType JSON = MediaType.parse("application/json");
     private static final Type CANDIDATE_LIST = new TypeToken<List<Map<String, Object>>>(){}.getType();
