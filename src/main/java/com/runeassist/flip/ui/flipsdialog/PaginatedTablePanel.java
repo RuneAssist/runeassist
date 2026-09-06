@@ -56,7 +56,6 @@ public class PaginatedTablePanel<T> extends JPanel {
         topPanel.add(rightControls, BorderLayout.EAST);
         add(topPanel, BorderLayout.NORTH);
 
-        // Create table model
         tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -64,7 +63,6 @@ public class PaginatedTablePanel<T> extends JPanel {
             }
         };
 
-        // Create table
         table = new JTable(tableModel);
         table.setBackground(ColorScheme.DARK_GRAY_COLOR);
         table.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
@@ -73,24 +71,21 @@ public class PaginatedTablePanel<T> extends JPanel {
         table.setGridColor(ColorScheme.MEDIUM_GRAY_COLOR);
         table.setRowHeight(rowHeight);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        table.setRowSorter(null); // Disable sorting
+        table.setRowSorter(null);
         table.getTableHeader().setReorderingAllowed(false);
         table.setFocusable(false);
 
-        // Create layered pane for spinner overlay
         layeredPane = new JLayeredPane();
         layeredPane.setBackground(ColorScheme.DARK_GRAY_COLOR);
         layeredPane.setOpaque(true);
 
-        // Create spinner overlay with loading text
-        // Create spinner with semi-transparent background
         spinner = new Spinner();
         spinner.show();
         spinnerOverlay = new JPanel(new GridBagLayout());
         spinnerOverlay.setBackground(ColorScheme.DARK_GRAY_COLOR);
         spinnerOverlay.setOpaque(true);
         spinnerOverlay.add(spinner);
-        spinnerOverlay.setVisible(false); // Initially hidden
+        spinnerOverlay.setVisible(false);
 
         JScrollPane scrollPane = new JScrollPane(table);
         scrollPane.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -99,7 +94,6 @@ public class PaginatedTablePanel<T> extends JPanel {
         layeredPane.setLayout(new OverlayLayout(layeredPane));
         layeredPane.add(spinnerOverlay, JLayeredPane.MODAL_LAYER);
         layeredPane.add(scrollPane, JLayeredPane.DEFAULT_LAYER);
-
         add(layeredPane, BorderLayout.CENTER);
     }
 
@@ -141,6 +135,18 @@ public class PaginatedTablePanel<T> extends JPanel {
         setRenderer(profitRenderer(format, config), columns);
     }
 
+    public void gpColumns(NumberFormat format, boolean signed, int... columns) {
+        setRenderer(gpRenderer(format, signed, null), columns);
+    }
+
+    public void gpProfitColumns(NumberFormat format, RuneAssistConfig config, int... columns) {
+        setRenderer(gpRenderer(format, true, config), columns);
+    }
+
+    public void percentRoiColumns(RuneAssistConfig config, int... columns) {
+        setRenderer(percentRoiRenderer(config), columns);
+    }
+
     public void setTopControlsVisible(boolean visible) {
         topPanel.setVisible(visible);
     }
@@ -152,7 +158,6 @@ public class PaginatedTablePanel<T> extends JPanel {
     public void installHeaderSort(Supplier<String> currentColumn,
                                   Supplier<SortDirection> currentDirection,
                                   BiConsumer<String, SortDirection> onSortChanged) {
-        // Add custom header click listener for sorting
         table.getTableHeader().addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -163,8 +168,8 @@ public class PaginatedTablePanel<T> extends JPanel {
                 String clickedColumn = columnNames[columnIndex];
                 SortDirection newDirection = SortDirection.DESC;
                 if (clickedColumn.equals(currentColumn.get())) {
-                    // Toggle sort direction if clicking the same column, otherwise default to DESC
-                    newDirection = currentDirection.get() == SortDirection.DESC ? SortDirection.ASC : SortDirection.DESC;
+                    newDirection = currentDirection.get() == SortDirection.DESC
+                            ? SortDirection.ASC : SortDirection.DESC;
                 }
                 onSortChanged.accept(clickedColumn, newDirection);
             }
@@ -206,7 +211,6 @@ public class PaginatedTablePanel<T> extends JPanel {
         pageSizeComboBox.setToolTipText("Page size");
         pageSizeComboBox.addActionListener(e -> onPageSizeChanged.accept((Integer) pageSizeComboBox.getSelectedItem()));
 
-        // Create bottom panel with pagination
         JPanel bottomPanel = new JPanel(new BorderLayout());
         bottomPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
@@ -218,32 +222,23 @@ public class PaginatedTablePanel<T> extends JPanel {
         pageSizePanel.add(pageSizeLabel);
         pageSizePanel.add(pageSizeComboBox);
 
-        // Adjust paginator border to account for page size panel width
         paginatorPanel.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createEmptyBorder(0, 0, 0, pageSizePanel.getPreferredSize().width),
                 paginatorPanel.getBorder()));
         bottomPanel.add(pageSizePanel, BorderLayout.WEST);
         bottomPanel.add(paginatorPanel, BorderLayout.CENTER);
-
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
     public JLabel setSpinnerText(String text) {
-        // Create loading text label
         JLabel label = new JLabel(text);
         label.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
         label.setFont(label.getFont().deriveFont(14f));
-
-        // Create a panel to hold the loading text and spinner horizontally
         JPanel loadingPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
         loadingPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
         loadingPanel.setOpaque(false);
-
-        // Add text and spinner to the loading panel
         loadingPanel.add(label);
         loadingPanel.add(spinner);
-
-        // Add the loading panel to the spinner overlay
         spinnerOverlay.removeAll();
         spinnerOverlay.add(loadingPanel);
         spinnerOverlay.revalidate();
@@ -289,18 +284,15 @@ public class PaginatedTablePanel<T> extends JPanel {
         int preferredWidth = tableColumn.getMinWidth();
         int maxWidth = tableColumn.getMaxWidth();
 
-        // Check header width
         Component comp = table.getTableHeader().getDefaultRenderer()
                 .getTableCellRendererComponent(table, tableColumn.getHeaderValue(), false, false, 0, column);
         preferredWidth = Math.max(comp.getPreferredSize().width + 10, preferredWidth);
 
-        // Check cell widths
         for (int row = 0; row < table.getRowCount(); row++) {
             comp = table.getCellRenderer(row, column)
                     .getTableCellRendererComponent(table, table.getValueAt(row, column), false, false, row, column);
             preferredWidth = Math.max(comp.getPreferredSize().width + 10, preferredWidth);
         }
-
         tableColumn.setPreferredWidth(Math.min(preferredWidth, maxWidth));
     }
 
@@ -337,16 +329,53 @@ public class PaginatedTablePanel<T> extends JPanel {
                     long amount = (Long) value;
                     setText(format.format(amount));
                     setHorizontalAlignment(RIGHT);
-                    // Color profit/loss only if not selected
                     if (!isSelected) {
-                        if (amount > 0) {
-                            setForeground(config.profitAmountColor());
-                        } else if (amount < 0) {
-                            setForeground(config.lossAmountColor());
-                        } else {
-                            setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-                        }
+                        setForeground(amount > 0 ? config.profitAmountColor()
+                                : amount < 0 ? config.lossAmountColor()
+                                : ColorScheme.LIGHT_GRAY_COLOR);
                     }
+                }
+                return c;
+            }
+        };
+    }
+
+    private static DefaultTableCellRenderer gpRenderer(NumberFormat format, boolean signed, RuneAssistConfig config) {
+        return new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                                                           boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                setHorizontalAlignment(RIGHT);
+                if (value instanceof Long) {
+                    long amount = (Long) value;
+                    setText((signed && amount > 0 ? "+" : "") + format.format(amount) + " gp");
+                    if (config != null && !isSelected) {
+                        setForeground(UIUtilities.getProfitColor(amount, config));
+                    }
+                } else {
+                    setText(value == null ? "Unknown" : value.toString());
+                }
+                return c;
+            }
+        };
+    }
+
+    private static DefaultTableCellRenderer percentRoiRenderer(RuneAssistConfig config) {
+        return new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                                                           boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                setHorizontalAlignment(RIGHT);
+                if (value instanceof Double) {
+                    double roi = (Double) value;
+                    setText(String.format("%.2f%%", roi * 100.0d));
+                    if (!isSelected) {
+                        setForeground(UIUtilities.getProfitColor(roi, config));
+                    }
+                } else {
+                    setText(value == null ? "Unknown" : value.toString());
                 }
                 return c;
             }

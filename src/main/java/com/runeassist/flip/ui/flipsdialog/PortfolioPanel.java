@@ -22,12 +22,15 @@ import java.text.NumberFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.IntSupplier;
 import java.util.List;
 
 @Slf4j
 public class PortfolioPanel extends JPanel {
     private static final NumberFormat GP_FORMAT = NumberFormat.getNumberInstance(Locale.US);
+    private static final NumberFormat INT_FORMAT = NumberFormat.getIntegerInstance(Locale.US);
     private static final String CONTENT_CARD = "content";
     private static final String LOGIN_PROMPT_CARD = "login";
     private static final String[] COLUMN_NAMES = {
@@ -37,9 +40,8 @@ public class PortfolioPanel extends JPanel {
     private static final Map<String, Comparator<PortfolioItemCardData>> SORT_COMPARATORS = new HashMap<>();
     static {
         SORT_COMPARATORS.put("Item", Comparator.comparing(
-                PortfolioItemCardData::getItemName,
-                Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
-        // Numeric columns are pre-reversed so the default DESC direction shows largest-first
+                PortfolioItemCardData::getItemName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
+        // Numeric columns pre-reversed so default DESC shows largest-first
         SORT_COMPARATORS.put("Market value", Comparator.<PortfolioItemCardData>comparingLong(
                 i -> i.getPostTaxSellUnitPrice() * (long) i.getPortfolioQuantity()).reversed());
         SORT_COMPARATORS.put("Quantity", Comparator.comparingInt(PortfolioItemCardData::getPortfolioQuantity).reversed());
@@ -102,16 +104,12 @@ public class PortfolioPanel extends JPanel {
         cardPanel = new JPanel(cardLayout);
         cardPanel.setOpaque(false);
 
-        JPanel contentPanel = new JPanel(new BorderLayout(0, 12));
-        contentPanel.setOpaque(false);
+        JPanel contentPanel = plain(new BorderLayout(0, 12));
         contentPanel.setBorder(new EmptyBorder(8, 0, 0, 0));
 
-        JPanel summarySection = new JPanel(new BorderLayout(28, 0));
-        summarySection.setOpaque(false);
+        JPanel summarySection = plain(new BorderLayout(28, 0));
         summarySection.setBorder(new EmptyBorder(0, 0, 10, 0));
-
-        summaryTablePanel = new JPanel(new GridLayout(0, 2, 24, 10));
-        summaryTablePanel.setOpaque(false);
+        summaryTablePanel = plain(new GridLayout(0, 2, 24, 10));
         summaryTablePanel.setBorder(new EmptyBorder(4, 0, 4, 0));
         summarySection.add(summaryTablePanel, BorderLayout.WEST);
 
@@ -120,111 +118,36 @@ public class PortfolioPanel extends JPanel {
         clearPortfolioButton.setFocusable(false);
         clearPortfolioButton.addActionListener(e -> onClearPortfolioClicked());
 
-        JPanel rightControlsPanel = new JPanel();
-        rightControlsPanel.setOpaque(false);
-        rightControlsPanel.setLayout(new BorderLayout());
-        rightControlsPanel.setBorder(new EmptyBorder(0, 12, 0, 0));
-
-        JPanel bottomRightWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        bottomRightWrap.setOpaque(false);
+        JPanel rightControls = plain(new BorderLayout());
+        rightControls.setBorder(new EmptyBorder(0, 12, 0, 0));
+        JPanel syncWrap = plain(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         autoSyncInfoLabel = new JLabel();
         autoSyncInfoLabel.setForeground(RuneAssistColors.ACCENT);
         autoSyncInfoLabel.setFont(FontManager.getRunescapeFont());
         autoSyncInfoLabel.setHorizontalAlignment(SwingConstants.LEFT);
-        bottomRightWrap.add(autoSyncInfoLabel);
-
-        rightControlsPanel.add(bottomRightWrap, BorderLayout.SOUTH);
-        summarySection.add(rightControlsPanel, BorderLayout.CENTER);
-
+        syncWrap.add(autoSyncInfoLabel);
+        rightControls.add(syncWrap, BorderLayout.SOUTH);
+        summarySection.add(rightControls, BorderLayout.CENTER);
         contentPanel.add(summarySection, BorderLayout.NORTH);
 
         tablePanel = new PaginatedTablePanel<>(COLUMN_NAMES, this::toRow, 40);
         tablePanel.rightControls().add(clearPortfolioButton);
-        tablePanel.installHeaderSort(() -> sortColumn, () -> sortDirection, (clickedColumn, newDirection) -> {
-            sortColumn = clickedColumn;
-            sortDirection = newDirection;
+        tablePanel.installHeaderSort(() -> sortColumn, () -> sortDirection, (col, dir) -> {
+            sortColumn = col;
+            sortDirection = dir;
             renderTable();
         });
         tablePanel.installPopupHandler((e, row) -> showPortfolioMenu(e, tablePanel.row(row)));
-        tablePanel.rightColumns(2, 6); // Quantity, Time held
-        tablePanel.setRenderer(new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                if (value instanceof Long) {
-                    setText(formatGp((Long) value, false));
-                } else if (value == null) {
-                    setText("Unknown");
-                }
-                setHorizontalAlignment(RIGHT);
-                return c;
-            }
-        }, 1, 5);
-        tablePanel.setRenderer(new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                if (value instanceof ItemCell) {
-                    ItemCell itemCell = (ItemCell) value;
-                    label.setText(itemCell.name);
-                    ImageIcon cachedIcon = itemIconCache.get(itemCell.itemId);
-                    if (cachedIcon != null) {
-                        label.setIcon(cachedIcon);
-                    } else {
-                        label.setIcon(null);
-                        itemController.loadImage(itemCell.itemId, image -> {
-                            if (image != null) {
-                                itemIconCache.put(itemCell.itemId, new ImageIcon(image));
-                                SwingUtilities.invokeLater(table::repaint);
-                            }
-                        });
-                    }
-                } else {
-                    label.setIcon(null);
-                }
-                return label;
-            }
-        }, 0);
-
-        DefaultTableCellRenderer profitRenderer = new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                if (value instanceof Long) {
-                    long amount = (Long) value;
-                    setText(formatGp(amount, true));
-                    setHorizontalAlignment(RIGHT);
-                    if (!isSelected) {
-                        setForeground(UIUtilities.getProfitColor(amount, config));
-                    }
-                }
-                return c;
-            }
-        };
-        tablePanel.setRenderer(profitRenderer, 3);
-
-        DefaultTableCellRenderer roiRenderer = new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                setHorizontalAlignment(RIGHT);
-                if (value instanceof Double) {
-                    double roi = (Double) value;
-                    setText(String.format("%.2f%%", roi * 100.0d));
-                    if (!isSelected) {
-                        setForeground(UIUtilities.getProfitColor(roi, config));
-                    }
-                } else {
-                    setText(value == null ? "Unknown" : value.toString());
-                }
-                return c;
-            }
-        };
-        tablePanel.setRenderer(roiRenderer, 4);
+        tablePanel.rightColumns(2, 6);
+        tablePanel.gpColumns(GP_FORMAT, false, 1, 5);
+        tablePanel.gpProfitColumns(GP_FORMAT, config, 3);
+        tablePanel.percentRoiColumns(config, 4);
+        tablePanel.setRenderer(itemCellRenderer(), 0);
         contentPanel.add(tablePanel, BorderLayout.CENTER);
 
         cardPanel.add(contentPanel, CONTENT_CARD);
-        cardPanel.add(DialogUi.centeredMessage("Log into the game to see account portfolio", null, false, 18f), LOGIN_PROMPT_CARD);
+        cardPanel.add(DialogUi.centeredMessage(
+                "Log into the game to see account portfolio", null, false, 18f), LOGIN_PROMPT_CARD);
         add(cardPanel, BorderLayout.CENTER);
 
         portfolioStateRS.registerListener(state -> SwingUtilities.invokeLater(() -> {
@@ -234,7 +157,6 @@ public class PortfolioPanel extends JPanel {
         }));
         osrsLoginRS.registerListener(state -> SwingUtilities.invokeLater(this::refresh));
         bankStateRS.registerListener(state -> SwingUtilities.invokeLater(this::refreshAutoSyncLabel));
-
         refresh();
     }
 
@@ -251,7 +173,6 @@ public class PortfolioPanel extends JPanel {
             return;
         }
         cardLayout.show(cardPanel, CONTENT_CARD);
-        // Gated on OSRS login; removal is local.
         clearPortfolioButton.setEnabled(true);
         refreshAutoSyncLabel();
         renderFromState(portfolioStateRS.get());
@@ -262,66 +183,55 @@ public class PortfolioPanel extends JPanel {
         if (displayName == null) {
             return;
         }
-        int choice = JOptionPane.showConfirmDialog(
-                this,
+        if (JOptionPane.showConfirmDialog(this,
                 "Are you sure you want to remove all items from your portfolio?",
-                "Confirm",
-                JOptionPane.YES_NO_OPTION);
-        if (choice != JOptionPane.YES_OPTION) {
+                "Confirm", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) {
             return;
         }
         clearPortfolioButton.setEnabled(false);
         executorService.execute(() -> {
-            if (flipHistorySyncService != null && flipHistorySyncService.isLinked()
-                    && flipHistorySyncService.clearPortfolio(displayName)) {
-                log.info("cleared portfolio via server for {}", displayName);
-            } else {
-                int removed = heldCostTracker.clearLots(displayName);
-                suggestionManager.setSuggestionNeeded(true);
-                log.info("cleared {} tracked units from local portfolio", removed);
-            }
+            mutatePortfolio(
+                    () -> flipHistorySyncService.clearPortfolio(displayName),
+                    () -> heldCostTracker.clearLots(displayName),
+                    "cleared portfolio via server for " + displayName,
+                    "cleared {} tracked units from local portfolio");
             SwingUtilities.invokeLater(() -> clearPortfolioButton.setEnabled(true));
         });
     }
 
     private void refreshAutoSyncLabel() {
-        String labelText = bankStateRS.get().isLoaded()
+        String text = bankStateRS.get().isLoaded()
                 ? "Bank loaded. Full quantity syncing enabled. Note: items are excluded from syncing whilst active in one of your Grand Exchange slots."
                 : "Please open your bank once to enable more accurate quantity syncing.";
-        autoSyncInfoLabel.setText(String.format("<html><div style='width: 560px; text-align: left;'>%s</div></html>", labelText));
-    }
-
-    private List<PortfolioItemCardData> filterInPortfolioItems(List<PortfolioItemCardData> items) {
-        List<PortfolioItemCardData> filteredItems = new ArrayList<>();
-        for (PortfolioItemCardData item : items) {
-            if (item.isInPortfolio()) {
-                filteredItems.add(item);
-            }
-        }
-        return filteredItems;
+        autoSyncInfoLabel.setText(
+                "<html><div style='width: 560px; text-align: left;'>" + text + "</div></html>");
     }
 
     private void renderFromState(PortfolioState state) {
-        List<PortfolioItemCardData> items = new ArrayList<>(state.getItemCardDataByItemId().values());
-        currentItems = filterInPortfolioItems(items);
-        PortfolioSummaryData sm = state.getSummaryData();
-        renderSummary(sm, currentItems.size());
+        currentItems = new ArrayList<>();
+        for (PortfolioItemCardData item : state.getItemCardDataByItemId().values()) {
+            if (item.isInPortfolio()) {
+                currentItems.add(item);
+            }
+        }
+        renderSummary(state.getSummaryData(), currentItems.size());
         renderTable();
         revalidate();
         repaint();
     }
 
-    private void renderSummary(PortfolioSummaryData data, int totalItemsInPortfolio) {
+    private void renderSummary(PortfolioSummaryData data, int totalItems) {
         summaryTablePanel.removeAll();
         if (data == null) {
             return;
         }
         addSummaryRow("Portfolio Market Value", formatGp(data.getPortfolioMarketValue(), false), config.profitAmountColor());
-        addSummaryRow("Unrealized Profit", formatGp(data.getUnrealizedProfit(), true), UIUtilities.getProfitColor(data.getUnrealizedProfit(), config));
+        addSummaryRow("Unrealized Profit", formatGp(data.getUnrealizedProfit(), true),
+                UIUtilities.getProfitColor(data.getUnrealizedProfit(), config));
         addSummaryRow("Cash Value", formatGp(data.getCashValue(), false));
         addSummaryRow("Cash in Buy Offers", formatGp(data.getLockedBuyCash(), false));
         addSummaryRow("Assets Value", formatGp(data.getAssetsValue(), false));
-        addSummaryRow("Unique Items in Portfolio", NumberFormat.getIntegerInstance(Locale.US).format(totalItemsInPortfolio));
+        addSummaryRow("Unique Items in Portfolio", INT_FORMAT.format(totalItems));
     }
 
     private void addSummaryRow(String label, String value) {
@@ -329,102 +239,123 @@ public class PortfolioPanel extends JPanel {
     }
 
     private void addSummaryRow(String label, String value, Color valueColor) {
-        JLabel keyLabel = new JLabel(label);
-        keyLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        keyLabel.setFont(FontManager.getRunescapeFont());
-
-        JLabel valueLabel = new JLabel(value, SwingConstants.RIGHT);
-        valueLabel.setForeground(valueColor);
-        valueLabel.setFont(FontManager.getRunescapeBoldFont());
-
-        summaryTablePanel.add(keyLabel);
-        summaryTablePanel.add(valueLabel);
+        JLabel key = new JLabel(label);
+        key.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        key.setFont(FontManager.getRunescapeFont());
+        JLabel val = new JLabel(value, SwingConstants.RIGHT);
+        val.setForeground(valueColor);
+        val.setFont(FontManager.getRunescapeBoldFont());
+        summaryTablePanel.add(key);
+        summaryTablePanel.add(val);
     }
 
     private void renderTable() {
-        List<PortfolioItemCardData> sortedItems = new ArrayList<>(currentItems);
-        FilterSortUtil.sort(sortedItems, SORT_COMPARATORS, sortColumn, sortDirection);
-        tablePanel.setRows(sortedItems);
+        List<PortfolioItemCardData> sorted = new ArrayList<>(currentItems);
+        FilterSortUtil.sort(sorted, SORT_COMPARATORS, sortColumn, sortDirection);
+        tablePanel.setRows(sorted);
     }
 
     private Object[] toRow(PortfolioItemCardData item) {
-        NumberFormat nf = NumberFormat.getIntegerInstance(Locale.US);
-        long avgBuyPrice = item.getUnitBuyPrice();
+        long avgBuy = item.getUnitBuyPrice();
         return new Object[]{
                 new ItemCell(item.getItemId(), item.getItemName()),
                 item.getPostTaxSellUnitPrice() * item.getPortfolioQuantity(),
-                nf.format(item.getPortfolioQuantity()),
+                INT_FORMAT.format(item.getPortfolioQuantity()),
                 item.portfolioUnrealizedProfit(),
                 calculateUnrealizedRoi(item),
-                avgBuyPrice > 0 ? avgBuyPrice : null,
+                avgBuy > 0 ? avgBuy : null,
                 UIUtilities.formatDurationMinutes(item.getHeldMinutes())
         };
     }
 
     private void showPortfolioMenu(MouseEvent e, PortfolioItemCardData item) {
-        JPopupMenu popupMenu = new JPopupMenu();
-        buildContextMenu(popupMenu, item);
-        popupMenu.show(e.getComponent(), e.getX(), e.getY());
+        JPopupMenu menu = new JPopupMenu();
+        addMenu(menu, "Show price graph", () -> openPriceGraph.accept(item.getItemId()));
+        int qty = item.getPortfolioQuantity();
+        if (qty > 0) {
+            addMenu(menu, "Remove from portfolio", () -> removeFromPortfolio(item.getItemId(), 0));
+        }
+        if (qty > 1) {
+            addMenu(menu, "Remove X from portfolio", () -> promptRemoveQuantity(item.getItemId()));
+        }
+        menu.show(e.getComponent(), e.getX(), e.getY());
     }
 
-    private void buildContextMenu(JPopupMenu menu, PortfolioItemCardData item) {
-        int portfolioQty = item.getPortfolioQuantity();
-
-        JMenuItem showGraph = new JMenuItem("Show price graph");
-        showGraph.addActionListener(e -> openPriceGraph.accept(item.getItemId()));
-        menu.add(showGraph);
-
-        if (portfolioQty > 0) {
-            JMenuItem removeAll = new JMenuItem("Remove from portfolio");
-            removeAll.addActionListener(e -> removeFromPortfolio(item.getItemId(), 0));
-            menu.add(removeAll);
+    private void promptRemoveQuantity(int itemId) {
+        String input = JOptionPane.showInputDialog(
+                this, "Quantity to remove:", "Remove from portfolio", JOptionPane.PLAIN_MESSAGE);
+        if (input == null) {
+            return;
         }
-
-        if (portfolioQty > 1) {
-            JMenuItem removeX = new JMenuItem("Remove X from portfolio");
-            removeX.addActionListener(e -> {
-                String input = JOptionPane.showInputDialog(this, "Quantity to remove:", "Remove from portfolio", JOptionPane.PLAIN_MESSAGE);
-                if (input != null) {
-                    try {
-                        int qty = Integer.parseInt(input.trim());
-                        if (qty > 0) {
-                            removeFromPortfolio(item.getItemId(), qty);
-                        }
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-            });
-            menu.add(removeX);
+        try {
+            int qty = Integer.parseInt(input.trim());
+            if (qty > 0) {
+                removeFromPortfolio(itemId, qty);
+            }
+        } catch (NumberFormatException ignored) {
         }
     }
 
-    /**
-     * Forget the tracked cost basis for held stock. When linked, posts to the
-     * server toggle-item-portfolio endpoint and refreshes from delta; otherwise
-     * falls back to local {@link HeldCostTracker} only.
-     *
-     * @param quantity units to remove, oldest lot first; {@code <= 0} removes all of the item
-     */
+    /** quantity <= 0 removes all tracked lots for the item. */
     private void removeFromPortfolio(int itemId, int quantity) {
         String displayName = osrsLoginRS.get().displayName;
         if (displayName == null) {
             return;
         }
-        executorService.execute(() -> {
-            if (flipHistorySyncService != null && flipHistorySyncService.isLinked()
-                    && flipHistorySyncService.toggleItemPortfolio(displayName, itemId, quantity, 0L, true)) {
-                log.info("removed item {} qty {} from server portfolio", itemId, quantity);
-            } else {
-                int removed = heldCostTracker.removeLots(displayName, itemId, quantity);
-                suggestionManager.setSuggestionNeeded(true);
-                log.info("removed {} x item {} from local portfolio", removed, itemId);
+        executorService.execute(() -> mutatePortfolio(
+                () -> flipHistorySyncService.toggleItemPortfolio(displayName, itemId, quantity, 0L, true),
+                () -> heldCostTracker.removeLots(displayName, itemId, quantity),
+                "removed item " + itemId + " qty " + quantity + " from server portfolio",
+                "removed {} x item " + itemId + " from local portfolio"));
+    }
+
+    private void mutatePortfolio(BooleanSupplier serverOp, IntSupplier localOp, String serverLog, String localLog) {
+        if (flipHistorySyncService != null && flipHistorySyncService.isLinked() && serverOp.getAsBoolean()) {
+            log.info(serverLog);
+            return;
+        }
+        log.info(localLog, localOp.getAsInt());
+        suggestionManager.setSuggestionNeeded(true);
+    }
+
+    private static void addMenu(JPopupMenu menu, String label, Runnable action) {
+        JMenuItem item = new JMenuItem(label);
+        item.addActionListener(e -> action.run());
+        menu.add(item);
+    }
+
+    private DefaultTableCellRenderer itemCellRenderer() {
+        return new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(
+                    JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                JLabel label = (JLabel) super.getTableCellRendererComponent(
+                        table, value, isSelected, hasFocus, row, column);
+                if (!(value instanceof ItemCell)) {
+                    label.setIcon(null);
+                    return label;
+                }
+                ItemCell cell = (ItemCell) value;
+                label.setText(cell.name);
+                ImageIcon cached = itemIconCache.get(cell.itemId);
+                if (cached != null) {
+                    label.setIcon(cached);
+                    return label;
+                }
+                label.setIcon(null);
+                itemController.loadImage(cell.itemId, image -> {
+                    if (image != null) {
+                        itemIconCache.put(cell.itemId, new ImageIcon(image));
+                        SwingUtilities.invokeLater(table::repaint);
+                    }
+                });
+                return label;
             }
-        });
+        };
     }
 
     private String formatGp(long amount, boolean signed) {
-        String prefix = signed && amount > 0 ? "+" : "";
-        return prefix + GP_FORMAT.format(amount) + " gp";
+        return (signed && amount > 0 ? "+" : "") + GP_FORMAT.format(amount) + " gp";
     }
 
     private static Double calculateUnrealizedRoi(PortfolioItemCardData item) {
@@ -432,20 +363,23 @@ public class PortfolioPanel extends JPanel {
             return null;
         }
         long unitBuyPrice = item.getPostTaxSellUnitPrice() - item.getUnrealizedUnitProfit();
-        if (unitBuyPrice <= 0) {
-            return null;
-        }
-        return (double) item.getUnrealizedUnitProfit() / (double) unitBuyPrice;
+        return unitBuyPrice <= 0 ? null
+                : (double) item.getUnrealizedUnitProfit() / (double) unitBuyPrice;
     }
 
-    private static class ItemCell {
-        private final int itemId;
-        private final String name;
+    private static JPanel plain(LayoutManager layout) {
+        JPanel panel = new JPanel(layout);
+        panel.setOpaque(false);
+        return panel;
+    }
 
-        private ItemCell(int itemId, String name) {
+    private static final class ItemCell {
+        final int itemId;
+        final String name;
+
+        ItemCell(int itemId, String name) {
             this.itemId = itemId;
             this.name = name;
         }
     }
-
 }
