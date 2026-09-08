@@ -77,6 +77,7 @@ public class RuneAssistSuggestionSource
             - preferences.getEffectiveReservedSlots());
         final Set<Integer> skipped = new HashSet<>(accountStatusManager.getSkippedItemIds());
         final Set<Integer> skipOffers = new HashSet<>(accountStatusManager.getSkipOfferItemIds());
+        final Map<Integer, Long> modifyDismissedMs = accountStatusManager.getModifyDismissedMs();
         final Set<Integer> blocked = new HashSet<>(preferences.blockedItems());
         final long minProfit = preferences.getMinPredictedProfit() != null
             ? preferences.getMinPredictedProfit()
@@ -109,7 +110,7 @@ public class RuneAssistSuggestionSource
 
             ComposeSuggestionRequest composeReq = buildComposeRequest(
                 coins, timeframe, risk, f2pOnly, maxSlots, remainingSlots, minProfit,
-                remainingHint, usedLimit, blocked, skipped, skipOffers, protectAbort,
+                remainingHint, usedLimit, blocked, skipped, skipOffers, modifyDismissedMs, protectAbort,
                 offersBySlot, held, ownedModifySnap, includeGraph,
                 clientDeviceId(), preferences.isTimeBasedAbortEnabled(),
                 preferences.getTimeBasedAbortMinutes());
@@ -396,6 +397,7 @@ public class RuneAssistSuggestionSource
             int maxSlots, int remainingSlots, long minProfit,
             Map<Integer, Integer> remainingHint, Map<Integer, Integer> usedLimit,
             Set<Integer> blocked, Set<Integer> skipped, Set<Integer> skipOffers,
+            Map<Integer, Long> modifyDismissedMs,
             Set<Integer> protectAbort, long[][] offersBySlot, Map<Integer, long[]> held,
             OwnedModifySnapshot ownedModifySnap, boolean includeGraph,
             String clientDeviceId, boolean timeBasedAbortEnabled, int timeBasedAbortMinutes)
@@ -418,6 +420,7 @@ public class RuneAssistSuggestionSource
         if (blocked != null) req.setBlockedIds(new ArrayList<>(blocked));
         if (skipped != null) req.setSkippedIds(new ArrayList<>(skipped));
         if (skipOffers != null) req.setSkipOfferItemIds(new ArrayList<>(skipOffers));
+        req.setModifyDismissedMs(stringifyLongKeys(modifyDismissedMs));
         if (protectAbort != null) req.setProtectAbortItemIds(new ArrayList<>(protectAbort));
         req.setOffers(toOfferSnapshots(offersBySlot));
         req.setHeld(toHeldSnapshots(held));
@@ -462,6 +465,18 @@ public class RuneAssistSuggestionSource
         return out;
     }
 
+    private static Map<String, Long> stringifyLongKeys(Map<Integer, Long> in)
+    {
+        Map<String, Long> out = new java.util.LinkedHashMap<>();
+        if (in == null) return out;
+        for (Map.Entry<Integer, Long> e : in.entrySet())
+        {
+            if (e.getKey() == null || e.getValue() == null || e.getValue() <= 0L) continue;
+            out.put(String.valueOf(e.getKey()), e.getValue());
+        }
+        return out;
+    }
+
     private static List<ComposeSuggestionRequest.OfferSnapshot> toOfferSnapshots(long[][] offersBySlot)
     {
         List<ComposeSuggestionRequest.OfferSnapshot> out = new ArrayList<>();
@@ -482,6 +497,7 @@ public class RuneAssistSuggestionSource
             snap.setFilling(o[5] == 1L);
             if (o.length > 6) snap.setLastProgressMs(o[6]);
             if (o.length > 7) snap.setListedMs(o[7]);
+            if (o.length > 8) snap.setLastPriceChangeMs(o[8]);
             out.add(snap);
         }
         return out;
@@ -521,7 +537,8 @@ public class RuneAssistSuggestionSource
                 && offers[open].getItemId() == itemId;
     }
 
-    /** offersBySlot[i] = null or {itemId, buyIs1, price, sold, total, fillingIs1, lastProgressMs, listedMs}. */
+    /** offersBySlot[i] = null or {itemId, buyIs1, price, sold, total, fillingIs1,
+     * lastProgressMs, listedMs, lastPriceChangeMs}. */
     private long[][] readOffers(String displayName)
     {
         long[][] out = new long[8][];
@@ -538,8 +555,9 @@ public class RuneAssistSuggestionSource
             boolean filling = st == GrandExchangeOfferState.BUYING || st == GrandExchangeOfferState.SELLING;
             long lastProgress = heldCostTracker.lastProgressMs(displayName, i, o.getItemId());
             long listed = heldCostTracker.listedMs(displayName, i, o.getItemId());
+            long lastPriceChange = heldCostTracker.lastPriceChangeMs(displayName, i, o.getItemId());
             out[i] = new long[]{ o.getItemId(), buy ? 1 : 0, o.getPrice(), o.getQuantitySold(),
-                o.getTotalQuantity(), filling ? 1 : 0, lastProgress, listed };
+                o.getTotalQuantity(), filling ? 1 : 0, lastProgress, listed, lastPriceChange };
         }
         return out;
     }

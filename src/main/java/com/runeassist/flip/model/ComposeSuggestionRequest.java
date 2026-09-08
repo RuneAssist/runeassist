@@ -35,6 +35,8 @@ public class ComposeSuggestionRequest
     private List<Integer> skippedIds = new ArrayList<>();
     /** User-skipped live offers: do not ABORT/MODIFY these. */
     private List<Integer> skipOfferItemIds = new ArrayList<>();
+    /** itemId string -> epoch ms when its MODIFY editor most recently closed. */
+    private Map<String, Long> modifyDismissedMs = new LinkedHashMap<>();
     /** Recently suggested / listed items: protect from ABORT for ~10 min. */
     private List<Integer> protectAbortItemIds = new ArrayList<>();
 
@@ -94,6 +96,8 @@ public class ComposeSuggestionRequest
         private long lastProgressMs;
         /** Epoch ms when this listing was placed; 0 if unknown. */
         private long listedMs;
+        /** Epoch ms when this offer price last changed; resets the reprice cooldown. */
+        private long lastPriceChangeMs;
     }
 
     @Getter
