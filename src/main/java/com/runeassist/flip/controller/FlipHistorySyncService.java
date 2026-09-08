@@ -1008,4 +1008,3 @@ public class FlipHistorySyncService {
         void run() throws Exception;
     }
 }
-
