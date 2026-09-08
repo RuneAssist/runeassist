@@ -46,6 +46,8 @@ public class AccountStatusManager {
     private final Map<Integer, Long> skipOfferUntil = new HashMap<>();
     /** itemId -> expire-at: listings we suggested, protected from immediate ABORT. */
     private final Map<Integer, Long> protectAbortUntil = new HashMap<>();
+    /** itemId -> local epoch ms when a MODIFY editor most recently closed. */
+    private final Map<Integer, Long> modifyDismissedMs = new HashMap<>();
     /** GE modify cancels the slot first; hold that listing until confirm/skip/collect/close. */
     private OwnedModify ownedModify;
 
@@ -276,6 +278,7 @@ public class AccountStatusManager {
         if (!editorOpen) {
             log.info("releasing stale owned modify item {} slot {} (editor closed)",
                     ownedModify.itemId, ownedModify.slot);
+            recordModifyDismissed(ownedModify.itemId);
             ownedModify = null;
             return true;
         }
@@ -336,6 +339,14 @@ public class AccountStatusManager {
         return new HashSet<>(skippedItemUntil.keySet());
     }
 
+    public synchronized Map<Integer, Long> getModifyDismissedMs() {
+        return new HashMap<>(modifyDismissedMs);
+    }
+
+    private void recordModifyDismissed(int itemId) {
+        if (itemId > 0) modifyDismissedMs.put(itemId, System.currentTimeMillis());
+    }
+
     public synchronized Set<Integer> getSkipOfferItemIds() {
         pruneExpiredSkips();
         return new HashSet<>(skipOfferUntil.keySet());
@@ -358,6 +369,7 @@ public class AccountStatusManager {
         skippedItemUntil.clear();
         skipOfferUntil.clear();
         protectAbortUntil.clear();
+        modifyDismissedMs.clear();
         ownedModify = null;
     }
 
