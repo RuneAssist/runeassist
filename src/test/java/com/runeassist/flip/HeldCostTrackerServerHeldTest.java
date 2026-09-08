@@ -69,4 +69,3 @@ public class HeldCostTrackerServerHeldTest {
         assertTrue(t.held("Bob").isEmpty());
     }
 }
-
