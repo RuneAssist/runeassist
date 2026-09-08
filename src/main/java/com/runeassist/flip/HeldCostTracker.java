@@ -60,7 +60,11 @@ public class HeldCostTracker
         long listed = sameInstance && prev.listedMs > 0L ? prev.listedMs : now;
         long lastProgress = dQty > 0 ? now
             : (sameInstance && prev.lastProgressMs > 0L ? prev.lastProgressMs : now);
-        acc.slots.put(slot, new HeldCostLots.Slot(itemId, buy, qtySold, spent, listed, lastProgress));
+        boolean priceChanged = sameInstance && prev.price > 0L && prev.price != price;
+        long lastPriceChange = priceChanged ? now
+            : (sameInstance && prev.lastPriceChangeMs > 0L ? prev.lastPriceChangeMs : listed);
+        acc.slots.put(slot, new HeldCostLots.Slot(
+            itemId, buy, qtySold, spent, listed, lastProgress, price, lastPriceChange));
 
         if (dQty > 0)
         {
@@ -183,6 +187,15 @@ public class HeldCostTracker
         return s == null || s.itemId != itemId ? 0L : s.listedMs;
     }
 
+    public synchronized long lastPriceChangeMs(String displayName, int slot, int itemId)
+    {
+        if (itemId <= 0) return 0L;
+        HeldCostLots.Account acc = account(displayName);
+        ensureLoaded(displayName, acc);
+        HeldCostLots.Slot s = acc.slots.get(slot);
+        return s == null || s.itemId != itemId ? 0L : s.lastPriceChangeMs;
+    }
+
     public synchronized int boughtInWindow(String displayName, int itemId)
     {
         HeldCostLots.Account acc = account(displayName);
@@ -260,7 +273,10 @@ public class HeldCostTracker
                 acc.slots.put(Integer.parseInt(e.getKey()), new HeldCostLots.Slot(((Number) a.get(0)).intValue(),
                     Boolean.TRUE.equals(a.get(1)), ((Number) a.get(2)).intValue(), ((Number) a.get(3)).longValue(),
                     a.size() > 4 ? ((Number) a.get(4)).longValue() : 0L,
-                    a.size() > 5 ? ((Number) a.get(5)).longValue() : 0L));
+                    a.size() > 5 ? ((Number) a.get(5)).longValue() : 0L,
+                    a.size() > 6 ? ((Number) a.get(6)).longValue() : 0L,
+                    a.size() > 7 ? ((Number) a.get(7)).longValue()
+                        : (a.size() > 4 ? ((Number) a.get(4)).longValue() : 0L)));
             }
             Map<String, Object> lim = (Map<String, Object>) saved.get("limitBuys");
             if (lim != null) for (Map.Entry<String, Object> e : lim.entrySet())
@@ -296,7 +312,8 @@ public class HeldCostTracker
             {
                 HeldCostLots.Slot s = e.getValue();
                 sl.put(String.valueOf(e.getKey()), new Object[]{
-                    s.itemId, s.buy, s.qty, s.spent, s.listedMs, s.lastProgressMs });
+                    s.itemId, s.buy, s.qty, s.spent, s.listedMs, s.lastProgressMs,
+                    s.price, s.lastPriceChangeMs });
             }
             out.put("slots", sl);
             pruneLimitBuys(acc);
