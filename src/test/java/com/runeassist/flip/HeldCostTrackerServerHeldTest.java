@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class HeldCostTrackerServerHeldTest {
@@ -51,5 +52,20 @@ public class HeldCostTrackerServerHeldTest {
             10_500, 10, 0, 0);
         assertTrue(t.lastPriceChangeMs("Bob", 0, 4151) > first);
         assertEquals(first, t.listedMs("Bob", 0, 4151));
+    }
+
+    @Test
+    public void staleServerHeldCannotRestoreStockConsumedByLocalFill() {
+        HeldCostTracker t = new HeldCostTracker();
+        t.addManualLot("Bob", 11943, 670, 5565);
+        long beforeRequest = t.heldRevision("Bob");
+
+        t.onOffer("Bob", 3, GrandExchangeOfferState.SOLD, 11943,
+            5700, 670, 670, 3_819_000);
+
+        Map<Integer, long[]> stale = new HashMap<>();
+        stale.put(11943, new long[]{670, 5565});
+        assertFalse(t.replaceServerHeldIfUnchanged("Bob", stale, beforeRequest));
+        assertTrue(t.held("Bob").isEmpty());
     }
 }
