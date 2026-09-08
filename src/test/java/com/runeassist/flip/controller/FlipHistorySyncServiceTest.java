@@ -50,11 +50,15 @@ public class FlipHistorySyncServiceTest {
         t.setBoxId(1);
         t.setAmountSpent(200);
         t.setTimestamp(Instant.parse("2024-01-01T00:00:00Z"));
+        t.setRuneAssistSuggestion(true);
+        t.setSuggestionId("11111111-1111-1111-1111-111111111111");
         JsonObject o = FlipHistorySyncService.txToJson(t);
         assertEquals("BUY", o.get("type").getAsString());
         assertEquals(4151, o.get("itemId").getAsInt());
         assertEquals(200, o.get("amountSpent").getAsLong());
         assertFalse(o.get("id").getAsString().isEmpty());
+        assertTrue(o.get("runeAssistSuggestion").getAsBoolean());
+        assertEquals(t.getSuggestionId(), o.get("suggestionId").getAsString());
     }
 
     @Test

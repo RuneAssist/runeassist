@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.runeassist.flip.HeldCostTracker;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.history.AccountHttp;
 import com.runeassist.flip.model.FlipManager;
 import com.runeassist.flip.model.FlipStatus;
@@ -12,6 +13,7 @@ import com.runeassist.flip.model.OfferStatus;
 import com.runeassist.flip.model.OsrsLoginManager;
 import com.runeassist.flip.model.PortfolioId;
 import com.runeassist.flip.model.SuggestionManager;
+import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.model.Transaction;
 import com.runeassist.flip.model.VisualizeFlipResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -59,9 +61,11 @@ public class FlipHistorySyncService {
     private final OsrsLoginManager osrsLoginManager;
     private final HeldCostTracker heldCostTracker;
     private final SuggestionManager suggestionManager;
+    private final RuneAssistConfig config;
     private final ScheduledExecutorService executor;
 
     private final ConcurrentMap<String, List<Transaction>> unackedByDisplay = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, JsonObject> pendingSuggestionOutcomes = new ConcurrentHashMap<>();
     private final List<Runnable> statusListeners = new CopyOnWriteArrayList<>();
     private volatile boolean started;
     private volatile boolean registering;
@@ -75,6 +79,7 @@ public class FlipHistorySyncService {
             OsrsLoginManager osrsLoginManager,
             HeldCostTracker heldCostTracker,
             SuggestionManager suggestionManager,
+            RuneAssistConfig config,
             @Named("runeAssistExecutor") ScheduledExecutorService executor) {
         this.api = api;
         this.configManager = configManager;
@@ -82,6 +87,7 @@ public class FlipHistorySyncService {
         this.osrsLoginManager = osrsLoginManager;
         this.heldCostTracker = heldCostTracker;
         this.suggestionManager = suggestionManager;
+        this.config = config;
         this.executor = executor;
     }
 
@@ -236,6 +242,39 @@ public class FlipHistorySyncService {
             }
         }
         async("enqueue flush", () -> flushDisplay(displayName));
+    }
+
+    /** Queue a terminal suggestion action and retry it during the regular sync cycle. */
+    public void reportSuggestionOutcome(Suggestion suggestion, String outcome) {
+        if (!config.contributeTrainingData() || suggestion == null
+                || suggestion.getServerSuggestionId() == null
+                || suggestion.getServerSuggestionId().isEmpty()) {
+            return;
+        }
+        String displayName = osrsLoginManager.getPlayerDisplayName();
+        String osrsAccountId = linkedOsrsAccountId(displayName);
+        if (osrsAccountId == null) return;
+        JsonObject body = new JsonObject();
+        body.addProperty("osrsAccountId", osrsAccountId);
+        body.addProperty("suggestionId", suggestion.getServerSuggestionId());
+        body.addProperty("outcome", outcome);
+        body.addProperty("kind", suggestion.offerType() != null ? suggestion.offerType()
+                : suggestion.getType().apiValue());
+        body.addProperty("itemId", suggestion.getItemId());
+        body.addProperty("slot", suggestion.getBoxId());
+        body.addProperty("price", suggestion.getPrice());
+        body.addProperty("qty", suggestion.getQuantity());
+        String key = suggestion.getServerSuggestionId() + ":" + outcome;
+        pendingSuggestionOutcomes.put(key, body);
+        async("suggestion outcome", this::flushSuggestionOutcomes);
+    }
+
+    private void flushSuggestionOutcomes() {
+        for (Map.Entry<String, JsonObject> entry : pendingSuggestionOutcomes.entrySet()) {
+            if (api.post("/v1/suggestion/action", entry.getValue(), true) != null) {
+                pendingSuggestionOutcomes.remove(entry.getKey(), entry.getValue());
+            }
+        }
     }
 
     public List<Transaction> listUnacked(String displayName) {
@@ -476,6 +515,8 @@ public class FlipHistorySyncService {
         t.setTimestamp(src.getTimestamp());
         t.setLogin(src.isLogin());
         t.setConsistent(src.isConsistent());
+        t.setRuneAssistSuggestion(src.isRuneAssistSuggestion());
+        t.setSuggestionId(src.getSuggestionId());
         return t;
     }
 
@@ -493,6 +534,10 @@ public class FlipHistorySyncService {
         o.addProperty("amountSpent", t.getAmountSpent());
         Instant ts = t.getTimestamp() != null ? t.getTimestamp() : Instant.now();
         o.addProperty("timestamp", ts.toString());
+        o.addProperty("runeAssistSuggestion", t.isRuneAssistSuggestion());
+        if (t.getSuggestionId() != null && !t.getSuggestionId().isEmpty()) {
+            o.addProperty("suggestionId", t.getSuggestionId());
+        }
         return o;
     }
 
@@ -514,6 +559,11 @@ public class FlipHistorySyncService {
                 t.setTimestamp(Instant.parse(o.get("timestamp").getAsString()));
             }
             t.setConsistent(true);
+            t.setRuneAssistSuggestion(o.has("runeAssistSuggestion")
+                    && o.get("runeAssistSuggestion").getAsBoolean());
+            if (o.has("suggestionId") && !o.get("suggestionId").isJsonNull()) {
+                t.setSuggestionId(o.get("suggestionId").getAsString());
+            }
             return t;
         } catch (Exception e) {
             return null;
@@ -710,6 +760,7 @@ public class FlipHistorySyncService {
     }
 
     private void flush() throws Exception {
+        flushSuggestionOutcomes();
         if (api.deviceToken() == null) {
             return;
         }
@@ -861,8 +912,17 @@ public class FlipHistorySyncService {
         return id;
     }
 
-    private String osrsKey(String displayName) {
+    public String linkedOsrsAccountId(String displayName) {
+        if (displayName == null || displayName.isEmpty()) return null;
+        return configManager.getConfiguration(CONFIG_GROUP, osrsConfigKey(displayName));
+    }
+
+    public static String osrsConfigKey(String displayName) {
         return "cloudOsrs." + Persistance.hashDisplayName(displayName);
+    }
+
+    private String osrsKey(String displayName) {
+        return osrsConfigKey(displayName);
     }
 
     private String flipsCursorKey(String displayName) {

@@ -22,6 +22,8 @@ public class Transaction {
     private Instant timestamp;
     private boolean login;
     private boolean consistent;
+    private boolean runeAssistSuggestion;
+    private String suggestionId;
 
     public boolean equals(Transaction other) {
         return this.type == other.type &&

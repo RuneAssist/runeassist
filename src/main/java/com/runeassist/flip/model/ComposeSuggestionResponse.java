@@ -19,6 +19,8 @@ public class ComposeSuggestionResponse
     private boolean ok;
     /** Ranker / compose provenance, e.g. {@code ares}. */
     private String source = "";
+    /** Server-issued lifecycle UUID when opted-in persistence was accepted. */
+    private String suggestionId = "";
     private SuggestionDto suggestion;
     /**
      * Optional price-history payload (same shape as {@code GET /v1/graph}), bundled when
