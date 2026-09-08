@@ -1,5 +1,6 @@
 package com.runeassist.flip;
 
+import net.runelite.api.GrandExchangeOfferState;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -32,5 +33,23 @@ public class HeldCostTrackerServerHeldTest {
         t.addManualLot("Bob", 1, 3, 10);
         t.replaceServerHeld("Bob", null);
         assertTrue(t.held("Bob").isEmpty());
+    }
+
+    @Test
+    public void offerPriceChangeResetsRepriceClock() throws Exception {
+        HeldCostTracker t = new HeldCostTracker();
+        t.onOffer("Bob", 0, GrandExchangeOfferState.BUYING, 4151,
+            10_000, 10, 0, 0);
+        long first = t.lastPriceChangeMs("Bob", 0, 4151);
+
+        t.onOffer("Bob", 0, GrandExchangeOfferState.BUYING, 4151,
+            10_000, 10, 0, 0);
+        assertEquals(first, t.lastPriceChangeMs("Bob", 0, 4151));
+
+        Thread.sleep(2L);
+        t.onOffer("Bob", 0, GrandExchangeOfferState.BUYING, 4151,
+            10_500, 10, 0, 0);
+        assertTrue(t.lastPriceChangeMs("Bob", 0, 4151) > first);
+        assertEquals(first, t.listedMs("Bob", 0, 4151));
     }
 }

@@ -30,14 +30,19 @@ final class HeldCostLots {
         long spent;
         long listedMs;
         long lastProgressMs;
+        long price;
+        long lastPriceChangeMs;
 
-        Slot(int i, boolean b, int q, long s, long listed, long progress) {
+        Slot(int i, boolean b, int q, long s, long listed, long progress,
+             long offerPrice, long priceChangeMs) {
             itemId = i;
             buy = b;
             qty = q;
             spent = s;
             listedMs = listed;
             lastProgressMs = progress;
+            price = offerPrice;
+            lastPriceChangeMs = priceChangeMs;
         }
     }
 
