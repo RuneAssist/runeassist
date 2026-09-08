@@ -21,6 +21,7 @@ public class ComposeSuggestionMapperTest
         String json = "{"
             + "\"ok\":true,"
             + "\"source\":\"ares\","
+            + "\"suggestionId\":\"11111111-1111-1111-1111-111111111111\","
             + "\"suggestion\":{"
             + "\"type\":\"buy\","
             + "\"boxId\":2,"
@@ -53,6 +54,7 @@ public class ComposeSuggestionMapperTest
         assertTrue(s.isLimitKnown());
         assertEquals(Collections.singletonList("thin"), s.getFlags());
         assertEquals("ares", s.getPickSource());
+        assertEquals("11111111-1111-1111-1111-111111111111", s.getServerSuggestionId());
         assertNull(s.getGraphData());
     }
 
@@ -99,6 +101,18 @@ public class ComposeSuggestionMapperTest
         assertTrue(json.contains("\"includeGraph\":false"));
         ComposeSuggestionRequest roundTrip = gson.fromJson(json, ComposeSuggestionRequest.class);
         assertFalse(roundTrip.isIncludeGraph());
+    }
+
+    @Test
+    public void contributionDefaultsOffAndSerializesLinkedAccountWhenEnabled()
+    {
+        ComposeSuggestionRequest req = new ComposeSuggestionRequest();
+        assertFalse(req.isContributeTrainingData());
+        req.setContributeTrainingData(true);
+        req.setOsrsAccountId("22222222-2222-2222-2222-222222222222");
+        ComposeSuggestionRequest roundTrip = gson.fromJson(gson.toJson(req), ComposeSuggestionRequest.class);
+        assertTrue(roundTrip.isContributeTrainingData());
+        assertEquals("22222222-2222-2222-2222-222222222222", roundTrip.getOsrsAccountId());
     }
 
     @Test

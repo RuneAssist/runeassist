@@ -25,6 +25,7 @@ public class GrandExchangeCollectHandler {
     private final Client client;
     private final HeldItemSyncStateRS heldItemSyncStateRS;
     private final AccountStatusManager accountStatusManager;
+    private final FlipHistorySyncService flipHistorySyncService;
 
     @Setter
     private SuggestionPanel suggestionPanel;
@@ -37,6 +38,7 @@ public class GrandExchangeCollectHandler {
             Suggestion suggestion = suggestionManager.getSuggestion();
             if (suggestion != null && suggestion.isAbortSuggestion() && suggestion.actionedTick == -1) {
                 suggestion.actionedTick = client.getTickCount();
+                flipHistorySyncService.reportSuggestionOutcome(suggestion, "acted");
             }
         }
         if (widget != null) {

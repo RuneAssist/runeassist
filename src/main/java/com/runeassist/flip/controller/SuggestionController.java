@@ -50,6 +50,7 @@ public class SuggestionController {
     private final GePreviousSearch gePreviousSearch;
     private final com.runeassist.flip.RuneAssistSuggestionSource runeAssistSource;
     private final ApiRequestHandler apiRequestHandler;
+    private final FlipHistorySyncService flipHistorySyncService;
 
 
     private MainPanel mainPanel;
@@ -57,7 +58,9 @@ public class SuggestionController {
     private SuggestionPanel suggestionPanel;
 
     public void skipSuggestion() {
+        Suggestion current = suggestionManager.getSuggestion();
         if (accountStatusManager.skipCurrentSuggestion()) {
+            flipHistorySyncService.reportSuggestionOutcome(current, "skip");
             clientThread.invokeLater(() -> {
                 if (!suggestionManager.isSuggestionRequestInProgress()) {
                     getSuggestionAsync();

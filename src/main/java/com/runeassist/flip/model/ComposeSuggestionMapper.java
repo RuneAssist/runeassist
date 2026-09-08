@@ -23,6 +23,10 @@ public final class ComposeSuggestionMapper
             return null;
         }
         Suggestion s = toSuggestion(response.getSuggestion(), response.getSource());
+        if (s != null && response.getSuggestionId() != null)
+        {
+            s.setServerSuggestionId(response.getSuggestionId());
+        }
         if (s != null && response.getGraph() != null)
         {
             s.setGraphData(response.getGraph());

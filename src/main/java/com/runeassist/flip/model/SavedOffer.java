@@ -15,6 +15,8 @@ public class SavedOffer
 	private long price;
 	private long spent;
 	private GrandExchangeOfferState state;
+	private boolean runeAssistSuggestion;
+	private String suggestionId;
 
 	public static SavedOffer fromGrandExchangeOffer(GrandExchangeOffer offer) {
 		SavedOffer o =  new SavedOffer();
