@@ -42,6 +42,12 @@ public class PrivacyPackagingTest {
             "displayName", "author", "description", "tags", "plugins", "version", "build", "support"));
 
     @Test
+    public void trainingContributionDefaultsOnAndCanBeDisabled() {
+        RuneAssistConfig config = new RuneAssistConfig() { };
+        assertTrue(config.contributeTrainingData());
+    }
+
+    @Test
     public void pluginDescriptorAndPropertiesUseStandardBuild() throws Exception {
         PluginDescriptor descriptor = RuneAssistPlugin.class.getAnnotation(PluginDescriptor.class);
         assertNotNull(descriptor);

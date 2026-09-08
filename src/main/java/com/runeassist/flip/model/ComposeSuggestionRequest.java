@@ -79,6 +79,12 @@ public class ComposeSuggestionRequest
      */
     private long nowMs;
 
+    /** Opt-in only: allow Ares to retain the minimized suggestion/offer lifecycle. */
+    private boolean contributeTrainingData;
+
+    /** Linked RuneAssist account UUID. Sent only when contribution is enabled. */
+    private String osrsAccountId = "";
+
     @Getter
     @Setter
     public static class OfferSnapshot

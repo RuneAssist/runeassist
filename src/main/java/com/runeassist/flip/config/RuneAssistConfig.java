@@ -299,6 +299,25 @@ public interface RuneAssistConfig extends Config
     )
     String notificationsSection = "notificationsSection";
 
+    @ConfigSection(
+            name = "Privacy",
+            description = "Control optional data contribution to RuneAssist",
+            position = 5
+    )
+    String privacySection = "privacySection";
+
+    @ConfigItem(
+            keyName = "contributeTrainingData",
+            name = "Contribute training data",
+            description = "Link suggestions with your GE offer and fill outcomes so RuneAssist can improve fill predictions. Enabled by default; turn this off to opt out. Does not send bank contents or chat.",
+            section = privacySection,
+            position = 1
+    )
+    default boolean contributeTrainingData()
+    {
+        return true;
+    }
+
     @ConfigItem(
             keyName = "dumpAlertSound",
             name = "Dump alert sound",

@@ -23,6 +23,8 @@ public class Suggestion {
     private int quantity;
     private String name;
     private int id;
+    /** Server-issued UUID used to join this suggestion to actions and fills. */
+    private String serverSuggestionId = "";
     private String message = "";
     /**
      * One-line honest reason this pick was chosen, from the scorer and live client
