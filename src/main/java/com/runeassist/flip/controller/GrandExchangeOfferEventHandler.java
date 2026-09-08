@@ -31,6 +31,7 @@ public class GrandExchangeOfferEventHandler {
     private final GrandExchangeUncollectedManager grandExchangeUncollectedManager;
     private final SuggestionManager suggestionManager;
     private final AccountStatusManager accountStatusManager;
+    private final FlipHistorySyncService flipHistorySyncService;
 
     // state
     private final Queue<Transaction> transactionsToProcess = new ConcurrentLinkedQueue<>();
@@ -87,6 +88,7 @@ public class GrandExchangeOfferEventHandler {
             processTransactions();
             log.debug("inferred transaction {}", t);
         }
+        flipHistorySyncService.reportOfferEvent(slot, o, prev);
         updateUncollected(accountHash, slot, o, prev, consistent);
         offerPersistence.saveOffer(accountHash, slot, o);
 
