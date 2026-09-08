@@ -4,8 +4,10 @@ import com.google.gson.JsonObject;
 import com.runeassist.flip.model.FlipStatus;
 import com.runeassist.flip.model.FlipV2;
 import com.runeassist.flip.model.OfferStatus;
+import com.runeassist.flip.model.SavedOffer;
 import com.runeassist.flip.model.Transaction;
 import com.runeassist.flip.ui.FlipRepairMenus;
+import net.runelite.api.GrandExchangeOfferState;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -78,6 +80,23 @@ public class FlipHistorySyncServiceTest {
         assertEquals(4151, t.getItemId());
         assertEquals(1500, t.getAmountSpent());
         assertEquals(UUID.fromString("33333333-3333-3333-3333-333333333333"), t.getId());
+    }
+
+    @Test
+    public void offerEventJsonKeepsPriorAttributionWhenSlotBecomesEmpty() {
+        SavedOffer previous = new SavedOffer();
+        previous.setState(GrandExchangeOfferState.BUYING);
+        previous.setRuneAssistSuggestion(true);
+        previous.setSuggestionId("11111111-1111-1111-1111-111111111111");
+        SavedOffer empty = new SavedOffer();
+        empty.setState(GrandExchangeOfferState.EMPTY);
+        JsonObject body = FlipHistorySyncService.offerEventJson(
+                "22222222-2222-2222-2222-222222222222",
+                "33333333-3333-3333-3333-333333333333", 2, empty, previous, 123L);
+        assertEquals("EMPTY", body.get("state").getAsString());
+        assertEquals("runeassist", body.get("origin").getAsString());
+        assertEquals(previous.getSuggestionId(), body.get("suggestionId").getAsString());
+        assertEquals(123L, body.get("ts").getAsLong());
     }
 
     @Test

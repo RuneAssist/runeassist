@@ -19,6 +19,7 @@ import net.runelite.client.chat.ChatMessageBuilder;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.*;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 
@@ -302,6 +303,13 @@ public class SuggestionController {
         }
         if (newSuggestion.isBuyDumpSuggestion() && config.dumpAlertSound()) {
             playDumpAlertSound();
+        }
+        if (oldSuggestion != null && oldSuggestion.actionedTick == -1
+                && oldSuggestion.getServerSuggestionId() != null
+                && !oldSuggestion.getServerSuggestionId().isEmpty()
+                && !Objects.equals(oldSuggestion.getServerSuggestionId(), newSuggestion.getServerSuggestionId()))
+        {
+            flipHistorySyncService.reportSuggestionOutcome(oldSuggestion, "superseded");
         }
         suggestionManager.setSuggestion(newSuggestion);
         portfolioStateRS.updatePortfolioState(

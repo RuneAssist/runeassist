@@ -116,6 +116,21 @@ public class ComposeSuggestionMapperTest
     }
 
     @Test
+    public void offerSnapshotSerializesSuggestionOrigin()
+    {
+        ComposeSuggestionRequest req = new ComposeSuggestionRequest();
+        ComposeSuggestionRequest.OfferSnapshot offer = new ComposeSuggestionRequest.OfferSnapshot();
+        offer.setSlot(1);
+        offer.setItemId(4151);
+        offer.setSuggestionId("11111111-1111-1111-1111-111111111111");
+        offer.setOrigin("runeassist");
+        req.getOffers().add(offer);
+        String json = gson.toJson(req);
+        assertTrue(json.contains("\"origin\":\"runeassist\""));
+        assertTrue(json.contains("\"suggestionId\":\"11111111-1111-1111-1111-111111111111\""));
+    }
+
+    @Test
     public void acceptsModifyBuySnakeAndWait()
     {
         assertEquals(SuggestionType.MODIFY_BUY, ComposeSuggestionMapper.parseType("modify_buy"));

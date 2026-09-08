@@ -14,6 +14,7 @@ import com.runeassist.flip.model.OsrsLoginManager;
 import com.runeassist.flip.model.PortfolioId;
 import com.runeassist.flip.model.SuggestionManager;
 import com.runeassist.flip.model.Suggestion;
+import com.runeassist.flip.model.SavedOffer;
 import com.runeassist.flip.model.Transaction;
 import com.runeassist.flip.model.VisualizeFlipResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -66,6 +67,7 @@ public class FlipHistorySyncService {
 
     private final ConcurrentMap<String, List<Transaction>> unackedByDisplay = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, JsonObject> pendingSuggestionOutcomes = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, JsonObject> pendingOfferEvents = new ConcurrentHashMap<>();
     private final List<Runnable> statusListeners = new CopyOnWriteArrayList<>();
     private volatile boolean started;
     private volatile boolean registering;
@@ -273,6 +275,49 @@ public class FlipHistorySyncService {
         for (Map.Entry<String, JsonObject> entry : pendingSuggestionOutcomes.entrySet()) {
             if (api.post("/v1/suggestion/action", entry.getValue(), true) != null) {
                 pendingSuggestionOutcomes.remove(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+
+    /** Report an exact GE state transition; periodic board snapshots remain the fallback. */
+    public void reportOfferEvent(int slot, SavedOffer offer, SavedOffer previous) {
+        if (!config.contributeTrainingData() || offer == null) return;
+        String displayName = osrsLoginManager.getPlayerDisplayName();
+        String osrsAccountId = linkedOsrsAccountId(displayName);
+        if (osrsAccountId == null) return;
+        String eventId = UUID.randomUUID().toString();
+        JsonObject body = offerEventJson(eventId, osrsAccountId, slot, offer, previous,
+                Instant.now().toEpochMilli());
+        pendingOfferEvents.put(eventId, body);
+        async("offer lifecycle event", this::flushOfferEvents);
+    }
+
+    static JsonObject offerEventJson(String eventId, String osrsAccountId, int slot,
+                                     SavedOffer offer, SavedOffer previous, long ts) {
+        SavedOffer attribution = offer.getSuggestionId() != null ? offer : previous;
+        String suggestionId = attribution != null ? attribution.getSuggestionId() : null;
+        boolean runeAssist = attribution != null && attribution.isRuneAssistSuggestion()
+                && suggestionId != null && !suggestionId.isEmpty();
+        JsonObject body = new JsonObject();
+        body.addProperty("eventId", eventId);
+        body.addProperty("osrsAccountId", osrsAccountId);
+        body.addProperty("ts", ts);
+        body.addProperty("slot", slot);
+        body.addProperty("state", offer.getState().name());
+        body.addProperty("itemId", offer.getItemId());
+        body.addProperty("price", offer.getPrice());
+        body.addProperty("totalQuantity", offer.getTotalQuantity());
+        body.addProperty("quantitySold", offer.getQuantitySold());
+        body.addProperty("spent", offer.getSpent());
+        body.addProperty("origin", runeAssist ? "runeassist" : "external");
+        if (runeAssist) body.addProperty("suggestionId", suggestionId);
+        return body;
+    }
+
+    private void flushOfferEvents() {
+        for (Map.Entry<String, JsonObject> entry : pendingOfferEvents.entrySet()) {
+            if (api.post("/v1/suggestion/offer-event", entry.getValue(), true) != null) {
+                pendingOfferEvents.remove(entry.getKey(), entry.getValue());
             }
         }
     }
@@ -761,6 +806,7 @@ public class FlipHistorySyncService {
 
     private void flush() throws Exception {
         flushSuggestionOutcomes();
+        flushOfferEvents();
         if (api.deviceToken() == null) {
             return;
         }
