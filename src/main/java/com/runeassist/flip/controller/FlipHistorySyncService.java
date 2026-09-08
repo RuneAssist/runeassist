@@ -669,6 +669,8 @@ public class FlipHistorySyncService {
     }
 
     private void pullFlipsDelta(String displayName, String osrsAccountId) {
+        long heldRevision = heldCostTracker.heldRevision(displayName);
+        boolean heldSyncBlocked = !listUnacked(displayName).isEmpty();
         String cursor = configManager.getConfiguration(CONFIG_GROUP, flipsCursorKey(displayName));
         String path = "/v1/account/client-flips-delta?osrsAccountId=" + AccountHttp.urlEnc(osrsAccountId);
         if (cursor != null && !cursor.isEmpty() && !"0".equals(cursor)) {
@@ -686,13 +688,18 @@ public class FlipHistorySyncService {
                 log.info("flip history pulled {} flips for {}", flips.size(), displayName);
             }
         }
-        applyHeldFromBody(displayName, body);
+        applyHeldFromBody(displayName, body,
+                heldSyncBlocked ? -1L : heldRevision);
         if (body.has("time") && !body.get("time").isJsonNull()) {
             configManager.setConfiguration(CONFIG_GROUP, flipsCursorKey(displayName), body.get("time").getAsString());
         }
     }
 
     private void applyHeldFromBody(String displayName, JsonObject body) {
+        applyHeldFromBody(displayName, body, null);
+    }
+
+    private void applyHeldFromBody(String displayName, JsonObject body, Long expectedRevision) {
         if (body == null || displayName == null || !body.has("held") || body.get("held").isJsonNull()) {
             return;
         }
@@ -719,7 +726,18 @@ public class FlipHistorySyncService {
                     held.put(itemId, new long[]{qty, avg});
                 }
             }
-            heldCostTracker.replaceServerHeld(displayName, held);
+            boolean applied;
+            if (expectedRevision == null) {
+                heldCostTracker.replaceServerHeld(displayName, held);
+                applied = true;
+            } else {
+                applied = heldCostTracker.replaceServerHeldIfUnchanged(
+                        displayName, held, expectedRevision);
+            }
+            if (!applied) {
+                log.info("discarding stale server held update for {}", displayName);
+                return;
+            }
             suggestionManager.setSuggestionNeeded(true);
             log.info("server held applied for {} ({} items)", displayName, held.size());
         } catch (Exception e) {
@@ -990,3 +1008,4 @@ public class FlipHistorySyncService {
         void run() throws Exception;
     }
 }
+
