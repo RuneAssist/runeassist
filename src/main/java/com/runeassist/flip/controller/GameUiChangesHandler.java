@@ -43,6 +43,7 @@ public class GameUiChangesHandler {
     private final RuneAssistConfig config;
     private final AccountStatusManager accountStatusManager;
     private final net.runelite.client.plugins.PluginManager pluginManager;
+    private final FlipHistorySyncService flipHistorySyncService;
     // state
     boolean quantityOrPriceChatboxOpen;
     boolean itemSearchChatboxOpen = false;
@@ -190,6 +191,8 @@ public class GameUiChangesHandler {
             Suggestion suggestion = suggestionManager.getSuggestion();
             if(suggestion != null) {
                 suggestion.actionedTick = client.getTickCount();
+                suggestionManager.recordOfferSubmission(suggestion, client.getTickCount());
+                flipHistorySyncService.reportSuggestionOutcome(suggestion, "acted");
             }
         }
         if (BANK_TAG_TAB_VIEW_OPTION.equals(event.getMenuOption())) {

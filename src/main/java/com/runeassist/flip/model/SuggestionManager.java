@@ -5,6 +5,7 @@ import lombok.Setter;
 
 import javax.inject.Singleton;
 import java.time.Instant;
+import java.util.Objects;
 
 @Singleton
 @Getter
@@ -19,6 +20,10 @@ public class SuggestionManager {
     private Suggestion suggestion;
     private Instant suggestionReceivedAt;
     private int lastOfferSubmittedTick = -1;
+    private String submittedSuggestionId;
+    private int submittedItemId;
+    private OfferStatus submittedOfferStatus;
+    private int submittedTick = -1;
 
     public volatile int suggestionsDelayedUntil = 0;
 
@@ -35,6 +40,10 @@ public class SuggestionManager {
         suggestionReceivedAt = null;
         lastFailureAt = null;
         lastOfferSubmittedTick = -1;
+        submittedSuggestionId = null;
+        submittedItemId = 0;
+        submittedOfferStatus = null;
+        submittedTick = -1;
     }
 
     public boolean suggestionOutOfDate() {
@@ -47,5 +56,20 @@ public class SuggestionManager {
 
     public boolean suggestionVeryOutOfDate() {
         return suggestionReceivedAt != null && Instant.now().minusSeconds(60L).isAfter(suggestionReceivedAt);
+    }
+
+    public synchronized void recordOfferSubmission(Suggestion suggestion, int tick) {
+        if (suggestion == null || suggestion.offerType() == null) return;
+        submittedSuggestionId = suggestion.getServerSuggestionId();
+        submittedItemId = suggestion.getItemId();
+        submittedOfferStatus = suggestion.isBuySuggestion() ? OfferStatus.BUY : OfferStatus.SELL;
+        submittedTick = tick;
+    }
+
+    public synchronized String matchingSubmittedSuggestion(int itemId, OfferStatus status, int tick) {
+        if (submittedSuggestionId == null || submittedSuggestionId.isEmpty()) return null;
+        if (tick < submittedTick || tick - submittedTick > 5) return null;
+        return submittedItemId == itemId && Objects.equals(submittedOfferStatus, status)
+                ? submittedSuggestionId : null;
     }
 }

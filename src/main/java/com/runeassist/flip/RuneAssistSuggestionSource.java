@@ -9,6 +9,8 @@ import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.model.SuggestionPreferencesManager;
 import com.runeassist.flip.model.SuggestionType;
 import com.runeassist.flip.controller.BugReportClient;
+import com.runeassist.flip.controller.FlipHistorySyncService;
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.util.ProfitCalculator;
 import net.runelite.api.Client;
 import net.runelite.api.GrandExchangeOffer;
@@ -48,6 +50,7 @@ public class RuneAssistSuggestionSource
     @Inject private OsrsLoginManager osrsLoginManager;
     @Inject private PluginManager pluginManager;
     @Inject private ConfigManager configManager;
+    @Inject private RuneAssistConfig config;
     @Inject private com.runeassist.flip.model.SuggestionManager suggestionManager;
     @Inject private com.runeassist.flip.controller.GrandExchange grandExchange;
     @Inject private ExecutorService executor;
@@ -114,6 +117,15 @@ public class RuneAssistSuggestionSource
                 offersBySlot, held, ownedModifySnap, includeGraph,
                 clientDeviceId(), preferences.isTimeBasedAbortEnabled(),
                 preferences.getTimeBasedAbortMinutes());
+            if (config.contributeTrainingData())
+            {
+                String linkedAccount = linkedOsrsAccountId(displayName);
+                if (linkedAccount != null && !linkedAccount.isEmpty())
+                {
+                    composeReq.setContributeTrainingData(true);
+                    composeReq.setOsrsAccountId(linkedAccount);
+                }
+            }
             try
             {
                 suggestion = market.composeSuggestion(composeReq);
@@ -451,6 +463,13 @@ public class RuneAssistSuggestionSource
         }
         Long hash = osrsLoginManager.getAccountHash();
         return hash != null ? String.valueOf(hash) : "";
+    }
+
+    private String linkedOsrsAccountId(String displayName)
+    {
+        if (displayName == null || displayName.isEmpty()) return null;
+        return configManager.getConfiguration(FlipHistorySyncService.CONFIG_GROUP,
+            FlipHistorySyncService.osrsConfigKey(displayName));
     }
 
     private static Map<String, Integer> stringifyKeys(Map<Integer, Integer> in)

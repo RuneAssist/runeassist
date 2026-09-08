@@ -9,6 +9,7 @@ import com.runeassist.flip.model.ComposeSuggestionRequest;
 import com.runeassist.flip.model.ComposeSuggestionResponse;
 import com.runeassist.flip.model.RiskLevel;
 import com.runeassist.flip.model.Suggestion;
+import com.runeassist.flip.controller.history.AccountHttp;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -48,6 +49,7 @@ public class AresMarketClient
 
     private final OkHttpClient httpClient;
     private final Gson gson;
+    private final AccountHttp accountHttp;
 
     private volatile Map<Integer, Integer> geLimits = new ConcurrentHashMap<>();
     private volatile long limitsFetchedAt = 0;
@@ -57,10 +59,17 @@ public class AresMarketClient
     private volatile boolean lastComposeUnreachable = false;
 
     @Inject
-    public AresMarketClient(OkHttpClient httpClient, Gson gson)
+    public AresMarketClient(OkHttpClient httpClient, Gson gson, AccountHttp accountHttp)
     {
         this.httpClient = httpClient;
         this.gson = gson;
+        this.accountHttp = accountHttp;
+    }
+
+    /** Test/backwards-compatible constructor; authenticated contribution is unavailable. */
+    public AresMarketClient(OkHttpClient httpClient, Gson gson)
+    {
+        this(httpClient, gson, null);
     }
 
     public boolean lastFromAres() { return lastFromAres; }
@@ -77,7 +86,8 @@ public class AresMarketClient
             lastComposeUnreachable = true;
             return null;
         }
-        JsonObject root = postJson(ARES_SUGGESTION, gson.toJson(request), "suggestion");
+        JsonObject root = postJson(ARES_SUGGESTION, gson.toJson(request), "suggestion",
+            request.isContributeTrainingData());
         if (root == null)
         {
             lastComposeUnreachable = true;
@@ -237,11 +247,20 @@ public class AresMarketClient
     /** POST JSON with compose/flips timeouts; null on HTTP/parse failure. */
     private JsonObject postJson(String url, String body, String label)
     {
-        Request req = new Request.Builder()
+        return postJson(url, body, label, false);
+    }
+
+    private JsonObject postJson(String url, String body, String label, boolean authed)
+    {
+        Request.Builder builder = new Request.Builder()
             .url(url)
             .header("User-Agent", UA)
-            .post(RequestBody.create(JSON, body))
-            .build();
+            .post(RequestBody.create(JSON, body));
+        if (authed && accountHttp != null && accountHttp.deviceToken() != null)
+        {
+            builder.header("Authorization", "Bearer " + accountHttp.deviceToken());
+        }
+        Request req = builder.build();
         OkHttpClient timed = httpClient.newBuilder()
             .callTimeout(15, TimeUnit.SECONDS)
             .connectTimeout(5, TimeUnit.SECONDS)

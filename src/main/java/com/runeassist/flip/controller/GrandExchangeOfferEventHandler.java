@@ -66,6 +66,16 @@ public class GrandExchangeOfferEventHandler {
             return;
         }
 
+        if (isNewOffer(prev, o)) {
+            String suggestionId = suggestionManager.matchingSubmittedSuggestion(
+                    o.getItemId(), o.getOfferStatus(), client.getTickCount());
+            o.setSuggestionId(suggestionId);
+            o.setRuneAssistSuggestion(suggestionId != null);
+        } else if (prev != null) {
+            o.setSuggestionId(prev.getSuggestionId());
+            o.setRuneAssistSuggestion(prev.isRuneAssistSuggestion());
+        }
+
         boolean consistent = isConsistent(prev, o);
         if(!consistent) {
             log.warn("offer on slot {} is inconsistent with previous saved offer", slot);
@@ -187,6 +197,8 @@ public class GrandExchangeOfferEventHandler {
         t.setTimestamp(Instant.now());
         t.setLogin(login);
         t.setConsistent(consistent);
+        t.setRuneAssistSuggestion(offer.isRuneAssistSuggestion());
+        t.setSuggestionId(offer.getSuggestionId());
         return t;
     }
 

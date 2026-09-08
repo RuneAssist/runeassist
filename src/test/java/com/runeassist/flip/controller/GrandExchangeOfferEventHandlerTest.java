@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Instant same-tick sells often report quantitySold without spent (GE tax item
@@ -53,6 +54,21 @@ public class GrandExchangeOfferEventHandlerTest {
         assertNotNull(t);
         assertEquals(10, t.getQuantity());
         assertEquals(11_760L, t.getAmountSpent());
+    }
+
+    @Test
+    public void fillKeepsServerSuggestionAttribution() {
+        SavedOffer prev = offer(GrandExchangeOfferState.BUYING, 4151, 0, 1, 100, 0);
+        prev.setRuneAssistSuggestion(true);
+        prev.setSuggestionId("11111111-1111-1111-1111-111111111111");
+        SavedOffer bought = offer(GrandExchangeOfferState.BOUGHT, 4151, 1, 1, 100, 100);
+        bought.setRuneAssistSuggestion(true);
+        bought.setSuggestionId(prev.getSuggestionId());
+
+        Transaction t = GrandExchangeOfferEventHandler.inferFill(0, bought, prev, true, false);
+        assertNotNull(t);
+        assertTrue(t.isRuneAssistSuggestion());
+        assertEquals(prev.getSuggestionId(), t.getSuggestionId());
     }
 
     @Test
