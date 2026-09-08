@@ -104,7 +104,7 @@ public class ComposeSuggestionMapperTest
     }
 
     @Test
-    public void contributionDefaultsOffAndSerializesLinkedAccountWhenEnabled()
+    public void requestRequiresExplicitContributionAndSerializesLinkedAccountWhenEnabled()
     {
         ComposeSuggestionRequest req = new ComposeSuggestionRequest();
         assertFalse(req.isContributeTrainingData());
