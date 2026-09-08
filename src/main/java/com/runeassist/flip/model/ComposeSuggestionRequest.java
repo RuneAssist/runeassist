@@ -104,6 +104,10 @@ public class ComposeSuggestionRequest
         private long listedMs;
         /** Epoch ms when this offer price last changed; resets the reprice cooldown. */
         private long lastPriceChangeMs;
+        /** Server suggestion UUID when this offer came from RuneAssist. */
+        private String suggestionId = "";
+        /** {@code runeassist} for attributed offers, otherwise {@code external}. */
+        private String origin = "external";
     }
 
     @Getter

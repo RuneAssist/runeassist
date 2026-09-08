@@ -4,6 +4,8 @@ import com.runeassist.flip.model.AccountStatusManager;
 import com.runeassist.flip.model.ComposeSuggestionRequest;
 import com.runeassist.flip.model.ModifyStep;
 import com.runeassist.flip.model.OsrsLoginManager;
+import com.runeassist.flip.model.OfferManager;
+import com.runeassist.flip.model.SavedOffer;
 import com.runeassist.flip.model.RiskLevel;
 import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.model.SuggestionPreferencesManager;
@@ -52,6 +54,7 @@ public class RuneAssistSuggestionSource
     @Inject private ConfigManager configManager;
     @Inject private RuneAssistConfig config;
     @Inject private com.runeassist.flip.model.SuggestionManager suggestionManager;
+    @Inject private OfferManager offerPersistence;
     @Inject private com.runeassist.flip.controller.GrandExchange grandExchange;
     @Inject private ExecutorService executor;
 
@@ -66,6 +69,7 @@ public class RuneAssistSuggestionSource
         final net.runelite.api.Player localPlayer = client.getLocalPlayer();
         final String displayName = localPlayer != null ? localPlayer.getName() : null;
         final long[][] offersBySlot = readOffers(displayName);
+        final Map<Integer, SavedOffer> savedOffers = readSavedOffers(client.getAccountHash(), offersBySlot);
         final Map<Integer, long[]> held = heldCostTracker.held(displayName);
         final long coins = inventoryCoins();
         // grandExchange slot helpers are client-thread-only — snapshot before background work.
@@ -114,7 +118,7 @@ public class RuneAssistSuggestionSource
             ComposeSuggestionRequest composeReq = buildComposeRequest(
                 coins, timeframe, risk, f2pOnly, maxSlots, remainingSlots, minProfit,
                 remainingHint, usedLimit, blocked, skipped, skipOffers, modifyDismissedMs, protectAbort,
-                offersBySlot, held, ownedModifySnap, includeGraph,
+                offersBySlot, savedOffers, held, ownedModifySnap, includeGraph,
                 clientDeviceId(), preferences.isTimeBasedAbortEnabled(),
                 preferences.getTimeBasedAbortMinutes());
             if (config.contributeTrainingData())
@@ -410,7 +414,8 @@ public class RuneAssistSuggestionSource
             Map<Integer, Integer> remainingHint, Map<Integer, Integer> usedLimit,
             Set<Integer> blocked, Set<Integer> skipped, Set<Integer> skipOffers,
             Map<Integer, Long> modifyDismissedMs,
-            Set<Integer> protectAbort, long[][] offersBySlot, Map<Integer, long[]> held,
+            Set<Integer> protectAbort, long[][] offersBySlot, Map<Integer, SavedOffer> savedOffers,
+            Map<Integer, long[]> held,
             OwnedModifySnapshot ownedModifySnap, boolean includeGraph,
             String clientDeviceId, boolean timeBasedAbortEnabled, int timeBasedAbortMinutes)
     {
@@ -434,7 +439,7 @@ public class RuneAssistSuggestionSource
         if (skipOffers != null) req.setSkipOfferItemIds(new ArrayList<>(skipOffers));
         req.setModifyDismissedMs(stringifyLongKeys(modifyDismissedMs));
         if (protectAbort != null) req.setProtectAbortItemIds(new ArrayList<>(protectAbort));
-        req.setOffers(toOfferSnapshots(offersBySlot));
+        req.setOffers(toOfferSnapshots(offersBySlot, savedOffers));
         req.setHeld(toHeldSnapshots(held));
         if (ownedModifySnap != null && ownedModifySnap.itemId > 0)
         {
@@ -496,7 +501,20 @@ public class RuneAssistSuggestionSource
         return out;
     }
 
-    private static List<ComposeSuggestionRequest.OfferSnapshot> toOfferSnapshots(long[][] offersBySlot)
+    private Map<Integer, SavedOffer> readSavedOffers(Long accountHash, long[][] offersBySlot)
+    {
+        Map<Integer, SavedOffer> out = new HashMap<>();
+        if (accountHash == null || offersBySlot == null) return out;
+        for (int slot = 0; slot < offersBySlot.length; slot++)
+        {
+            SavedOffer saved = offerPersistence.loadOffer(accountHash, slot);
+            if (saved != null) out.put(slot, saved);
+        }
+        return out;
+    }
+
+    private static List<ComposeSuggestionRequest.OfferSnapshot> toOfferSnapshots(
+            long[][] offersBySlot, Map<Integer, SavedOffer> savedOffers)
     {
         List<ComposeSuggestionRequest.OfferSnapshot> out = new ArrayList<>();
         if (offersBySlot == null) return out;
@@ -517,6 +535,15 @@ public class RuneAssistSuggestionSource
             if (o.length > 6) snap.setLastProgressMs(o[6]);
             if (o.length > 7) snap.setListedMs(o[7]);
             if (o.length > 8) snap.setLastPriceChangeMs(o[8]);
+            SavedOffer saved = savedOffers != null ? savedOffers.get(slot) : null;
+            boolean sameOffer = saved != null && saved.getItemId() == itemId
+                    && saved.getPrice() == o[2] && saved.getTotalQuantity() == (int) o[4];
+            if (sameOffer && saved.isRuneAssistSuggestion()
+                    && saved.getSuggestionId() != null && !saved.getSuggestionId().isEmpty())
+            {
+                snap.setSuggestionId(saved.getSuggestionId());
+                snap.setOrigin("runeassist");
+            }
             out.add(snap);
         }
         return out;
