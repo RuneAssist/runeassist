@@ -76,6 +76,7 @@ public class HeldCostTracker
                     .add(new long[]{ dQty, System.currentTimeMillis() });
             }
             else HeldCostLots.consumeSell(acc, itemId, dQty);
+            acc.heldRevision++;
         }
         save(displayName, acc);
     }
@@ -92,6 +93,7 @@ public class HeldCostTracker
         long producedQty = Math.max(1, (toQty * qtyConsumed) / fromQty);
         long unit = Math.max(1, costConsumed / producedQty);
         HeldCostLots.addLot(acc, toItemId, (int) producedQty, unit);
+        acc.heldRevision++;
         save(displayName, acc);
     }
 
@@ -102,6 +104,7 @@ public class HeldCostTracker
         HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
         HeldCostLots.addLot(acc, itemId, qty, unitCost);
+        acc.heldRevision++;
         save(displayName, acc);
     }
 
@@ -115,8 +118,10 @@ public class HeldCostTracker
         if (before <= 0) return 0;
         if (qty <= 0) acc.positions.remove(itemId);
         else HeldCostLots.consumeSell(acc, itemId, qty);
+        int removed = before - HeldCostLots.heldQty(acc, itemId);
+        if (removed > 0) acc.heldRevision++;
         save(displayName, acc);
-        return before - HeldCostLots.heldQty(acc, itemId);
+        return removed;
     }
 
     /** Drop every tracked lot for this account. */
@@ -130,6 +135,7 @@ public class HeldCostTracker
             for (HeldCostLots.Lot l : lots) removed += l.qty;
         }
         acc.positions.clear();
+        if (removed > 0) acc.heldRevision++;
         save(displayName, acc);
         return removed;
     }
@@ -142,6 +148,30 @@ public class HeldCostTracker
     {
         HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
+        replaceServerHeld(displayName, acc, held);
+    }
+
+    /** Apply a response only if no local fill changed held stock while it was in flight. */
+    public synchronized boolean replaceServerHeldIfUnchanged(
+        String displayName, Map<Integer, long[]> held, long expectedRevision)
+    {
+        HeldCostLots.Account acc = account(displayName);
+        ensureLoaded(displayName, acc);
+        if (expectedRevision < 0L || acc.heldRevision != expectedRevision) return false;
+        replaceServerHeld(displayName, acc, held);
+        return true;
+    }
+
+    public synchronized long heldRevision(String displayName)
+    {
+        HeldCostLots.Account acc = account(displayName);
+        ensureLoaded(displayName, acc);
+        return acc.heldRevision;
+    }
+
+    private void replaceServerHeld(
+        String displayName, HeldCostLots.Account acc, Map<Integer, long[]> held)
+    {
         acc.positions.clear();
         if (held != null)
         {
@@ -159,6 +189,7 @@ public class HeldCostTracker
                 acc.positions.put(e.getKey(), q);
             }
         }
+        acc.heldRevision++;
         save(displayName, acc);
     }
 
@@ -343,3 +374,4 @@ public class HeldCostTracker
         });
     }
 }
+

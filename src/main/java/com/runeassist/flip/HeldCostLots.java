@@ -51,6 +51,7 @@ final class HeldCostLots {
         final Map<Integer, Deque<Lot>> positions = new LinkedHashMap<>();
         final Map<Integer, Slot> slots = new HashMap<>();
         final Map<Integer, List<long[]>> limitBuys = new LinkedHashMap<>();
+        long heldRevision = 0L;
         boolean loaded = false;
     }
 
@@ -127,3 +128,4 @@ final class HeldCostLots {
         return out;
     }
 }
+
