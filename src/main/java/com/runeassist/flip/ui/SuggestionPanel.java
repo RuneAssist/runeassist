@@ -74,6 +74,7 @@ public class SuggestionPanel extends JPanel {
     private final JPanel flagsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
 
     private String serverMessage = "";
+    private final WaitRefreshState waitRefreshState = new WaitRefreshState();
 
     public void setServerMessage(String serverMessage) {
         this.serverMessage = serverMessage == null ? "" : serverMessage;
@@ -321,6 +322,7 @@ public class SuggestionPanel extends JPanel {
     }
 
     public void updateSuggestion(Suggestion suggestion) {
+        waitRefreshState.clear();
         NumberFormat formatter = NumberFormat.getNumberInstance();
         suggestionIcon.setVisible(false);
         additionalInfoText.setText("");
@@ -429,6 +431,7 @@ public class SuggestionPanel extends JPanel {
                 "<html><body width='260'>" + SuggestionCardText.details(message, why) + "</body></html>");
         setButtonsVisible(false);
         showStructuredCard();
+        waitRefreshState.showing(suggestion, osrsLoginManager.getAccountHash());
     }
 
     private boolean shouldSellFromBank(Suggestion suggestion) {
@@ -472,6 +475,7 @@ public class SuggestionPanel extends JPanel {
     }
 
     public void setMessage(String message) {
+        waitRefreshState.clear();
         additionalInfoText.setVisible(false);
         clearSuggestionTooltips();
         innerSuggestionMessage = message;
@@ -489,6 +493,7 @@ public class SuggestionPanel extends JPanel {
     }
 
     public void showLoading() {
+        waitRefreshState.clear();
         setHeadline("…");
         populateFlags(null);
         setServerMessage("");
@@ -587,7 +592,13 @@ public class SuggestionPanel extends JPanel {
         }
 
         if(suggestionManager.isSuggestionRequestInProgress() || suggestionManager.isSuggestionRefreshPending()) {
-            showLoading();
+            // Routine polling must not blank an already displayed WAIT card.
+            // Only retain that exact result on the same account; startup, state
+            // changes and actionable trades still use the normal loading path.
+            if (!waitRefreshState.canKeepWhileRefreshing(suggestionManager.getSuggestion(),
+                    osrsLoginManager.getAccountHash())) {
+                showLoading();
+            }
             return;
         }
         hideLoading();
