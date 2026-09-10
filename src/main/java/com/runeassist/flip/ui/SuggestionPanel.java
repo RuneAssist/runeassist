@@ -333,7 +333,8 @@ public class SuggestionPanel extends JPanel {
                 setItemIcon(suggestion.getItemId());
                 break;
             case BUY:
-                setHeadline(suggestion.isHold() ? "Hold" : "Buy", suggestion.getName());
+                boolean trial = suggestion.getFlags() != null && suggestion.getFlags().contains("probe");
+                setHeadline(suggestion.isHold() ? "Hold" : trial ? "Trial buy" : "Buy", suggestion.getName());
                 qtyPriceLabel.setText(qtyAndPriceLine(suggestion, formatter));
                 setItemIcon(suggestion.getItemId());
                 break;
@@ -354,8 +355,7 @@ public class SuggestionPanel extends JPanel {
                 break;
             case DECANT:
                 setHeadline("Decant", suggestion.getName());
-                qtyPriceLabel.setText(!Strings.isNullOrEmpty(suggestion.getMessage())
-                        ? suggestion.getMessage() : "Decant now");
+                qtyPriceLabel.setText("Decant now");
                 setItemIcon(suggestion.getItemId());
                 break;
             default:
@@ -363,59 +363,31 @@ public class SuggestionPanel extends JPanel {
                 showFetchingWait();
                 return;
         }
-        populateFlags(suggestion);
-        String why = suggestion.getWhy();
-        boolean hasWhy = !Strings.isNullOrEmpty(why);
-        String additionalInfoMessage = "";
-        if (!suggestion.isWaitSuggestion() && !hasWhy && !Strings.isNullOrEmpty(suggestion.getMessage())) {
-            additionalInfoMessage = suggestion.getMessage();
-        }
+        populateFlags(null);
 
         innerSuggestionMessage = "";
         if (!suggestion.isWaitSuggestion()) {
             setButtonsVisible(true);
         }
-        String whyHtml = hasWhy ? htmlEscape(why) : "";
         if (suggestion.isBuySuggestion()) {
-            String profit = formatProfitAndDuration(
-                    suggestion.getExpectedProfit(), suggestion.getExpectedDuration(), false, true);
-            String text = joinInfoLines(whyHtml, profit, hasWhy, additionalInfoMessage);
-            if (!containsIgnoreCase(why, "limit")) {
-                text += formatLimitLine(suggestion);
-            }
-            setAdditionalInfoText(text, formatSuggestionTooltip(suggestion, suggestion.getExpectedProfit()));
+            String profit = formatEstimatedProfit(suggestion.getExpectedProfit(), false);
+            setAdditionalInfoText(profit, formatSuggestionTooltip(suggestion, suggestion.getExpectedProfit()));
         } else if (suggestion.isSellSuggestion()) {
             Long profit = profitCalculator.calculateSuggestionProfit(suggestion);
             if (profit == null && suggestion.getExpectedProfit() != null) {
                 profit = Math.round(suggestion.getExpectedProfit());
             }
             String profitText = profit == null ? ""
-                    : formatProfitAndDuration((double) profit, suggestion.getExpectedDuration(), true, false);
-            String text = joinInfoLines(whyHtml, profitText, hasWhy, additionalInfoMessage);
+                    : formatEstimatedProfit((double) profit, true);
             setAdditionalInfoText(
-                    text,
+                    profitText,
                     formatSuggestionTooltip(suggestion, profit == null ? null : (double) profit)
             );
         } else {
-            String waitText = hasWhy ? whyHtml : additionalInfoMessage;
-            if (waitText == null || waitText.isEmpty()) {
-                waitText = formatWaitSlotStatus();
-            }
-            setAdditionalInfoText(waitText, null);
+            setAdditionalInfoText("", formatSuggestionTooltip(suggestion, null));
         }
 
         showStructuredCard();
-    }
-
-    private static String joinInfoLines(String whyHtml, String profitHtml, boolean hasWhy, String additional) {
-        String text = whyHtml == null ? "" : whyHtml;
-        if (profitHtml != null && !profitHtml.isEmpty()) {
-            text = text.isEmpty() ? profitHtml : text + "<br>" + profitHtml;
-        }
-        if (!hasWhy && additional != null) {
-            text += additional;
-        }
-        return text;
     }
 
     private void paintWait(Suggestion suggestion) {
@@ -431,11 +403,8 @@ public class SuggestionPanel extends JPanel {
         if (Strings.isNullOrEmpty(why)) {
             why = formatWaitSlotStatus();
         }
-        String body = htmlEscape(message);
-        if (!Strings.isNullOrEmpty(why) && !why.equals(message)) {
-            body += "<br>" + htmlEscape(why);
-        }
-        setAdditionalInfoText(body, null);
+        setAdditionalInfoText(SuggestionCardText.waitStatus(message),
+                "<html><body width='260'>" + SuggestionCardText.details(message, why) + "</body></html>");
         setButtonsVisible(false);
         showStructuredCard();
     }
@@ -465,7 +434,7 @@ public class SuggestionPanel extends JPanel {
         showStaticSuggestion("Add gp",
                 "Add at least <FONT COLOR=" + RuneAssistColors.hex(RuneAssistColors.ACCENT) + ">"
                         + formatter.format(MIN_GP_NEEDED_TO_FLIP)
-                        + "</FONT> gp to your inventory to get a flip suggestion");
+                        + "</FONT> gp");
     }
 
     public void suggestScanningForDumps() {
@@ -473,7 +442,7 @@ public class SuggestionPanel extends JPanel {
     }
 
     public void suggestOpenGe() {
-        showStaticSuggestion("Open GE", "Open the Grand Exchange to get a flip suggestion");
+        showStaticSuggestion("Open GE", "Open the Grand Exchange to continue");
     }
 
     public void setIsPausedMessage() {
@@ -557,7 +526,6 @@ public class SuggestionPanel extends JPanel {
         if (HubPluginConflict.WAIT_MESSAGE.equals(suggestion.getMessage())) {
             suggestHubConflict();
         } else if (collectNeeded) {
-            setServerMessage(suggestion.getMessage());
             suggestCollect();
         } else if (suggestion.isWaitSuggestion() && !grandExchange.isOpen() && accountStatus.emptySlotExists()) {
             suggestOpenGe();
@@ -629,17 +597,13 @@ public class SuggestionPanel extends JPanel {
         flagsRow.repaint();
     }
 
-    private String formatProfitAndDuration(Double expectedProfit, Double expectedDuration,
-                                           boolean lossColor, boolean requirePositiveDuration) {
+    private String formatEstimatedProfit(Double expectedProfit, boolean lossColor) {
         if (expectedProfit == null) {
             return "";
         }
         Color color = lossColor && expectedProfit < 0
                 ? config.lossAmountColor() : config.profitAmountColor();
-        String text = boldColor(formatProfit(expectedProfit), color) + " profit";
-        if (expectedDuration != null && (!requirePositiveDuration || expectedDuration > 0)) {
-            text += " in <b>" + formatSuggestionDuration(expectedDuration) + "</b>";
-        }
+        String text = "Est. " + boldColor(formatProfit(expectedProfit), color) + " gp profit";
         return text;
     }
 
@@ -671,11 +635,6 @@ public class SuggestionPanel extends JPanel {
         return text;
     }
 
-    private static boolean containsIgnoreCase(String s, String needle) {
-        return s != null && needle != null && !s.isEmpty()
-                && s.toLowerCase(Locale.ROOT).contains(needle.toLowerCase(Locale.ROOT));
-    }
-
     private String formatLimitLine(Suggestion suggestion) {
         int ge = suggestion.getGeLimit();
         int left = suggestion.getRemainingLimit();
@@ -693,13 +652,22 @@ public class SuggestionPanel extends JPanel {
     private String formatSuggestionTooltip(Suggestion suggestion, Double suggestionProfit) {
         String roiLine = formatRoiTooltipLine(suggestion, suggestionProfit);
         String costLine = formatCostTooltipLine(suggestion);
-        if (roiLine == null && costLine == null) {
-            return null;
-        }
         StringBuilder tooltip = new StringBuilder("<html>");
+        String details = SuggestionCardText.details(suggestion.getMessage(), suggestion.getWhy());
+        if (!details.isEmpty()) appendTooltipLine(tooltip, details);
         appendTooltipLine(tooltip, roiLine);
         appendTooltipLine(tooltip, costLine);
-        return tooltip.append("</html>").toString();
+        if (suggestion.getExpectedDuration() != null && suggestion.getExpectedDuration() > 0) {
+            appendTooltipLine(tooltip, "Estimated fill: " + formatSuggestionDuration(suggestion.getExpectedDuration()));
+        }
+        if (suggestion.isBuySuggestion()) appendTooltipLine(tooltip, formatLimitLine(suggestion).replaceFirst("^<br>", ""));
+        if (suggestion.getFlags() != null) {
+            for (String flag : suggestion.getFlags()) {
+                if (!Strings.isNullOrEmpty(flag)) appendTooltipLine(tooltip, htmlEscape(flag));
+            }
+        }
+        return tooltip.append("</html>").toString().replace("<html>", "<html><body width='260'>")
+                .replace("</html>", "</body></html>");
     }
 
     private void appendTooltipLine(StringBuilder tooltip, String line) {
