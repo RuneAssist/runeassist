@@ -84,7 +84,7 @@ public class RuneAssistPanel extends JPanel {
         }
         mainContent.setBounds(0, 0, w, h);
         preferencesPanel.setBounds(0, 0, w, h);
-        gearButton.setBounds(Math.max(0, w - 24), 6, 20, 20);
+        gearButton.setBounds(6, 6, 20, 20);
         if (mainContent.isVisible()) {
             mainContent.validate();
         }
