@@ -287,7 +287,7 @@ public class FlipHistorySyncService {
         if (osrsAccountId == null) return;
         String eventId = UUID.randomUUID().toString();
         JsonObject body = offerEventJson(eventId, osrsAccountId, slot, offer, previous,
-                Instant.now().toEpochMilli());
+                offer.getObservedAt() > 0 ? offer.getObservedAt() : Instant.now().toEpochMilli());
         pendingOfferEvents.put(eventId, body);
         async("offer lifecycle event", this::flushOfferEvents);
     }
@@ -302,6 +302,11 @@ public class FlipHistorySyncService {
         body.addProperty("eventId", eventId);
         body.addProperty("osrsAccountId", osrsAccountId);
         body.addProperty("ts", ts);
+        body.addProperty("observationSessionId", offer.getObservationSessionId());
+        body.addProperty("offerInstanceId", offer.getOfferInstanceId());
+        body.addProperty("loginObservation", offer.isLoginObservation());
+        body.addProperty("placementQuality", offer.getPlacedAt() > 0 ? "observed_placement" : "unknown");
+        if (offer.getPlacedAt() > 0) body.addProperty("placedAt", offer.getPlacedAt());
         body.addProperty("slot", slot);
         body.addProperty("state", offer.getState().name());
         body.addProperty("itemId", offer.getItemId());
