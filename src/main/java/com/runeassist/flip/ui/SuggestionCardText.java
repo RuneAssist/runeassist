@@ -53,7 +53,7 @@ final class SuggestionCardText {
         String text = message == null ? "" : message.toLowerCase(Locale.ROOT);
         if (text.contains("market data") && text.contains("unavailable")) return "Waiting for fresh prices";
         if (text.contains("unreachable") || text.contains("unavailable") || text.contains("offline")) {
-            return "Connection unavailable";
+            return "Reconnecting…";
         }
         if (text.contains("slots are full") || text.contains("slots full")) return "Waiting for offers to fill";
         if (text.contains("not enough coins")) return "More coins needed";

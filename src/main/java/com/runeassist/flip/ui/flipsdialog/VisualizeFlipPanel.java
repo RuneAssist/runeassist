@@ -104,7 +104,7 @@ public class VisualizeFlipPanel extends JPanel {
             SwingUtilities.invokeLater(() -> showGraphCard(new DataManager(d.getGraphData(), d), flip));
         };
 
-        String displayName = osrsLoginManager != null ? osrsLoginManager.getPlayerDisplayName() : null;
+        String displayName = flipHistorySyncService == null ? null : flipHistorySyncService.displayNameForAccount(flip.getAccountId());
         if (displayName != null && flipHistorySyncService != null
                 && flipHistorySyncService.isOsrsLinked(displayName)
                 && flip.getId() != null) {

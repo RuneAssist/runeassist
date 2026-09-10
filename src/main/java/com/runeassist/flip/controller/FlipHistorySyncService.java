@@ -72,6 +72,75 @@ public class FlipHistorySyncService {
     private volatile boolean started;
     private volatile boolean registering;
     private volatile String lastError;
+    @Inject private com.runeassist.flip.rs.AccountLoginRS accountLoginRS;
+    // Cursors must have the same lifetime as FlipManager's in-memory history.
+    private final Map<String, String> historyCursors = new ConcurrentHashMap<>();
+    private final Map<String, String> linkedAccounts = new ConcurrentHashMap<>();
+    private String historyUserId;
+    private long accountsRefreshedAt;
+
+    public boolean isHistoryReady(Integer accountId) {
+        if (linkedAccounts.isEmpty()) return false;
+        for (Map.Entry<String, String> account : linkedAccounts.entrySet()) {
+            if (accountId == null || accountIdFor(account.getKey()) == accountId) {
+                if (!historyCursors.containsKey(account.getValue())) return false;
+                if (accountId != null) return true;
+            }
+        }
+        return accountId == null;
+    }
+
+    synchronized void syncLinkedAccounts() {
+        String userId = api.userId();
+        if (userId == null) return;
+        if (!userId.equals(historyUserId)) {
+            if (historyUserId != null) {
+                flipManager.reset();
+                accountLoginRS.set(new com.runeassist.flip.model.AccountLoginState());
+            }
+            historyUserId = userId;
+            historyCursors.clear();
+            linkedAccounts.clear();
+            accountsRefreshedAt = 0;
+        }
+        long now = System.currentTimeMillis();
+        if (now - accountsRefreshedAt > 300_000 || linkedAccounts.isEmpty()) {
+            JsonObject me = api.get("/v1/account/me", true);
+            if (me != null && me.has("osrsAccounts") && me.get("osrsAccounts").isJsonArray()) {
+                Map<String, String> accounts = new HashMap<>();
+                for (JsonElement entry : me.getAsJsonArray("osrsAccounts")) {
+                    if (!entry.isJsonObject()) continue;
+                    JsonObject account = entry.getAsJsonObject();
+                    if (!account.has("displayName") || account.get("displayName").isJsonNull()
+                            || !account.has("id") || account.get("id").isJsonNull()) continue;
+                    String name = account.get("displayName").getAsString();
+                    String id = account.get("id").getAsString();
+                    if (!name.isBlank() && !id.isBlank()) accounts.put(name, id);
+                }
+                if (!linkedAccounts.isEmpty() && !linkedAccounts.equals(accounts)) {
+                    historyCursors.clear();
+                    flipManager.clearHistory();
+                    Integer selected = flipManager.getIntervalAccount();
+                    if (selected != null && accounts.keySet().stream().noneMatch(name -> accountIdFor(name) == selected)) {
+                        flipManager.setIntervalAccount(null);
+                    }
+                }
+                linkedAccounts.clear();
+                linkedAccounts.putAll(accounts);
+                com.runeassist.flip.model.AccountLoginState state = new com.runeassist.flip.model.AccountLoginState();
+                for (Map.Entry<String, String> account : accounts.entrySet()) {
+                    state.displayNameToAccountId.put(account.getKey(), accountIdFor(account.getKey()));
+                    state.accountIdToDisplayName.put(accountIdFor(account.getKey()), account.getKey());
+                }
+                accountLoginRS.set(state);
+                accountsRefreshedAt = now;
+            }
+        }
+        for (Map.Entry<String, String> account : linkedAccounts.entrySet()) {
+            pullFlipsDelta(account.getKey(), account.getValue());
+        }
+        fireStatus();
+    }
 
     @Inject
     public FlipHistorySyncService(
@@ -120,7 +189,7 @@ public class FlipHistorySyncService {
         if (displayName == null || displayName.isEmpty() || !isLinked()) {
             return false;
         }
-        String cached = configManager.getConfiguration(CONFIG_GROUP, osrsKey(displayName));
+        String cached = linkedOsrsAccountId(displayName);
         return cached != null && !cached.isEmpty();
     }
 
@@ -670,19 +739,20 @@ public class FlipHistorySyncService {
             return;
         }
         flushDisplay(displayName);
-        pullFlipsDelta(displayName, osrsAccountId);
+        accountsRefreshedAt = 0;
+        syncLinkedAccounts();
     }
 
-    private void pullFlipsDelta(String displayName, String osrsAccountId) {
+    private synchronized void pullFlipsDelta(String displayName, String osrsAccountId) {
         long heldRevision = heldCostTracker.heldRevision(displayName);
         boolean heldSyncBlocked = !listUnacked(displayName).isEmpty();
-        String cursor = configManager.getConfiguration(CONFIG_GROUP, flipsCursorKey(displayName));
+        String cursor = historyCursors.get(osrsAccountId);
         String path = "/v1/account/client-flips-delta?osrsAccountId=" + AccountHttp.urlEnc(osrsAccountId);
         if (cursor != null && !cursor.isEmpty() && !"0".equals(cursor)) {
             path += "&sinceUpdatedTime=" + AccountHttp.urlEnc(cursor);
         }
         JsonObject body = api.get(path, true);
-        if (body == null) {
+        if (body == null || !body.has("flips") || !body.get("flips").isJsonArray()) {
             return;
         }
         if (body.has("flips")) {
@@ -693,10 +763,11 @@ public class FlipHistorySyncService {
                 log.info("flip history pulled {} flips for {}", flips.size(), displayName);
             }
         }
-        applyHeldFromBody(displayName, body,
-                heldSyncBlocked ? -1L : heldRevision);
+        if (displayName.equals(osrsLoginManager.getPlayerDisplayName())) {
+            applyHeldFromBody(displayName, body, heldSyncBlocked ? -1L : heldRevision);
+        }
         if (body.has("time") && !body.get("time").isJsonNull()) {
-            configManager.setConfiguration(CONFIG_GROUP, flipsCursorKey(displayName), body.get("time").getAsString());
+            historyCursors.put(osrsAccountId, body.get("time").getAsString());
         }
     }
 
@@ -822,8 +893,8 @@ public class FlipHistorySyncService {
         return flips;
     }
 
-    private void refreshDelta(String displayName, String osrsAccountId) {
-        configManager.unsetConfiguration(CONFIG_GROUP, flipsCursorKey(displayName));
+    private synchronized void refreshDelta(String displayName, String osrsAccountId) {
+        historyCursors.remove(osrsAccountId);
         pullFlipsDelta(displayName, osrsAccountId);
     }
 
@@ -845,6 +916,7 @@ public class FlipHistorySyncService {
                 log.debug("flip history flush {}: {}", displayName, e.getMessage());
             }
         }
+        syncLinkedAccounts();
     }
 
     private void flushDisplay(String displayName) throws Exception {
@@ -966,6 +1038,7 @@ public class FlipHistorySyncService {
 
     private String ensureOsrsAccount(String displayName) throws Exception {
         ensureRegistered();
+        if (linkedAccounts.containsKey(displayName)) return linkedAccounts.get(displayName);
         String cached = configManager.getConfiguration(CONFIG_GROUP, osrsKey(displayName));
         if (cached != null && !cached.isEmpty()) {
             return cached;
@@ -983,7 +1056,13 @@ public class FlipHistorySyncService {
 
     public String linkedOsrsAccountId(String displayName) {
         if (displayName == null || displayName.isEmpty()) return null;
+        if (linkedAccounts.containsKey(displayName)) return linkedAccounts.get(displayName);
         return configManager.getConfiguration(CONFIG_GROUP, osrsConfigKey(displayName));
+    }
+
+    public String displayNameForAccount(int accountId) {
+        for (String name : linkedAccounts.keySet()) if (accountIdFor(name) == accountId) return name;
+        return null;
     }
 
     public static String osrsConfigKey(String displayName) {
