@@ -8,6 +8,13 @@ final class ControlUi {
     private ControlUi() {
     }
 
+    static void configureCardLayout(JPanel card) {
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        // Match the surrounding cards in the outer Y-axis stack. Otherwise the
+        // left-aligned contents make BoxLayout place this card's left edge at center.
+        card.setAlignmentX(Component.CENTER_ALIGNMENT);
+    }
+
     static void styleCompactCombo(JComboBox<String> combo) {
         combo.setBackground(RuneAssistColors.CARD);
         combo.setForeground(RuneAssistColors.TEXT);

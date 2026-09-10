@@ -13,6 +13,10 @@ import java.nio.charset.StandardCharsets;
 @ConfigGroup("runeassistflip")
 public interface RuneAssistConfig extends Config
 {
+    @ConfigItem(keyName = "sessionStatsCollapsed", name = "Collapse session statistics",
+            description = "Remember the compact statistics card state", hidden = true)
+    default boolean sessionStatsCollapsed() { return true; }
+
     public enum PriceGraphWebsite
     {
         RUNEASSIST("RuneAssist"),

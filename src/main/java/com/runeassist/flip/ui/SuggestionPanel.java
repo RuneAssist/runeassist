@@ -24,6 +24,7 @@ import java.text.NumberFormat;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.runeassist.flip.ui.UIUtilities.*;
 import static com.runeassist.flip.util.Constants.MIN_GP_NEEDED_TO_FLIP;
@@ -33,6 +34,7 @@ import static com.runeassist.flip.util.Constants.MIN_GP_NEEDED_TO_FLIP;
 @Slf4j
 public class SuggestionPanel extends JPanel {
     private static final int DEFAULT_PANEL_HEIGHT = 148;
+    private static final int STATUS_PANEL_HEIGHT = 96;
     private static final int FLAGS_ROW_HEIGHT = 18;
     private static final String CARD_STRUCTURED = "structured";
     private static final String CARD_MESSAGE = "message";
@@ -66,7 +68,9 @@ public class SuggestionPanel extends JPanel {
     private final JPanel buttonContainer = new JPanel();
     private final JPanel suggestedActionPanel;
     private final JPanel cardHeader;
-    private String innerSuggestionMessage;
+    private static final String COLLECT_MESSAGE = "Collect items";
+    // Read by the client thread; a hidden Swing child can still report isVisible().
+    private final AtomicReference<String> displayedMessage = new AtomicReference<>();
     private final CardLayout bodyLayout = new CardLayout();
     private final JPanel bodyCards = new JPanel(bodyLayout);
     private final JLabel headlineLabel = new JLabel();
@@ -75,6 +79,12 @@ public class SuggestionPanel extends JPanel {
 
     private String serverMessage = "";
     private final WaitRefreshState waitRefreshState = new WaitRefreshState();
+    private volatile boolean loadingStatusVisible;
+    private final Timer loadingStatusTimer = new Timer(8000, e -> {
+        if (loadingStatusVisible) {
+            suggestionText.setText("<html><center>Server slow—still waiting…</center></html>");
+        }
+    });
 
     public void setServerMessage(String serverMessage) {
         this.serverMessage = serverMessage == null ? "" : serverMessage;
@@ -113,7 +123,8 @@ public class SuggestionPanel extends JPanel {
 
         Dimension size = new Dimension(MainPanel.CONTENT_WIDTH, DEFAULT_PANEL_HEIGHT);
         setPreferredSize(size);
-        setMinimumSize(new Dimension(MainPanel.CONTENT_WIDTH, 120));
+        setMinimumSize(new Dimension(MainPanel.CONTENT_WIDTH, STATUS_PANEL_HEIGHT));
+        loadingStatusTimer.setRepeats(false);
         setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
         setLayout(new BorderLayout());
         setBackground(RuneAssistColors.SHELL);
@@ -219,6 +230,8 @@ public class SuggestionPanel extends JPanel {
     }
 
     private void showStructuredCard() {
+        stopLoadingStatus();
+        displayedMessage.set(null);
         bodyLayout.show(bodyCards, CARD_STRUCTURED);
         int contentHeight = bodyCards.getComponent(0).getPreferredSize().height;
         setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH,
@@ -228,7 +241,8 @@ public class SuggestionPanel extends JPanel {
 
     private void showMessageCard() {
         bodyLayout.show(bodyCards, CARD_MESSAGE);
-        setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH, DEFAULT_PANEL_HEIGHT));
+        setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH, STATUS_PANEL_HEIGHT));
+        revalidate();
     }
 
     private void setupButtonContainer() {
@@ -389,7 +403,6 @@ public class SuggestionPanel extends JPanel {
                 suggestion.getQuantity(), suggestion.getPrice(), suggestion.isBuySuggestion() || suggestion.isSellSuggestion()));
         populateFlags(null);
 
-        innerSuggestionMessage = "";
         if (!suggestion.isWaitSuggestion()) {
             setButtonsVisible(true);
         }
@@ -432,6 +445,9 @@ public class SuggestionPanel extends JPanel {
         setButtonsVisible(false);
         showStructuredCard();
         waitRefreshState.showing(suggestion, osrsLoginManager.getAccountHash());
+        cardHeader.setVisible(false);
+        setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH, STATUS_PANEL_HEIGHT));
+        revalidate();
     }
 
     private boolean shouldSellFromBank(Suggestion suggestion) {
@@ -451,7 +467,7 @@ public class SuggestionPanel extends JPanel {
     }
 
     public void suggestCollect() {
-        showStaticSuggestion("Collect", "Collect items");
+        showStaticSuggestion("Collect", COLLECT_MESSAGE);
     }
 
     public void suggestAddGp() {
@@ -475,10 +491,11 @@ public class SuggestionPanel extends JPanel {
     }
 
     public void setMessage(String message) {
+        stopLoadingStatus();
         waitRefreshState.clear();
         additionalInfoText.setVisible(false);
         clearSuggestionTooltips();
-        innerSuggestionMessage = message;
+        displayedMessage.set(message);
         setButtonsVisible(false);
 
         suggestionText.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
@@ -489,27 +506,46 @@ public class SuggestionPanel extends JPanel {
     }
 
     public boolean isCollectItemsSuggested() {
-        return suggestionText.isVisible() && "Collect items".equals(innerSuggestionMessage);
+        return COLLECT_MESSAGE.equals(displayedMessage.get());
+    }
+
+    public void clearCollectSuggestion() {
+        // Consume the mismatch immediately, even if fetching is delayed or the EDT is busy.
+        String message = displayedMessage.get();
+        if (COLLECT_MESSAGE.equals(message) && displayedMessage.compareAndSet(message, null)) {
+            SwingUtilities.invokeLater(() -> {
+                // Do not overwrite a newer message or a structured/loading card.
+                if (displayedMessage.get() == null && suggestionTextContainer.isVisible()) {
+                    showFetchingWait();
+                }
+            });
+        }
     }
 
     public void showLoading() {
-        waitRefreshState.clear();
-        setHeadline("…");
-        populateFlags(null);
+        if (loadingStatusVisible) return;
         setServerMessage("");
-        bodyLayout.show(bodyCards, CARD_SPINNER);
-        spinner.show();
-        setButtonsVisible(false);
+        showStaticSuggestion("Wait", "Getting the next flip…");
+        cardHeader.setVisible(false);
         suggestionIcon.setVisible(false);
-        additionalInfoText.setText("");
-        clearSuggestionTooltips();
-        additionalInfoText.setVisible(false);
-        suggestionText.setText("");
+        loadingStatusVisible = true;
+        loadingStatusTimer.restart();
     }
 
     public void hideLoading() {
+        stopLoadingStatus();
         spinner.hide();
         additionalInfoText.setVisible(true);
+    }
+
+    private void stopLoadingStatus() {
+        loadingStatusVisible = false;
+        loadingStatusTimer.stop();
+    }
+
+    @Override public void removeNotify() {
+        stopLoadingStatus();
+        super.removeNotify();
     }
 
     private void setButtonsVisible(boolean visible) {

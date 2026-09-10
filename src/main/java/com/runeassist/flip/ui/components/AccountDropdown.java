@@ -54,27 +54,30 @@ public class AccountDropdown extends JComboBox<String> {
     public void refresh() {
         Map<String, Integer> displayNameOptions = accountsGetter.get();
         if (!Objects.equals(displayNameOptions, cachedAccounts)) {
-            String previousSelectedItem = (String) getSelectedItem();
             refreshAccountOptions();
-            setSelectedItem(MoreObjects.firstNonNull(previousSelectedItem, ALL_ACCOUNTS_DROPDOWN_OPTION));
         }
     }
 
     public void refreshAccountOptions() {
-        cachedAccounts = accountsGetter.get();
+        String selected = (String) getSelectedItem();
+        Map<String, Integer> supplied = accountsGetter.get();
+        cachedAccounts = supplied == null ? java.util.Collections.emptyMap() : new java.util.TreeMap<>(supplied);
         refreshInProgress = true;
-        DefaultComboBoxModel<String> model = (DefaultComboBoxModel<String>) getModel();
-        model.removeAllElements();
-        cachedAccounts.forEach((k, v) -> {
-            model.addElement(k);
-        });
-        model.addElement(ALL_ACCOUNTS_DROPDOWN_OPTION);
-        setVisible(model.getSize() > 1);
-        refreshInProgress = false;
+        try {
+            DefaultComboBoxModel<String> model = (DefaultComboBoxModel<String>) getModel();
+            model.removeAllElements();
+            cachedAccounts.keySet().forEach(model::addElement);
+            model.addElement(ALL_ACCOUNTS_DROPDOWN_OPTION);
+            setSelectedItem(cachedAccounts.containsKey(selected) ? selected : ALL_ACCOUNTS_DROPDOWN_OPTION);
+            setVisible(model.getSize() > 1);
+        } finally { refreshInProgress = false; }
     }
 
 
     public void setSelectedAccountId(Integer accountId) {
+        if (cachedAccounts == null) refreshAccountOptions();
+        refreshInProgress = true;
+        try {
         if (accountId == null) {
             setSelectedItem(ALL_ACCOUNTS_DROPDOWN_OPTION);
         } else {
@@ -87,5 +90,6 @@ public class AccountDropdown extends JComboBox<String> {
                 }
             }
         }
+        } finally { refreshInProgress = false; }
     }
 }

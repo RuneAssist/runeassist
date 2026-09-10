@@ -26,6 +26,8 @@ import java.util.List;
 @Slf4j
 @Singleton
 public class StatsPanelV2 extends JPanel {
+    @Inject private net.runelite.client.config.ConfigManager configManager;
+    private CollapsibleStatsCard sessionCard;
     private final StatsUi.IconPair flipsDialogIcons = StatsUi.toolbarIcon(getClass(), "/popout-flips.png");
     private final StatsUi.IconPair webAnalyticsIcons = StatsUi.toolbarIcon(getClass(), "/internet.png");
 
@@ -116,16 +118,22 @@ public class StatsPanelV2 extends JPanel {
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         scrollPane.setBorder(null);
 
-        JPanel mainPanel = UIUtilities.verticalPanel(RuneAssistColors.SHELL);
-        mainPanel.add(profitAndSubInfoPanel);
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.setBackground(RuneAssistColors.SHELL);
+        JPanel summarySection = new JPanel(new BorderLayout());
+        summarySection.setOpaque(false);
+        sessionCard = new CollapsibleStatsCard(profitAndSubInfoPanel, config.sessionStatsCollapsed(),
+                collapsed -> configManager.setConfiguration("runeassistflip", "sessionStatsCollapsed", collapsed));
+        summarySection.add(sessionCard, BorderLayout.CENTER);
 
         JPanel flipsHeader = new JPanel(new BorderLayout());
         flipsHeader.setOpaque(false);
         flipsHeader.setBorder(BorderFactory.createEmptyBorder(8, 2, 4, 0));
         flipsHeader.add(RuneAssistColors.kicker("RECENT FLIPS"), BorderLayout.WEST);
         flipsHeader.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
-        mainPanel.add(flipsHeader);
-        mainPanel.add(scrollPane);
+        summarySection.add(flipsHeader, BorderLayout.SOUTH);
+        mainPanel.add(summarySection, BorderLayout.NORTH);
+        mainPanel.add(scrollPane, BorderLayout.CENTER);
         add(mainPanel, BorderLayout.CENTER);
 
         paginator = new Paginator((i) -> refresh(true, lastValidState));
@@ -209,7 +217,7 @@ public class StatsPanelV2 extends JPanel {
         realized.add(hourlyProfitRow);
 
         JPanel unrealized = UIUtilities.verticalPanel(RuneAssistColors.CARD);
-        unrealized.add(RuneAssistColors.kicker("UNREALIZED"));
+        unrealized.add(RuneAssistColors.kicker("CURRENT HOLDINGS"));
         unrealized.add(StatsUi.metricCell("Unrealized", unrealizedProfitVal, ColorScheme.LIGHT_GRAY_COLOR,
                 flipsDialogController::showPortfolioTab));
         unrealized.add(StatsUi.metricCell("Open", openFlipsVal, ColorScheme.LIGHT_GRAY_COLOR,
@@ -279,13 +287,13 @@ public class StatsPanelV2 extends JPanel {
             return;
         }
 
-        accountDropdown.setSelectedAccountId(flipManager.getIntervalAccount());
         accountDropdown.setVisible(true);
         accountDropdown.refresh();
+        accountDropdown.setSelectedAccountId(flipManager.getIntervalAccount());
 
         SessionData sd = sessionManager.getCachedSessionData();
-        Stats stats = flipManager.getIntervalStats();
-        paginator.setTotalPages(1 + stats.flipsMade / 50);
+        Stats stats = flipManager.getRealizedIntervalStats();
+        paginator.setTotalPages(Math.max(1, (flipManager.getIntervalStats().flipsMade + 49) / 50));
         long s = System.nanoTime();
         if (flipsMaybeChanged) {
             flipsPanel.removeAll();
@@ -318,41 +326,59 @@ public class StatsPanelV2 extends JPanel {
             }
             roiVal.setText(String.format("%.3f%%", stats.calculateRoi() * 100));
             roiVal.setForeground(UIUtilities.getProfitColor(stats.profit, config));
-            int openCount = flipManager.countOpenInInterval();
-            flipsMadeVal.setText(String.format("%d", Math.max(0, stats.flipsMade - openCount)));
-            openFlipsVal.setText(String.format("%d", openCount));
+            flipsMadeVal.setText(String.format("%d", stats.flipsMade));
             totalProfitVal.setText(UIUtilities.formatProfit(stats.profit));
             totalProfitVal.setForeground(UIUtilities.getProfitColor(stats.profit, config));
             totalProfitVal.setToolTipText("Open profit graph on the dashboard. Realized profit from closed sells.");
             log.debug("populating flips took {}ms", (System.nanoTime() - s) / 1000_000);
         }
 
-        PortfolioSummaryData summaryData = portfolioStateRS.get().getSummaryData();
+        PortfolioState portfolio = portfolioStateRS.get();
+        boolean currentAccount = flipManager.getIntervalAccount() != null
+                && osrsLoginManager.getPlayerDisplayName() != null
+                && flipManager.getIntervalAccount() == FlipHistorySyncService.accountIdFor(osrsLoginManager.getPlayerDisplayName());
+        PortfolioSummaryData summaryData = portfolio.getSummaryData();
         long portfolioValue = summaryData.getPortfolioMarketValue();
         portfolioValueVal.setText(UIUtilities.quantityToRSDecimalStack(Math.abs(portfolioValue), true) + " gp");
         long unrealizedProfit = summaryData.getUnrealizedProfit();
         unrealizedProfitVal.setText(UIUtilities.formatProfit(unrealizedProfit));
         unrealizedProfitVal.setForeground(UIUtilities.getProfitColor(unrealizedProfit, config));
+        openFlipsVal.setText(String.valueOf(portfolio.getItemCardDataByItemId().values().stream()
+                .filter(PortfolioItemCardData::isInPortfolio).count()));
+        String liveScope = "Current holdings for the logged-in character, independent of the history interval. Portfolio includes cash and buy-offer funds.";
+        for (JLabel value : new JLabel[]{portfolioValueVal, unrealizedProfitVal, openFlipsVal}) {
+            if (!currentAccount || !portfolio.isLoaded()) value.setText("—");
+            value.setToolTipText(currentAccount ? liveScope : "Live portfolio is only available for the logged-in character; not an account-wide total.");
+        }
 
         sessionTimeVal.setText(StatsUi.sessionClock(sd.durationMillis));
         float hoursFloat = Math.max(0L, sd.durationMillis / 1000) / 3600.0f;
         long hourlyProfit = hoursFloat == 0 ? 0 : (long) (stats.profit / hoursFloat);
         hourlyProfitVal.setText(UIUtilities.formatProfitWithoutGp(hourlyProfit) + " gp/hr");
         hourlyProfitVal.setForeground(UIUtilities.getProfitColor(hourlyProfit, config));
-        setSessionStatsVisible(true);
+        setSessionStatsVisible(currentAccount && IntervalTimeUnit.SESSION.equals(intervalDropdown.getSelectedIntervalTimeUnit()));
+        if (flipHistorySyncService != null && !flipHistorySyncService.isHistoryReady(flipManager.getIntervalAccount())) {
+            for (JLabel value : new JLabel[]{totalProfitVal, roiVal, flipsMadeVal, hourlyProfitVal}) value.setText("Loading…");
+        }
+        sessionCard.setSummary(intervalDropdown.getSelectedItem() + " · " + totalProfitVal.getText(),
+                totalProfitVal.getForeground());
+        flipsPanel.revalidate();
+        flipsPanel.repaint();
     }
 
     private void addFlipRow(FlipV2 f, String displayName, boolean allowGhostRepair, boolean missed) {
+        String owner = accountLoginRS.get().accountIdToDisplayName.get(f.getAccountId());
         flipsPanel.add(new FlipPanel(
                 f,
                 config,
                 () -> flipsDialogController.showVisualizeFlip(f),
                 menu -> FlipRepairMenus.addStandardActions(
-                        menu, this, f, displayName, flipHistorySyncService, allowGhostRepair, missed)));
+                        menu, this, f, owner, flipHistorySyncService, allowGhostRepair, missed)));
     }
 
     private void clearLoggedOut() {
         totalProfitVal.setText("0 gp");
+        sessionCard.setSummary("Session · 0 gp", RuneAssistColors.TEXT);
         roiVal.setText("-0.00%");
         flipsMadeVal.setText("0");
         openFlipsVal.setText("0");

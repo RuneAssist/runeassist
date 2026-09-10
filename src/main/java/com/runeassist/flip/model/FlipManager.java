@@ -73,6 +73,20 @@ public class FlipManager {
         return intervalStats.copy();
     }
 
+    /** Completed flips only; open purchase costs must not dilute realized ROI. */
+    public synchronized Stats getRealizedIntervalStats() {
+        Stats stats = new Stats();
+        for (WeekAggregate week : weeks) {
+            List<FlipV2> flips = intervalAccount == null
+                    ? week.flipsAfter(intervalStartTime, false)
+                    : week.flipsAfterForAccount(intervalStartTime, intervalAccount);
+            for (FlipV2 flip : flips) {
+                if (flip != null && flip.isClosed()) stats.addFlip(flip);
+            }
+        }
+        return stats;
+    }
+
     public synchronized Stats calculateStats(int startTime, Integer accountId) {
         if(accountId == null) {
             return calculateStatsAllAccounts(startTime);
@@ -290,6 +304,10 @@ public class FlipManager {
         intervalAccount = null;
         intervalStartTime = 0;
         pluginUserId = 0;
+        clearHistory();
+    }
+
+    public synchronized void clearHistory() {
         intervalStats = new Stats();
         lastOpenFlipByItemId.clear();
         existingCloseTimes.clear();
