@@ -349,6 +349,10 @@ public class RuneAssistPlugin extends Plugin {
 
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event) {
+		if (event.getGameState() == GameState.LOGIN_SCREEN || event.getGameState() == GameState.LOGGING_IN
+				|| event.getGameState() == GameState.HOPPING || event.getGameState() == GameState.CONNECTION_LOST) {
+			offerEventHandler.resetObservationSession();
+		}
 		switch (event.getGameState())
 		{
 			case LOGIN_SCREEN:
