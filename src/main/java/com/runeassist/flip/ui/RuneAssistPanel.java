@@ -43,7 +43,6 @@ public class RuneAssistPanel extends JPanel {
         topPanel.add(controlPanel);
         topPanel.add(Box.createRigidArea(new Dimension(MainPanel.CONTENT_WIDTH, 8)));
         topPanel.add(statusStrip);
-        topPanel.add(Box.createRigidArea(new Dimension(MainPanel.CONTENT_WIDTH, 8)));
 
         mainContent.setOpaque(true);
         mainContent.setBackground(RuneAssistColors.SHELL);

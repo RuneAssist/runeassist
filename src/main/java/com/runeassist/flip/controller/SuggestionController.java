@@ -97,12 +97,7 @@ public class SuggestionController {
         if(suggestionManager.isSuggestionRequestInProgress() || suggestionManager.isGraphDataReadingInProgress()) {
             return;
         }
-        // Collect-button race can leave uncollectedManager falsely non-empty.
-        if(isUncollectedOutOfSync()) {
-            log.warn("uncollected is out of sync, it thinks there are items to collect but the GE is open and the Collect button not visible");
-            uncollectedManager.clearAllUncollected(osrsLoginManager.getAccountHash());
-            suggestionManager.setSuggestionNeeded(true);
-        }
+        reconcileUncollected();
         if (osrsLoginManager.hasJustLoggedIn()) {
             return;
         }
@@ -199,15 +194,27 @@ public class SuggestionController {
         return suggestionManager.suggestionVeryOutOfDate();
     }
 
-    private boolean isUncollectedOutOfSync() {
+    void reconcileUncollected() {
         if (client.getTickCount() <= uncollectedManager.getLastUncollectedAddedTick() + 2) {
-            return false;
+            return;
         }
         if(!grandExchange.isHomeScreenOpen() || grandExchange.isCollectButtonVisible()) {
-            return false;
+            return;
         }
-        return uncollectedManager.HasUncollected(osrsLoginManager.getAccountHash())
-                || suggestionPanel.isCollectItemsSuggested();
+        Long accountHash = osrsLoginManager.getAccountHash();
+        boolean staleItems = uncollectedManager.HasUncollected(accountHash);
+        boolean staleCard = suggestionPanel != null && suggestionPanel.isCollectItemsSuggested();
+        if (!staleItems && !staleCard) {
+            return;
+        }
+        if (staleItems) {
+            log.warn("Clearing stale uncollected state: GE home is open without a Collect button");
+            uncollectedManager.clearAllUncollected(accountHash);
+        }
+        if (staleCard) {
+            suggestionPanel.clearCollectSuggestion();
+        }
+        suggestionManager.setSuggestionNeeded(true);
     }
 
     public void getSuggestionAsync() {

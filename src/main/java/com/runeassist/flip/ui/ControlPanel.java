@@ -23,7 +23,7 @@ public class ControlPanel extends JPanel {
     private static final int PRESET_8H = 8 * 60;
     private static final String[] TIMEFRAME_ITEMS = {"5m", "30m", "2h", "8h", "Custom"};
     private static final String VOLUME_TOOLTIP =
-            "Sizes how much 5m/1h volume each offer covers. This is not a reprice timer.";
+            "How often you expect to check your offers. Flips may take longer; this is not a reprice timer.";
     private static final String RISK_LOW_LABEL = "Low";
     private static final String RISK_MEDIUM_LABEL = "Med";
     private static final String RISK_HIGH_LABEL = "High";
@@ -56,7 +56,7 @@ public class ControlPanel extends JPanel {
         this.suggestionManager = suggestionManager;
         this.preferencesManager = preferencesManager;
 
-        setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+        ControlUi.configureCardLayout(this);
         setBackground(RuneAssistColors.CARD);
         setBorder(RuneAssistColors.cardBorder());
 
@@ -65,7 +65,7 @@ public class ControlPanel extends JPanel {
         timeframePanel.setOpaque(false);
         timeframePanel.setAlignmentX(LEFT_ALIGNMENT);
 
-        JLabel settingsLabel = RuneAssistColors.kicker("WINDOW / RISK");
+        JLabel settingsLabel = RuneAssistColors.kicker("CHECK-IN INTERVAL / RISK");
         settingsLabel.setHorizontalAlignment(SwingConstants.LEFT);
         settingsLabel.setToolTipText(VOLUME_TOOLTIP);
         settingsLabel.setAlignmentX(LEFT_ALIGNMENT);

@@ -36,6 +36,7 @@ public class StatusStrip extends JPanel {
         line.setHorizontalAlignment(SwingConstants.LEFT);
         add(line, BorderLayout.CENTER);
         setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        setVisible(false);
     }
 
     public StatusStrip() {
@@ -51,9 +52,7 @@ public class StatusStrip extends JPanel {
             return;
         }
         List<String> parts = new ArrayList<>();
-        appendSlots(parts);
         appendAged(parts);
-        appendDeployed(parts);
         if (parts.isEmpty()) {
             setVisible(false);
             return;
@@ -83,7 +82,7 @@ public class StatusStrip extends JPanel {
             return;
         }
         int aged = flipManager.countOpenOlderThan(FlipManager.AGED_OPEN_SECONDS);
-        parts.add(aged + " positions > 4h");
+        if (aged > 0) parts.add(aged + (aged == 1 ? " position > 4h" : " positions > 4h"));
     }
 
     private void appendDeployed(List<String> parts) {

@@ -33,7 +33,7 @@ public class FlipPanel extends JPanel {
 
         JLabel itemNameLabel = new JLabel(UIUtilities.truncateString(flip.getCachedItemName(), 22));
         itemNameLabel.setForeground(Color.WHITE);
-        itemNameLabel.setFont(FontManager.getRunescapeSmallFont());
+        itemNameLabel.setFont(FontManager.getRunescapeFont());
 
         JLabel qtyLabel = new JLabel(statusLine(flip));
         qtyLabel.setForeground(RuneAssistColors.MUTED);
@@ -43,7 +43,7 @@ public class FlipPanel extends JPanel {
         leftPanel.add(itemNameLabel);
         leftPanel.add(qtyLabel);
 
-        JLabel profitLabel = new JLabel(UIUtilities.formatProfitWithoutGp(flip.getProfit()));
+        JLabel profitLabel = new JLabel(UIUtilities.formatProfit(flip.getProfit()));
         profitLabel.setForeground(UIUtilities.getProfitColor(flip.getProfit(), config));
         profitLabel.setFont(FontManager.getRunescapeSmallFont());
         profitLabel.setVerticalAlignment(SwingConstants.TOP);
@@ -138,14 +138,18 @@ public class FlipPanel extends JPanel {
         }
     }
 
-    private static String statusLine(FlipV2 flip) {
+    static String statusLine(FlipV2 flip) {
         if (flip.isClosed()) {
-            String qty = String.valueOf(flip.getClosedQuantity());
-            String hold = holdDuration(flip);
-            return hold == null ? qty + " closed" : qty + " · " + hold;
+            return "Sold " + flip.getClosedQuantity() + " · " + closeTime(flip.getClosedTime());
         }
         String age = holdDuration(flip);
-        return age == null ? "open" : "open · " + age;
+        return (flip.getClosedQuantity() > 0 ? "Part sold" : "Open") + (age == null ? "" : " · " + age);
+    }
+
+    private static String closeTime(int epoch) {
+        if (epoch <= 0) return "Time unknown";
+        return java.time.format.DateTimeFormatter.ofPattern("dd MMM HH:mm")
+                .withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.ofEpochSecond(epoch));
     }
 
     private static String holdDuration(FlipV2 flip) {
