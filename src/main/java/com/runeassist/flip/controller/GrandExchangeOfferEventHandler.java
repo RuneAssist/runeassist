@@ -35,6 +35,11 @@ public class GrandExchangeOfferEventHandler {
 
     // state
     private final Queue<Transaction> transactionsToProcess = new ConcurrentLinkedQueue<>();
+    private final OfferObservationTracker observationTracker = new OfferObservationTracker();
+
+    public void resetObservationSession() {
+        observationTracker.reset();
+    }
 
     public void onGameTick() {
         if(!transactionsToProcess.isEmpty()) {
@@ -61,8 +66,14 @@ public class GrandExchangeOfferEventHandler {
         SavedOffer o = SavedOffer.fromGrandExchangeOffer(offer);
 
         SavedOffer prev = offerPersistence.loadOffer(accountHash, slot);
+        boolean loginBurst = client.getGameState() != GameState.LOGGED_IN
+                || client.getTickCount() <= osrsLoginManager.getLastLoginTick() + GE_LOGIN_BURST_WINDOW;
+        boolean firstObservation = observationTracker.observe(accountHash, slot, o, loginBurst,
+                Instant.now().toEpochMilli());
 
         if(Objects.equals(o, prev)) {
+            // Persisted equality does not mean this session observed the placement.
+            if (firstObservation) flipHistorySyncService.reportOfferEvent(slot, o, prev);
             log.debug("skipping duplicate offer event {}", o);
             return;
         }
@@ -94,7 +105,6 @@ public class GrandExchangeOfferEventHandler {
 
         // Own a freshly listed or modified offer for ~10 min (leftover qty after
         // cancel-relist looks like sold==0 and must not abort the same tick).
-        boolean loginBurst = client.getTickCount() <= osrsLoginManager.getLastLoginTick() + GE_LOGIN_BURST_WINDOW;
         if (!loginBurst && isNewOffer(prev, o)) {
             GrandExchangeOfferState st = o.getState();
             if ((st == GrandExchangeOfferState.BUYING || st == GrandExchangeOfferState.SELLING)

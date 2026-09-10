@@ -17,6 +17,12 @@ public class SavedOffer
 	private GrandExchangeOfferState state;
 	private boolean runeAssistSuggestion;
 	private String suggestionId;
+	// Observation metadata is session-local; never restore it as placement proof.
+	private transient long observedAt;
+	private transient long placedAt;
+	private transient String offerInstanceId;
+	private transient String observationSessionId;
+	private transient boolean loginObservation;
 
 	public static SavedOffer fromGrandExchangeOffer(GrandExchangeOffer offer) {
 		SavedOffer o =  new SavedOffer();
