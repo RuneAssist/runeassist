@@ -1,10 +1,17 @@
 package com.runeassist.flip.ui;
 
 import java.util.Locale;
+import java.awt.Font;
+import javax.swing.JLabel;
 
 /** Presentation only: never changes eligibility, telemetry or trading decisions. */
 final class SuggestionCardText {
     private SuggestionCardText() { }
+
+    static void styleText(JLabel label, boolean heading) {
+        label.setFont(label.getFont().deriveFont(heading ? Font.BOLD : Font.PLAIN,
+                heading ? 16f : 14f));
+    }
 
     static String waitStatus(String message) {
         String text = message == null ? "" : message.toLowerCase(Locale.ROOT);
