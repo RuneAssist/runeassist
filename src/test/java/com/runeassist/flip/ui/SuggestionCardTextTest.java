@@ -97,7 +97,7 @@ class SuggestionCardTextTest {
         assertEquals("Waiting for offers to fill", SuggestionCardText.waitStatus("All GE slots are full."));
         assertEquals("More coins needed", SuggestionCardText.waitStatus("Not enough coins for the next flip."));
         assertEquals("Waiting for buy limits", SuggestionCardText.waitStatus("Buy limits exhausted."));
-        assertEquals("Connection unavailable", SuggestionCardText.waitStatus("Ares is unreachable — no flip candidates."));
+        assertEquals("Reconnecting…", SuggestionCardText.waitStatus("Ares is unreachable — no flip candidates."));
         assertEquals("Waiting for fresh prices", SuggestionCardText.waitStatus("Market data is temporarily unavailable."));
     }
 

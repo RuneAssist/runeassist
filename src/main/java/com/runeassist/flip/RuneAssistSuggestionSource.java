@@ -214,8 +214,8 @@ public class RuneAssistSuggestionSource
 
     private String softFailWaitMessage(int remainingSlots)
     {
-        if (remainingSlots <= 0) return WaitSuggestions.WAIT_SLOTS_FULL;
         if (aresUnreachable()) return WaitSuggestions.WAIT_ARES_DOWN;
+        if (remainingSlots <= 0) return WaitSuggestions.WAIT_SLOTS_FULL;
         return WaitSuggestions.WAIT_NO_CANDIDATES;
     }
 
