@@ -139,7 +139,7 @@ public class SuggestionPanel extends JPanel {
         JPanel header = darkPanel(new BorderLayout(), RuneAssistColors.CARD);
         header.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, HEADER_TRAILING_INSET));
         headlineLabel.setForeground(Color.WHITE);
-        headlineLabel.setFont(headlineLabel.getFont().deriveFont(Font.BOLD, 13f));
+        SuggestionCardText.styleText(headlineLabel, true);
         headlineLabel.setBorder(RuneAssistColors.sectionHeaderBorder());
         constrainWidth(headlineLabel);
         suggestionIcon.setVisible(false);
@@ -157,13 +157,14 @@ public class SuggestionPanel extends JPanel {
         JPanel structured = UIUtilities.verticalPanel(RuneAssistColors.CARD);
 
         qtyPriceLabel.setForeground(RuneAssistColors.ACCENT);
-        qtyPriceLabel.setFont(qtyPriceLabel.getFont().deriveFont(11f));
+        SuggestionCardText.styleText(qtyPriceLabel, false);
         qtyPriceLabel.setAlignmentX(LEFT_ALIGNMENT);
         constrainWidth(qtyPriceLabel);
         structured.add(qtyPriceLabel);
 
         additionalInfoText.setHorizontalAlignment(SwingConstants.LEFT);
-        additionalInfoText.setForeground(RuneAssistColors.MUTED);
+        additionalInfoText.setForeground(RuneAssistColors.TEXT);
+        SuggestionCardText.styleText(additionalInfoText, false);
         additionalInfoText.setText("");
         additionalInfoText.setAlignmentX(LEFT_ALIGNMENT);
         additionalInfoText.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
@@ -196,6 +197,7 @@ public class SuggestionPanel extends JPanel {
         suggestionText.setHorizontalAlignment(SwingConstants.CENTER);
         suggestionText.setVerticalAlignment(SwingConstants.CENTER);
         suggestionText.setForeground(RuneAssistColors.TEXT);
+        SuggestionCardText.styleText(suggestionText, false);
         suggestionText.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
         return suggestionTextContainer;
     }
