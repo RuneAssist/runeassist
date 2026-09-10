@@ -32,9 +32,8 @@ import static com.runeassist.flip.util.Constants.MIN_GP_NEEDED_TO_FLIP;
 @Singleton
 @Slf4j
 public class SuggestionPanel extends JPanel {
-    private static final int DEFAULT_PANEL_HEIGHT = 168;
+    private static final int DEFAULT_PANEL_HEIGHT = 148;
     private static final int FLAGS_ROW_HEIGHT = 18;
-    private static final int HEADER_TRAILING_INSET = 52;
     private static final String CARD_STRUCTURED = "structured";
     private static final String CARD_MESSAGE = "message";
     private static final String CARD_SPINNER = "spinner";
@@ -66,6 +65,7 @@ public class SuggestionPanel extends JPanel {
     private JButton skipButton;
     private final JPanel buttonContainer = new JPanel();
     private final JPanel suggestedActionPanel;
+    private final JPanel cardHeader;
     private String innerSuggestionMessage;
     private final CardLayout bodyLayout = new CardLayout();
     private final JPanel bodyCards = new JPanel(bodyLayout);
@@ -118,8 +118,9 @@ public class SuggestionPanel extends JPanel {
         setBackground(RuneAssistColors.SHELL);
 
         suggestedActionPanel = darkPanel(new BorderLayout(), RuneAssistColors.CARD);
-        suggestedActionPanel.setBorder(RuneAssistColors.cardBorder());
-        suggestedActionPanel.add(buildHeader(), BorderLayout.NORTH);
+        suggestedActionPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 16, 8));
+        cardHeader = buildHeader();
+        suggestedActionPanel.add(cardHeader, BorderLayout.NORTH);
 
         bodyCards.setOpaque(true);
         bodyCards.setBackground(RuneAssistColors.CARD);
@@ -137,30 +138,27 @@ public class SuggestionPanel extends JPanel {
 
     private JPanel buildHeader() {
         JPanel header = darkPanel(new BorderLayout(), RuneAssistColors.CARD);
-        header.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, HEADER_TRAILING_INSET));
+        header.setBorder(BorderFactory.createEmptyBorder(0, 22, 0, 22));
+        header.setPreferredSize(new Dimension(210, 18));
         headlineLabel.setForeground(Color.WHITE);
         SuggestionCardText.styleText(headlineLabel, true);
-        headlineLabel.setBorder(RuneAssistColors.sectionHeaderBorder());
+        headlineLabel.setHorizontalAlignment(SwingConstants.CENTER);
         constrainWidth(headlineLabel);
         suggestionIcon.setVisible(false);
         suggestionIcon.setOpaque(true);
         suggestionIcon.setBackground(RuneAssistColors.CARD);
         suggestionIcon.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 6));
         JPanel titleRow = darkPanel(new BorderLayout(), RuneAssistColors.CARD);
-        titleRow.add(suggestionIcon, BorderLayout.WEST);
         titleRow.add(headlineLabel, BorderLayout.CENTER);
         header.add(titleRow, BorderLayout.CENTER);
         return header;
     }
 
     private JPanel buildStructuredCard() {
-        JPanel structured = UIUtilities.verticalPanel(RuneAssistColors.CARD);
-
-        qtyPriceLabel.setForeground(RuneAssistColors.ACCENT);
+        qtyPriceLabel.setForeground(RuneAssistColors.TEXT);
         SuggestionCardText.styleText(qtyPriceLabel, false);
         qtyPriceLabel.setAlignmentX(LEFT_ALIGNMENT);
         constrainWidth(qtyPriceLabel);
-        structured.add(qtyPriceLabel);
 
         additionalInfoText.setHorizontalAlignment(SwingConstants.LEFT);
         additionalInfoText.setForeground(RuneAssistColors.TEXT);
@@ -169,7 +167,6 @@ public class SuggestionPanel extends JPanel {
         additionalInfoText.setAlignmentX(LEFT_ALIGNMENT);
         additionalInfoText.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
         constrainWidth(additionalInfoText);
-        structured.add(additionalInfoText);
 
         flagsRow.setOpaque(true);
         flagsRow.setBackground(RuneAssistColors.CARD);
@@ -180,8 +177,7 @@ public class SuggestionPanel extends JPanel {
         flagsRow.setMinimumSize(flagsSize);
         flagsRow.setPreferredSize(flagsSize);
         constrainWidth(flagsRow);
-        structured.add(flagsRow);
-        return structured;
+        return SuggestionCardText.tradeBody(suggestionIcon, qtyPriceLabel, additionalInfoText);
     }
 
     private static void constrainWidth(JComponent component) {
@@ -203,6 +199,8 @@ public class SuggestionPanel extends JPanel {
     }
 
     private void setHeadline(String text) {
+        cardHeader.setVisible(true);
+        headlineLabel.setVisible(true);
         if (text == null || text.isBlank()) {
             headlineLabel.setText(" ");
             return;
@@ -221,34 +219,41 @@ public class SuggestionPanel extends JPanel {
 
     private void showStructuredCard() {
         bodyLayout.show(bodyCards, CARD_STRUCTURED);
+        int contentHeight = bodyCards.getComponent(0).getPreferredSize().height;
+        setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH,
+                Math.max(DEFAULT_PANEL_HEIGHT, contentHeight + 60)));
+        revalidate();
     }
 
     private void showMessageCard() {
         bodyLayout.show(bodyCards, CARD_MESSAGE);
+        setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH, DEFAULT_PANEL_HEIGHT));
     }
 
     private void setupButtonContainer() {
-        buttonContainer.setLayout(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        buttonContainer.setLayout(new FlowLayout(FlowLayout.CENTER, 14, 0));
         buttonContainer.setBackground(RuneAssistColors.CARD);
         buttonContainer.setBorder(BorderFactory.createEmptyBorder(4, 0, 0, 0));
 
         pauseButton.setToolTipText("Pause suggestions");
         pauseButton.setPreferredSize(new Dimension(22, 22));
         pauseButton.setMargin(new Insets(0, 0, 0, 0));
-        buttonContainer.add(pauseButton);
 
-        skipButton = new JButton("Skip");
+        skipButton = new JButton(new ImageIcon(ImageUtil.loadImageResource(getClass(), "/skip.png")));
+        skipButton.setPreferredSize(new Dimension(22, 22));
+        skipButton.setBorderPainted(false);
+        skipButton.setContentAreaFilled(false);
+        skipButton.setFocusPainted(false);
         skipButton.setToolTipText("Skip suggestion");
         skipButton.setUI(new javax.swing.plaf.basic.BasicButtonUI());
-        RuneAssistColors.styleGhostButton(skipButton);
         skipButton.setMargin(new Insets(1, 6, 1, 6));
         skipButton.addActionListener(e -> suggestionController.skipSuggestion());
-        buttonContainer.add(skipButton);
 
         BufferedImage graphIcon = ImageUtil.loadImageResource(getClass(), "/graph.png");
         buttonContainer.add(buildButton(graphIcon, "Price graph", flipsDialogController::openSuggestionPriceGraph));
         BufferedImage portfolioIcon = ImageUtil.loadImageResource(getClass(), "/pie-chart.png");
         buttonContainer.add(buildButton(portfolioIcon, "Open portfolio", flipsDialogController::showPortfolioTab));
+        buttonContainer.add(pauseButton);
 
         BufferedImage blockImg = ImageUtil.loadImageResource(getClass(), "/block.png");
         ImageIcon blockIcon = new ImageIcon(blockImg);
@@ -262,6 +267,7 @@ public class SuggestionPanel extends JPanel {
         blockButton.addActionListener(e -> confirmAndBlock());
         addHoverIcons(blockButton, () -> blockIcon, () -> blockIconHover);
         buttonContainer.add(blockButton);
+        buttonContainer.add(skipButton);
     }
 
     private void confirmAndBlock() {
@@ -302,7 +308,7 @@ public class SuggestionPanel extends JPanel {
         if (text == null || text.isEmpty()) {
             additionalInfoText.setText("");
         } else {
-            additionalInfoText.setText("<html><body width='196'>" + text + "</body></html>");
+            additionalInfoText.setText("<html><body width='196'><center>" + text + "</center></body></html>");
         }
         additionalInfoText.setToolTipText(tooltip);
         headlineLabel.setToolTipText(tooltip);
@@ -365,6 +371,20 @@ public class SuggestionPanel extends JPanel {
                 showFetchingWait();
                 return;
         }
+        String action;
+        switch (suggestionType) {
+            case BUY: action = suggestion.isHold() ? "Buy and hold"
+                    : suggestion.getFlags() != null && suggestion.getFlags().contains("probe") ? "Trial buy" : "Buy"; break;
+            case SELL: action = shouldSellFromBank(suggestion) ? "Sell from bank" : "Sell"; break;
+            case MODIFY_BUY: action = "Update buy"; break;
+            case MODIFY_SELL: action = "Update sell"; break;
+            case ABORT: action = "Abort offer"; break;
+            default: action = "Decant";
+        }
+        headlineLabel.setVisible(false);
+        cardHeader.setVisible(false);
+        qtyPriceLabel.setText(SuggestionCardText.instruction(action, suggestion.getName(),
+                suggestion.getQuantity(), suggestion.getPrice(), suggestion.isBuySuggestion() || suggestion.isSellSuggestion()));
         populateFlags(null);
 
         innerSuggestionMessage = "";
@@ -372,7 +392,7 @@ public class SuggestionPanel extends JPanel {
             setButtonsVisible(true);
         }
         if (suggestion.isBuySuggestion()) {
-            String profit = formatEstimatedProfit(suggestion.getExpectedProfit(), false);
+            String profit = formatEstimatedProfit(suggestion.getExpectedProfit(), suggestion.getExpectedDuration(), false);
             setAdditionalInfoText(profit, formatSuggestionTooltip(suggestion, suggestion.getExpectedProfit()));
         } else if (suggestion.isSellSuggestion()) {
             Long profit = profitCalculator.calculateSuggestionProfit(suggestion);
@@ -380,7 +400,7 @@ public class SuggestionPanel extends JPanel {
                 profit = Math.round(suggestion.getExpectedProfit());
             }
             String profitText = profit == null ? ""
-                    : formatEstimatedProfit((double) profit, true);
+                    : formatEstimatedProfit((double) profit, suggestion.getExpectedDuration(), true);
             setAdditionalInfoText(
                     profitText,
                     formatSuggestionTooltip(suggestion, profit == null ? null : (double) profit)
@@ -599,13 +619,18 @@ public class SuggestionPanel extends JPanel {
         flagsRow.repaint();
     }
 
-    private String formatEstimatedProfit(Double expectedProfit, boolean lossColor) {
+    private String formatEstimatedProfit(Double expectedProfit, Double duration, boolean lossColor) {
         if (expectedProfit == null) {
             return "";
         }
         Color color = lossColor && expectedProfit < 0
                 ? config.lossAmountColor() : config.profitAmountColor();
-        String text = "Est. " + boldColor(formatProfit(expectedProfit), color) + " gp profit";
+        String text = boldColor(formatProfit(expectedProfit), color) + " profit";
+        if (duration != null && Double.isFinite(duration) && duration > 0) {
+            text += " in ~" + formatSuggestionDuration(duration);
+        } else {
+            text = "Est. " + text;
+        }
         return text;
     }
 
