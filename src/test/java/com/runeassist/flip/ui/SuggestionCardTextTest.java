@@ -1,9 +1,22 @@
 package com.runeassist.flip.ui;
 
 import org.junit.jupiter.api.Test;
+import java.awt.Font;
+import javax.swing.JLabel;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SuggestionCardTextTest {
+    @Test void cardTextHasExplicitReadableSizesEvenWithATinyInheritedFont() {
+        JLabel label = new JLabel("Waiting for a suitable flip");
+        label.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 8));
+        SuggestionCardText.styleText(label, false);
+        assertEquals(14, label.getFont().getSize());
+        assertFalse(label.getFont().isBold());
+        SuggestionCardText.styleText(label, true);
+        assertEquals(16, label.getFont().getSize());
+        assertTrue(label.getFont().isBold());
+    }
+
     @Test void profitAndSizingReasonsStayOutOfTheMainCard() {
         assertEquals("Waiting for a suitable flip", SuggestionCardText.waitStatus(
                 "Available safe batches fall below the 20,000 gp profit target."));
