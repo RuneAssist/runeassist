@@ -57,8 +57,14 @@ public class SuggestionController {
     private MainPanel mainPanel;
     private RuneAssistPanel runeAssistPanel;
     private SuggestionPanel suggestionPanel;
+    private final TradingContext tradingContext = new TradingContext();
 
     public void skipSuggestion() {
+        clientThread.invokeLater(this::skipSuggestionOnClientThread);
+    }
+
+    private void skipSuggestionOnClientThread() {
+        if (!syncTradingContext()) return;
         Suggestion current = suggestionManager.getSuggestion();
         if (accountStatusManager.skipCurrentSuggestion()) {
             flipHistorySyncService.reportSuggestionOutcome(current, "skip");
@@ -74,18 +80,16 @@ public class SuggestionController {
     }
 
     public void togglePause() {
-        if (pausedManager.isPaused()) {
-            pausedManager.setPaused(false);
-            suggestionManager.setSuggestionNeeded(true);
-            suggestionPanel.refresh();
-        } else {
-            pausedManager.setPaused(true);
-            highlightController.removeAll();
-            suggestionPanel.refresh();
-        }
+        // Account identity, GE widgets and suggestion mutations belong to the client thread.
+        clientThread.invokeLater(() -> {
+            pausedManager.setPaused(!pausedManager.isPaused());
+            syncTradingContext();
+            if (suggestionPanel != null) suggestionPanel.refresh();
+        });
     }
 
     void onGameTick() {
+        if (!syncTradingContext()) return;
         if (accountStatusManager.releaseStaleOwnedModify(
                 client.getGrandExchangeOffers(), grandExchange.isSlotOpen())) {
             markGhostModifyActioned();
@@ -218,6 +222,7 @@ public class SuggestionController {
     }
 
     public void getSuggestionAsync() {
+        if (!syncTradingContext()) return;
         if (suggestionManager.isSuggestionRequestInProgress()) {
             suggestionManager.setSuggestionNeeded(true);
             return;
@@ -248,14 +253,16 @@ public class SuggestionController {
         suggestionManager.setSuggestionRefreshPending(false);
         boolean skipGraphData = config.lowDataMode();
         suggestionManager.setGraphDataReadingInProgress(!skipGraphData);
+        final long requestGeneration = tradingContext.generation();
         Consumer<Suggestion> suggestionConsumer = (newSuggestion) ->
-                handleSuggestionReceived(oldSuggestion, newSuggestion, accountStatus, !skipGraphData);
+                receiveForContext(requestGeneration, oldSuggestion, newSuggestion, accountStatus, !skipGraphData);
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
         runeAssistSource.getSuggestionAsync(suggestionConsumer, !skipGraphData);
     }
 
     void handleDumpSuggestion(Suggestion suggestion) {
+        if (!syncTradingContext()) return;
         AccountStatus accountStatus = accountStatusManager.getAccountStatus();
         if (accountStatus == null) {
             log.info("discarding dump suggestion as account status null");
@@ -272,6 +279,56 @@ public class SuggestionController {
         } else {
             log.info("discarding dump suggestion as no free slot");
         }
+    }
+
+    void handleDumpSuggestion(Suggestion suggestion, long streamGeneration) {
+        syncTradingContext();
+        if (tradingContext.accepts(streamGeneration)) handleDumpSuggestion(suggestion);
+    }
+
+    /** Invalidate only suggestion/UI work; offer observation and history sync keep running. */
+    boolean syncTradingContext() {
+        boolean valid = osrsLoginManager.isValidLoginState();
+        Suggestion current = suggestionManager.getSuggestion();
+        boolean preserveDecantGuidance = valid && !pausedManager.isPaused()
+                && tradingContext.sameAccount(osrsLoginManager.getAccountHash())
+                && !grandExchange.isOpen() && current != null && current.isDecantSuggestion();
+        boolean changed = tradingContext.update(osrsLoginManager.getAccountHash(), valid,
+                valid && grandExchange.isOpen(), valid && pausedManager.isPaused());
+        if (changed) {
+            clearContextSuggestion();
+            // Decanting itself requires leaving the GE. Keep only the already
+            // issued local instruction; do not poll or announce new trades.
+            if (preserveDecantGuidance) suggestionManager.setSuggestion(current);
+            suggestionManager.setSuggestionNeeded(tradingContext.canRequest());
+            if (suggestionPanel != null) suggestionPanel.refresh();
+        }
+        return tradingContext.canRequest();
+    }
+
+    void onSessionEnded() {
+        tradingContext.invalidate();
+        clearContextSuggestion();
+    }
+
+    private void clearContextSuggestion() {
+        suggestionManager.setSuggestion(null);
+        suggestionManager.setSuggestionRequestInProgress(false);
+        suggestionManager.setGraphDataReadingInProgress(false);
+        suggestionManager.setSuggestionRefreshPending(false);
+        suggestionManager.setSuggestionNeeded(false);
+        suggestionManager.suggestionsDelayedUntil = 0;
+        suggestionManager.setLastFailureAt(null);
+        highlightController.removeAll();
+    }
+
+    void receiveForContext(long generation, Suggestion oldSuggestion, Suggestion newSuggestion,
+                           AccountStatus accountStatus, boolean loadGraph) {
+        syncTradingContext();
+        // A stale reply must not release a newer request, change another account's
+        // skip/protection state, display a card or emit a notification.
+        if (!tradingContext.accepts(generation)) return;
+        handleSuggestionReceived(oldSuggestion, newSuggestion, accountStatus, loadGraph);
     }
 
     private synchronized void handleSuggestionReceived(Suggestion oldSuggestion, Suggestion newSuggestion,
@@ -308,6 +365,23 @@ public class SuggestionController {
             }
             return;
         }
+        if (!isSellAvailableNow(newSuggestion)) {
+            Suggestion wait = new Suggestion();
+            wait.setType(SuggestionType.WAIT);
+            wait.setMessage("Waiting for inventory update");
+            suggestionManager.setSuggestion(wait);
+            suggestionManager.setSuggestionRequestInProgress(false);
+            suggestionManager.setGraphDataReadingInProgress(false);
+            suggestionManager.setSuggestionNeeded(false);
+            if (suggestionPanel != null) suggestionPanel.refresh();
+            return;
+        }
+        if (newSuggestion.isBuySuggestion() || newSuggestion.isSellSuggestion()) {
+            accountStatusManager.protectListing(newSuggestion.getItemId());
+        }
+        if (newSuggestion.isAbortSuggestion() && newSuggestion.getItemId() > 0) {
+            accountStatusManager.skipItem(newSuggestion.getItemId());
+        }
         if (newSuggestion.isBuyDumpSuggestion() && config.dumpAlertSound()) {
             playDumpAlertSound();
         }
@@ -332,7 +406,9 @@ public class SuggestionController {
         offerManager.setOfferJustPlaced(false);
         suggestionPanel.refresh();
         showNotifications(oldSuggestion, newSuggestion, accountStatus);
+        final long acceptedGeneration = tradingContext.generation();
         SwingUtilities.invokeLater(() -> {
+            if (!tradingContext.accepts(acceptedGeneration) || suggestionManager.getSuggestion() != newSuggestion) return;
             if (flipDialogController.priceGraphPanel == null) {
                 return;
             }
@@ -346,7 +422,10 @@ public class SuggestionController {
             }
         });
         if (client.getVarcIntValue(VarClientInt.INPUT_TYPE) == 14) {
-            clientThread.invokeLater(gePreviousSearch::showSuggestedItemInSearch);
+            clientThread.invokeLater(() -> {
+                if (syncTradingContext() && tradingContext.accepts(acceptedGeneration)
+                        && suggestionManager.getSuggestion() == newSuggestion) gePreviousSearch.showSuggestedItemInSearch();
+            });
         }
         feedSuggestionGraph(newSuggestion, loadGraph);
     }
@@ -358,8 +437,11 @@ public class SuggestionController {
             return;
         }
         suggestionManager.setGraphDataReadingInProgress(true);
+        final long graphGeneration = tradingContext.generation();
         Consumer<Data> graphDataConsumer = (d) -> {
+            if (!tradingContext.accepts(graphGeneration) || suggestionManager.getSuggestion() != suggestion) return;
             SwingUtilities.invokeLater(() -> {
+                if (!tradingContext.accepts(graphGeneration) || suggestionManager.getSuggestion() != suggestion) return;
                 if (flipDialogController.priceGraphPanel != null) {
                     flipDialogController.priceGraphPanel.setSuggestionPriceData(d);
                 }
@@ -419,6 +501,19 @@ public class SuggestionController {
                 grandExchange.hasFillingOffer(s.getItemId()));
     }
 
+    /** Direct sales need current physical stock, not only historical purchases. */
+    public boolean isSellAvailableNow(Suggestion suggestion) {
+        if (suggestion == null || !suggestion.isSellSuggestion()) return true;
+        if (suggestion.getType() == SuggestionType.MODIFY_SELL) {
+            if (grandExchange.hasFillingSellOffer(suggestion.getItemId())) return true;
+            // Cancel/collect guidance is allowed before the relist editor. Once
+            // preparing a new offer, only physical inventory can back its quantity.
+            if (!grandExchange.isSetupOfferOpen() && uncollectedManager.loadAllUncollected(
+                    osrsLoginManager.getAccountHash()).getOrDefault(suggestion.getItemId(), 0L) > 0) return true;
+        }
+        return runeAssistSource.hasInventoryForSale(suggestion);
+    }
+
     private void playDumpAlertSound() {
         try {
             audioPlayer.play(SuggestionController.class, DUMP_ALERT_SOUND, 0);
@@ -438,6 +533,7 @@ public class SuggestionController {
     }
 
     void showNotifications(Suggestion oldSuggestion, Suggestion newSuggestion, AccountStatus accountStatus) {
+        if (!tradingContext.canRequest()) return;
         if (shouldNotify(newSuggestion, oldSuggestion)) {
             String msg = newSuggestion.toMessage();
             if (config.enableTrayNotifications()) {
@@ -457,10 +553,14 @@ public class SuggestionController {
     }
 
     private void showChatNotifications(Suggestion newSuggestion, AccountStatus accountStatus) {
-        if (accountStatus.isCollectNeeded(newSuggestion, grandExchange.isSetupOfferOpen())) {
-            clientThread.invokeLater(() -> showChatNotification("RuneAssist: Collect items"));
-        }
-        clientThread.invokeLater(() -> showChatNotification(newSuggestion.toMessage()));
+        final long notificationGeneration = tradingContext.generation();
+        final boolean collectNeeded = accountStatus.isCollectNeeded(newSuggestion, grandExchange.isSetupOfferOpen());
+        clientThread.invokeLater(() -> {
+            if (!syncTradingContext() || !tradingContext.accepts(notificationGeneration)
+                    || suggestionManager.getSuggestion() != newSuggestion) return;
+            if (collectNeeded) showChatNotification("RuneAssist: Collect items");
+            showChatNotification(newSuggestion.toMessage());
+        });
     }
 
     private void showChatNotification(String message) {

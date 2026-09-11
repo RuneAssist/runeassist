@@ -94,6 +94,12 @@ public class GrandExchange {
         return slotMatchingItem(itemId, -1) >= 0;
     }
 
+    boolean hasFillingSellOffer(int itemId) {
+        GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
+        return offers != null && Arrays.stream(offers).anyMatch(offer -> offer != null
+                && offer.getItemId() == itemId && offer.getState() == GrandExchangeOfferState.SELLING);
+    }
+
     private static boolean isFillingOffer(GrandExchangeOffer o) {
         if (o == null) {
             return false;
@@ -143,7 +149,10 @@ public class GrandExchange {
     }
 
     public boolean isOpen() {
-        return client.getWidget(InterfaceID.GE_OFFERS, 7) != null;
+        Widget offers = client.getWidget(InterfaceID.GE_OFFERS, 7);
+        Widget editor = getOfferContainerWidget();
+        // Home slot widgets can be hidden while the offer editor is visible.
+        return offers != null && !offers.isHidden() || editor != null && !editor.isHidden();
     }
 
     public boolean isPreviousSearchSet() {

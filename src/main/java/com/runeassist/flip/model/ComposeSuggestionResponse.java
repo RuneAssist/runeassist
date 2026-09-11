@@ -46,6 +46,11 @@ public class ComposeSuggestionResponse
         private String message = "";
         private String why = "";
         private Double expectedProfit;
+        private String profitEstimateBasis;
+        private Double potentialProfitGp;
+        private Long targetSellPrice;
+        private Long targetSellTaxGp;
+        private String profitModelVersion;
         /** Expected fill duration in <em>seconds</em> (same as local {@link Suggestion}). */
         private Double expectedDuration;
         private int geLimit;

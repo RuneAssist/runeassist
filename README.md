@@ -10,7 +10,7 @@ Plugin Hub maintainers: see `plugin-hub/README.md` for the manifest draft and su
 
 ## Data sent to servers
 
-- **(default-on)** `POST https://runeassist.com/v1/suggestion` — capital, live GE offers, held stock with avg buy, risk/timeframe, buy-limit usage, blocked/skipped ids, and IP. Returns a typed suggestion (ABORT/MODIFY/SELL/BUY/WAIT). The request remains transient unless training contribution is enabled. Soft-fails to a WAIT card if unreachable.
+- **(default-on, while the GE is open and suggestions are not paused)** `POST https://runeassist.com/v1/suggestion` — capital, live GE offers, held stock with avg buy, current inventory quantities limited to already tracked held item IDs, risk/timeframe, buy-limit usage, blocked/skipped ids, and IP. Returns a typed suggestion (ABORT/MODIFY/SELL/BUY/WAIT). No full inventory, bank contents or location coordinates are sent. The request remains transient unless training contribution is enabled. Soft-fails to a WAIT card if unreachable.
 - **(default-on, market ranking / helpers)** `POST https://runeassist.com/v1/flips` — capital, timeframe, risk level, free GE slots, per-item remaining/used buy limits, blocked and skipped item ids, and IP. Ranks flip candidates server-side (also used by tools/tests); no RSN.
 - **(default-on)** `GET https://runeassist.com/v1/graph` — price graph data for the item you're viewing.
 - **(when Dump alerts prefs are on + GE open)** `POST https://runeassist.com/v1/dump-alerts` — long-lived stream of buy-side dump suggestions (length-prefixed JSON). Filters use your dump min-profit / F2P / blocklist prefs; no RSN.
@@ -19,6 +19,8 @@ Plugin Hub maintainers: see `plugin-hub/README.md` for the manifest draft and su
 - **(on demand)** Bug reports ("Report a bug" in Preferences) — sends your report text, RSN, and an optional screenshot (opt-in checkbox, off by default) only after you confirm the dialog, which discloses where the data goes.
 
 Local data directory: `~/.runelite/runeassist-flip/` (suggestion/held-cost state and the durable unacked GE transaction queue pending server acknowledgement).
+
+Suggestions automatically show a quiet **Away** state when the GE is closed and refresh when it reopens. Manual pause remains independent for each account. Offer observation, personal history and enabled training/cloud-sync channels keep running while away or paused. Already issued decant instructions can remain visible while visiting the decanter; no new trade prompts are fetched while the GE is closed.
 
 If Plugin Hub Flipping Copilot is also enabled, RuneAssist yields (see `HubPluginConflict`).
 
