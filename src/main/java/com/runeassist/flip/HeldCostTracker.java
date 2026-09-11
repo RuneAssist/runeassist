@@ -42,7 +42,16 @@ public class HeldCostTracker
     {
         HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
-        if (state == null || state == GrandExchangeOfferState.EMPTY || itemId <= 0) return;
+        if (state == null) return;
+        if (state == GrandExchangeOfferState.EMPTY)
+        {
+            // Collection ends this offer instance, not ownership of the items.
+            // Keeping the cumulative counters would make a same-item replacement
+            // look like another update of the old offer and lose its fills.
+            if (acc.slots.remove(slot) != null) save(displayName, acc);
+            return;
+        }
+        if (itemId <= 0) return;
         boolean buy = state == GrandExchangeOfferState.BUYING || state == GrandExchangeOfferState.BOUGHT
             || state == GrandExchangeOfferState.CANCELLED_BUY;
 

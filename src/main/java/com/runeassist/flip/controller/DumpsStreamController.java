@@ -43,6 +43,7 @@ public class DumpsStreamController {
     private final AccountStatusManager accountStatusManager;
     private final AtomicReference<Call> activeCall = new AtomicReference<>();
     private final ReactiveState<Boolean> shouldSubscribe;
+    private long subscribedGeneration = -1;
 
     @Inject
     public DumpsStreamController(
@@ -71,7 +72,7 @@ public class DumpsStreamController {
                                 && Boolean.TRUE.equals(isGrandExchangeOpen));
         shouldSubscribe.registerListener(active -> {
             if (Boolean.TRUE.equals(active)) {
-                consumeDumps();
+                clientThread.invokeLater(this::onGameTick);
             } else {
                 ensureUnsubscribed();
             }
@@ -85,25 +86,44 @@ public class DumpsStreamController {
         }
     }
 
+    /** Keep the optional stream bound to the same local account/trading session. */
+    void onGameTick() {
+        long generation = suggestionController.getTradingContext().generation();
+        boolean active = Boolean.TRUE.equals(shouldSubscribe.get())
+                && suggestionController.getTradingContext().canRequest();
+        if (!active || generation != subscribedGeneration || activeCall.get() == null) {
+            ensureUnsubscribed();
+            subscribedGeneration = generation;
+            if (active) consumeDumps();
+        }
+    }
+
     private void consumeDumps() {
-        if (!Boolean.TRUE.equals(shouldSubscribe.get())) {
+        if (!Boolean.TRUE.equals(shouldSubscribe.get())
+                || !suggestionController.getTradingContext().canRequest()) {
             return;
         }
+        final long streamGeneration = suggestionController.getTradingContext().generation();
         Call previous = activeCall.get();
         Map<String, Object> filters = buildFilters();
         Call call = apiRequestHandler.asyncConsumeDumpAlerts(
                 filters,
-                this::consumeDumpStream,
+                response -> consumeDumpStream(response, streamGeneration),
                 error -> {
                     log.warn("dump alerts connection failed, re-connecting: {}", error.getMessage());
-                    if (Boolean.TRUE.equals(shouldSubscribe.get())) {
-                        consumeDumps();
-                    }
+                    retryIfCurrent(streamGeneration);
                 });
         log.info("subscribing to dump alerts");
         if (activeCall.getAndSet(call) != previous || !Boolean.TRUE.equals(shouldSubscribe.get())) {
             ensureUnsubscribed();
         }
+    }
+
+    private void retryIfCurrent(long generation) {
+        clientThread.invokeLater(() -> {
+            if (Boolean.TRUE.equals(shouldSubscribe.get())
+                    && suggestionController.getTradingContext().accepts(generation)) consumeDumps();
+        });
     }
 
     private Map<String, Object> buildFilters() {
@@ -135,10 +155,10 @@ public class DumpsStreamController {
     }
 
     /** Each frame is a uvarint byte length followed by that many bytes of JSON; zero-length = keepalive. */
-    private void consumeDumpStream(Response response) {
+    private void consumeDumpStream(Response response, long streamGeneration) {
         try (Response resp = response) {
             BufferedSource source = resp.body().source();
-            while (activeCall.get() != null) {
+            while (activeCall.get() != null && suggestionController.getTradingContext().accepts(streamGeneration)) {
                 long length = readUvarint(source);
                 if (length == 0) {
                     continue;
@@ -146,12 +166,12 @@ public class DumpsStreamController {
                 if (length < 0 || length > MAX_FRAME_BYTES) {
                     throw new IOException("invalid dump frame length: " + length);
                 }
-                handleDumpMessage(source.readByteArray(length));
+                handleDumpMessage(source.readByteArray(length), streamGeneration);
             }
         } catch (IOException e) {
             if (Boolean.TRUE.equals(shouldSubscribe.get())) {
                 log.warn("dump alerts stream error", e);
-                consumeDumps();
+                retryIfCurrent(streamGeneration);
             } else {
                 log.info("consumeDumpStream ended gracefully");
             }
@@ -170,7 +190,7 @@ public class DumpsStreamController {
         throw new IOException("dump frame length is not a valid uvarint");
     }
 
-    private void handleDumpMessage(byte[] data) {
+    private void handleDumpMessage(byte[] data, long streamGeneration) {
         Suggestion suggestion = apiRequestHandler.decodeDumpSuggestionFrame(data);
         if (suggestion == null) {
             log.warn("dump suggestion decode failed");
@@ -181,7 +201,7 @@ public class DumpsStreamController {
         if (suggestion.getMessage() == null || suggestion.getMessage().isEmpty()) {
             suggestion.setMessage("<html><b><font color=#FA4A4B>Dump alert!!</font></b></html>");
         }
-        clientThread.invoke(() -> suggestionController.handleDumpSuggestion(suggestion));
+        clientThread.invoke(() -> suggestionController.handleDumpSuggestion(suggestion, streamGeneration));
         log.info("received dump suggestion {} {}", suggestion.getName(), suggestion.getType());
     }
 }

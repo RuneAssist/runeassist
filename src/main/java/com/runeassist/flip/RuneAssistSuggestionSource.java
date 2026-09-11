@@ -10,6 +10,8 @@ import com.runeassist.flip.model.RiskLevel;
 import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.model.SuggestionPreferencesManager;
 import com.runeassist.flip.model.SuggestionType;
+import com.runeassist.flip.model.Inventory;
+import com.runeassist.flip.model.InventoryAvailabilitySnapshot;
 import com.runeassist.flip.controller.BugReportClient;
 import com.runeassist.flip.controller.FlipHistorySyncService;
 import com.runeassist.flip.config.RuneAssistConfig;
@@ -71,6 +73,10 @@ public class RuneAssistSuggestionSource
         final long[][] offersBySlot = readOffers(displayName);
         final Map<Integer, SavedOffer> savedOffers = readSavedOffers(client.getAccountHash(), offersBySlot);
         final Map<Integer, long[]> held = heldCostTracker.held(displayName);
+        final ItemContainer currentInventory = client.getItemContainer(InventoryID.INVENTORY);
+        final InventoryAvailabilitySnapshot availability = InventoryAvailabilitySnapshot.from(held,
+            Inventory.fromRunelite(currentInventory, client).getItemAmounts(),
+            currentInventory != null && osrsLoginManager.isValidLoginState() && !osrsLoginManager.hasJustLoggedIn());
         final long coins = inventoryCoins();
         // grandExchange slot helpers are client-thread-only — snapshot before background work.
         final OwnedModifySnapshot ownedModifySnap = computeOwnedModify();
@@ -86,6 +92,11 @@ public class RuneAssistSuggestionSource
         final Set<Integer> skipOffers = new HashSet<>(accountStatusManager.getSkipOfferItemIds());
         final Map<Integer, Long> modifyDismissedMs = accountStatusManager.getModifyDismissedMs();
         final Set<Integer> blocked = new HashSet<>(preferences.blockedItems());
+        final Set<Integer> protectAbort = new HashSet<>(accountStatusManager.getProtectAbortItemIds());
+        final String deviceId = clientDeviceId();
+        final String linkedAccount = config.contributeTrainingData() ? linkedOsrsAccountId(displayName) : null;
+        final boolean timeAbortEnabled = preferences.isTimeBasedAbortEnabled();
+        final int timeAbortMinutes = preferences.getTimeBasedAbortMinutes();
         final long minProfit = preferences.getMinPredictedProfit() != null
             ? preferences.getMinPredictedProfit()
             : SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT;
@@ -113,22 +124,18 @@ public class RuneAssistSuggestionSource
                 int ge = market.geLimit(e.getKey());
                 if (ge > 0) remainingHint.put(e.getKey(), Math.max(0, ge - e.getValue()));
             }
-            Set<Integer> protectAbort = new HashSet<>(accountStatusManager.getProtectAbortItemIds());
 
             ComposeSuggestionRequest composeReq = buildComposeRequest(
                 coins, timeframe, risk, f2pOnly, maxSlots, remainingSlots, minProfit,
                 remainingHint, usedLimit, blocked, skipped, skipOffers, modifyDismissedMs, protectAbort,
                 offersBySlot, savedOffers, held, ownedModifySnap, includeGraph,
-                clientDeviceId(), preferences.isTimeBasedAbortEnabled(),
-                preferences.getTimeBasedAbortMinutes());
-            if (config.contributeTrainingData())
+                deviceId, timeAbortEnabled, timeAbortMinutes);
+            composeReq.setInventorySnapshotKnown(availability.isInventorySnapshotKnown());
+            composeReq.setAvailableInventory(availability.getAvailableInventory());
+            if (linkedAccount != null && !linkedAccount.isEmpty())
             {
-                String linkedAccount = linkedOsrsAccountId(displayName);
-                if (linkedAccount != null && !linkedAccount.isEmpty())
-                {
-                    composeReq.setContributeTrainingData(true);
-                    composeReq.setOsrsAccountId(linkedAccount);
-                }
+                composeReq.setContributeTrainingData(true);
+                composeReq.setOsrsAccountId(linkedAccount);
             }
             try
             {
@@ -154,16 +161,6 @@ public class RuneAssistSuggestionSource
                 {
                     suggestion = null;
                 }
-                else if (t == SuggestionType.BUY || t == SuggestionType.SELL
-                        || t == SuggestionType.MODIFY_BUY || t == SuggestionType.MODIFY_SELL)
-                {
-                    accountStatusManager.protectListing(id);
-                }
-            }
-            if (suggestion != null && suggestion.isAbortSuggestion())
-            {
-                int abortId = suggestion.getItemId();
-                if (abortId > 0) accountStatusManager.skipItem(abortId);
             }
             }
             catch (Exception e)
@@ -468,6 +465,17 @@ public class RuneAssistSuggestionSource
         }
         Long hash = osrsLoginManager.getAccountHash();
         return hash != null ? String.valueOf(hash) : "";
+    }
+
+    /** Client-thread recheck after a network round trip or an inventory update. */
+    public boolean hasInventoryForSale(Suggestion suggestion) {
+        if (suggestion == null || suggestion.getItemId() <= 0 || suggestion.getQuantity() <= 0
+                || !osrsLoginManager.isValidLoginState() || osrsLoginManager.hasJustLoggedIn()) return false;
+        long[] held = heldCostTracker.held(osrsLoginManager.getPlayerDisplayName()).get(suggestion.getItemId());
+        if (held == null || held.length == 0 || held[0] < suggestion.getQuantity()) return false;
+        ItemContainer container = client.getItemContainer(InventoryID.INVENTORY);
+        return container != null && Inventory.fromRunelite(container, client)
+                .getTotalAmount(suggestion.getItemId()) >= suggestion.getQuantity();
     }
 
     private String linkedOsrsAccountId(String displayName)
