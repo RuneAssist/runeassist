@@ -16,6 +16,8 @@ import java.util.*;
 @NoArgsConstructor
 @Slf4j
 public class Suggestion {
+    private DecantPlan decantPlan;
+    private boolean decantComplete;
     private SuggestionType type;
     private int boxId;
     private int itemId;
