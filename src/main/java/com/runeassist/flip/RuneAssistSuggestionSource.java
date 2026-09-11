@@ -47,6 +47,7 @@ public class RuneAssistSuggestionSource
     @Inject private ClientThread clientThread;
     @Inject private AresMarketClient market;
     @Inject private HeldCostTracker heldCostTracker;
+    @Inject private DecantWorkflow decantWorkflow;
     @Inject private SuggestionPreferencesManager preferences;
     @Inject private AccountStatusManager accountStatusManager;
     @Inject private OsrsLoginManager osrsLoginManager;
@@ -71,6 +72,12 @@ public class RuneAssistSuggestionSource
         final long[][] offersBySlot = readOffers(displayName);
         final Map<Integer, SavedOffer> savedOffers = readSavedOffers(client.getAccountHash(), offersBySlot);
         final Map<Integer, long[]> held = heldCostTracker.held(displayName);
+        final String linkedAccount = linkedOsrsAccountId(displayName);
+        decantWorkflow.bind(linkedAccount);
+        decantWorkflow.reconcile(held);
+        final com.runeassist.flip.model.DecantPlan decantPlan = decantWorkflow.plan();
+        final Map<String, Integer> decantInventory = decantWorkflow.inventory();
+        final boolean decantInventoryIsolated = decantWorkflow.isolatedInventory();
         final long coins = inventoryCoins();
         // grandExchange slot helpers are client-thread-only — snapshot before background work.
         final OwnedModifySnapshot ownedModifySnap = computeOwnedModify();
@@ -121,14 +128,17 @@ public class RuneAssistSuggestionSource
                 offersBySlot, savedOffers, held, ownedModifySnap, includeGraph,
                 clientDeviceId(), preferences.isTimeBasedAbortEnabled(),
                 preferences.getTimeBasedAbortMinutes());
-            if (config.contributeTrainingData())
+            if (linkedAccount != null && !linkedAccount.isEmpty())
             {
-                String linkedAccount = linkedOsrsAccountId(displayName);
-                if (linkedAccount != null && !linkedAccount.isEmpty())
-                {
-                    composeReq.setContributeTrainingData(true);
-                    composeReq.setOsrsAccountId(linkedAccount);
-                }
+                decantWorkflow.flush(linkedAccount);
+                composeReq.setContributeTrainingData(config.contributeTrainingData());
+                composeReq.setOsrsAccountId(linkedAccount);
+                composeReq.setDecantWorkflowVersion(1);
+                composeReq.setDecantPlan(decantPlan);
+                composeReq.setDecantInventory(decantInventory);
+                composeReq.setDecantInventoryIsolated(decantInventoryIsolated);
+                composeReq.setDecantPending(decantWorkflow.pending());
+                composeReq.setDecantConversionId(decantWorkflow.conversionId());
             }
             try
             {
@@ -203,7 +213,10 @@ public class RuneAssistSuggestionSource
                 result.setTimeIssued(Instant.now());
             }
             final Suggestion delivered = result;
-            clientThread.invokeLater(() -> consumer.accept(delivered));
+            clientThread.invokeLater(() -> {
+                decantWorkflow.accept(linkedAccount, delivered);
+                consumer.accept(delivered);
+            });
         });
     }
 

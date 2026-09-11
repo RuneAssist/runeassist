@@ -401,6 +401,17 @@ public class SuggestionPanel extends JPanel {
         cardHeader.setVisible(false);
         qtyPriceLabel.setText(SuggestionCardText.instruction(action, suggestion.getName(),
                 suggestion.getQuantity(), suggestion.getPrice(), suggestion.isBuySuggestion() || suggestion.isSellSuggestion()));
+        if (suggestion.getDecantPlan() != null) {
+            com.runeassist.flip.model.DecantPlan plan = suggestion.getDecantPlan();
+            qtyPriceLabel.setToolTipText(suggestion.getMessage());
+            if (suggestion.isDecantSuggestion()) {
+                qtyPriceLabel.setText(SuggestionCardText.instruction("Decant at Bob Barter to",
+                    plan.getSellName(), suggestion.getQuantity() * plan.getBuyDose() / 4, 0, false));
+            } else if (suggestion.isBuySuggestion()) {
+                qtyPriceLabel.setText(SuggestionCardText.instruction("Buy to decant", suggestion.getName(),
+                    suggestion.getQuantity(), suggestion.getPrice(), true));
+            }
+        } else qtyPriceLabel.setToolTipText(null);
         populateFlags(null);
 
         if (!suggestion.isWaitSuggestion()) {

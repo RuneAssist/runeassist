@@ -87,7 +87,7 @@ public class AresMarketClient
             return null;
         }
         JsonObject root = postJson(ARES_SUGGESTION, gson.toJson(request), "suggestion",
-            request.isContributeTrainingData());
+            request.isContributeTrainingData() || request.getDecantWorkflowVersion() == 1);
         if (root == null)
         {
             lastComposeUnreachable = true;
