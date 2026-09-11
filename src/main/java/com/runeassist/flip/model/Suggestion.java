@@ -33,6 +33,11 @@ public class Suggestion {
      */
     private String why = "";
     private Double expectedProfit;
+    private String profitEstimateBasis;
+    private Double potentialProfitGp;
+    private Long targetSellPrice;
+    private Long targetSellTaxGp;
+    private String profitModelVersion;
     private Double expectedDuration;
     @SerializedName("is_hold")
     private boolean isHold;

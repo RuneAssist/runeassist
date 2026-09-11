@@ -15,6 +15,22 @@ public class ComposeSuggestionMapperTest
 {
     private final Gson gson = new Gson();
 
+    @Test public void preservesForecastBasisAndOriginalExitWithoutInventingLegacyFields() {
+        String json = "{\"ok\":true,\"suggestion\":{\"type\":\"buy\",\"expectedProfit\":21000,"
+                + "\"profitEstimateBasis\":\"heuristic_net\",\"potentialProfitGp\":24000,"
+                + "\"targetSellPrice\":1234,\"targetSellTaxGp\":24,\"profitModelVersion\":\"quote-net-v1\"}}";
+        Suggestion suggestion = ComposeSuggestionMapper.toSuggestion(gson.fromJson(json, ComposeSuggestionResponse.class));
+        assertEquals("heuristic_net", suggestion.getProfitEstimateBasis());
+        assertEquals(24000.0, suggestion.getPotentialProfitGp());
+        assertEquals(1234L, suggestion.getTargetSellPrice());
+        assertEquals(24L, suggestion.getTargetSellTaxGp());
+        assertEquals("quote-net-v1", suggestion.getProfitModelVersion());
+        Suggestion legacy = ComposeSuggestionMapper.toSuggestion(gson.fromJson(
+                "{\"ok\":true,\"suggestion\":{\"type\":\"buy\"}}", ComposeSuggestionResponse.class));
+        assertNull(legacy.getTargetSellPrice());
+        assertNull(legacy.getProfitEstimateBasis());
+    }
+
     @Test
     public void mapsBuySuggestionFromJson()
     {

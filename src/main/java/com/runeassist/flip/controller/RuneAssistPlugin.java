@@ -233,11 +233,24 @@ public class RuneAssistPlugin extends Plugin {
 		net.runelite.api.GrandExchangeOffer o = event.getOffer();
 		if (o != null) {
 			net.runelite.api.Player p = client.getLocalPlayer();
-			String rsn = p != null ? p.getName() : "anon";
-			heldCostTracker.onOffer(rsn, event.getSlot(), o.getState(), o.getItemId(),
-				o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
+			String rsn = p != null ? p.getName() : null;
+			if (shouldObserveHeldOffer(rsn, client.getGameState(), o.getState(),
+					osrsLoginManager.isValidLoginState(), osrsLoginManager.hasJustLoggedIn())) {
+				heldCostTracker.onOffer(rsn, event.getSlot(), o.getState(), o.getItemId(),
+					o.getPrice(), o.getTotalQuantity(), o.getQuantitySold(), o.getSpent());
+			}
 		}
 		clientThread.invokeLater(() -> highlightController.redraw());
+	}
+
+	static boolean shouldObserveHeldOffer(String name, GameState gameState, GrandExchangeOfferState offerState,
+			boolean validLogin, boolean loginBurst) {
+		if (name == null || name.trim().isEmpty() || offerState == null) return false;
+		// Client teardown/login clears are not actual collections. Keep cumulative
+		// counters so the next login snapshot cannot count the old fills twice.
+		// Non-empty login observations still recover legitimate offline fill deltas.
+		return offerState != GrandExchangeOfferState.EMPTY
+				|| gameState == GameState.LOGGED_IN && validLogin && !loginBurst;
 	}
 
 	@Subscribe
@@ -296,6 +309,7 @@ public class RuneAssistPlugin extends Plugin {
 		grandExchangeOpenRS.set(grandExchange.isOpen());
 
 		suggestionController.onGameTick();
+		dumpsStreamController.onGameTick();
 		offerEventHandler.onGameTick();
 		osrsLoginRS.set(osrsLoginRS.get().nextState(client));
 	}
@@ -352,6 +366,7 @@ public class RuneAssistPlugin extends Plugin {
 		if (event.getGameState() == GameState.LOGIN_SCREEN || event.getGameState() == GameState.LOGGING_IN
 				|| event.getGameState() == GameState.HOPPING || event.getGameState() == GameState.CONNECTION_LOST) {
 			offerEventHandler.resetObservationSession();
+			suggestionController.onSessionEnded();
 		}
 		switch (event.getGameState())
 		{

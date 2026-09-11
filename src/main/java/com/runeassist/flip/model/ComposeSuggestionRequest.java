@@ -49,6 +49,10 @@ public class ComposeSuggestionRequest
     /** Held stock with FIFO avg buy (gp). */
     private List<HeldSnapshot> held = new ArrayList<>();
 
+    /** Current physical inventory proof, limited to already tracked held item IDs. */
+    private boolean inventorySnapshotKnown;
+    private List<InventoryAvailabilitySnapshot.ItemQuantity> availableInventory = new ArrayList<>();
+
     /** In-progress GE modify (cancel-then-relist); null if none. */
     private OwnedModifySnapshot ownedModify;
 
