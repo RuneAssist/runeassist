@@ -46,6 +46,11 @@ public final class ComposeSuggestionMapper
             return null;
         }
         Suggestion s = new Suggestion();
+        s.setDecantComplete(dto.isDecantComplete());
+        if (dto.getDecantPlan() != null) {
+            if (!dto.getDecantPlan().isValid()) return null;
+            s.setDecantPlan(dto.getDecantPlan());
+        }
         s.setType(type);
         s.setBoxId(dto.getBoxId());
         s.setItemId(dto.getItemId());

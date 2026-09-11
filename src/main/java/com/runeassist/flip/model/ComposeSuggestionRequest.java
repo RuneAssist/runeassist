@@ -13,6 +13,12 @@ import java.util.Map;
 @Setter
 public class ComposeSuggestionRequest
 {
+    private int decantWorkflowVersion;
+    private DecantPlan decantPlan;
+    private Map<String, Integer> decantInventory;
+    private boolean decantPending;
+    private boolean decantInventoryIsolated;
+    private String decantConversionId;
     /** Available coins (same meaning as {@code /v1/flips} {@code capital}). */
     private long capital;
     private int timeframeMinutes = 5;

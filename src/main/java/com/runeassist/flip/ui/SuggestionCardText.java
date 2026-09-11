@@ -51,6 +51,10 @@ final class SuggestionCardText {
 
     static String waitStatus(String message) {
         String text = message == null ? "" : message.toLowerCase(Locale.ROOT);
+        if (text.contains("bank spare potions")) return "Bank spare potions for decant";
+        if (text.contains("bank other potions")) return "Bank other potions first";
+        if (text.contains("decant history")) return "Syncing decant history";
+        if (text.contains("checking potion prices")) return "Checking potion prices";
         if (text.contains("market data") && text.contains("unavailable")) return "Waiting for fresh prices";
         if (text.contains("unreachable") || text.contains("unavailable") || text.contains("offline")) {
             return "Reconnecting…";

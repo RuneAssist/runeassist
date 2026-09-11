@@ -37,6 +37,8 @@ public class ComposeSuggestionResponse
     @Setter
     public static class SuggestionDto
     {
+        private DecantPlan decantPlan;
+        private boolean decantComplete;
         private String type;
         private int boxId = -1;
         private int itemId;

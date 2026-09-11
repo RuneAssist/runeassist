@@ -125,6 +125,8 @@ public class RuneAssistPlugin extends Plugin {
 	@Inject
 	private com.runeassist.flip.HeldCostTracker heldCostTracker;
 	@Inject
+	private com.runeassist.flip.DecantWorkflow decantWorkflow;
+	@Inject
 	private FlipHistorySyncService flipHistorySyncService;
 	/** Constructed so Guice registers dump-alert stream listeners. */
 	@Inject
@@ -293,6 +295,7 @@ public class RuneAssistPlugin extends Plugin {
 	@Subscribe
 	public void onGameTick(GameTick event) {
 		bankStateRS.onGameTick();
+		decantWorkflow.onTick(isBankOpen());
 		grandExchangeOpenRS.set(grandExchange.isOpen());
 
 		suggestionController.onGameTick();
@@ -307,6 +310,7 @@ public class RuneAssistPlugin extends Plugin {
 
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked event) {
+		decantWorkflow.onMenu(event);
 		int slot = grandExchange.getOpenSlot();
 		grandExchangeCollectHandler.handleCollect(event, slot);
 		gameUiChangesHandler.handleMenuOptionClicked(event);
@@ -349,6 +353,7 @@ public class RuneAssistPlugin extends Plugin {
 
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event) {
+		if (event.getGameState() != GameState.LOGGED_IN) decantWorkflow.disarm();
 		if (event.getGameState() == GameState.LOGIN_SCREEN || event.getGameState() == GameState.LOGGING_IN
 				|| event.getGameState() == GameState.HOPPING || event.getGameState() == GameState.CONNECTION_LOST) {
 			offerEventHandler.resetObservationSession();
