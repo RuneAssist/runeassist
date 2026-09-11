@@ -10,6 +10,7 @@ import java.awt.BorderLayout;
 import java.awt.GridBagLayout;
 import java.text.NumberFormat;
 import net.runelite.client.ui.FontManager;
+import com.runeassist.flip.model.Suggestion;
 
 /** Presentation only: never changes eligibility, telemetry or trading decisions. */
 final class SuggestionCardText {
@@ -65,6 +66,22 @@ final class SuggestionCardText {
 
     static String escape(String text) {
         return text == null ? "" : text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    static String profitBasis(Suggestion suggestion) {
+        if (suggestion == null) return "";
+        if (suggestion.isSellSuggestion()) {
+            return "Potential profit if the full quantity sells at this price, after tax. Not guaranteed.";
+        }
+        if (suggestion.isBuySuggestion()) {
+            if (suggestion.getProfitEstimateBasis() == null
+                    || "heuristic_net".equals(suggestion.getProfitEstimateBasis())) {
+                return "Estimate from quotes, tax and a slippage allowance; not a calibrated expected return."
+                        + " Partial fills and repricing can reduce profit.";
+            }
+            return "Estimated profit, not a guarantee. Partial fills and repricing can reduce profit.";
+        }
+        return "";
     }
 
     static String details(String message, String why) {

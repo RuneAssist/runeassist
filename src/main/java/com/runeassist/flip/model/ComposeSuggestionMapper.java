@@ -55,6 +55,11 @@ public final class ComposeSuggestionMapper
         s.setName(dto.getName() != null ? dto.getName() : "");
         s.setMessage(dto.getMessage() != null ? dto.getMessage() : "");
         s.setWhy(dto.getWhy() != null ? dto.getWhy() : "");
+        s.setProfitEstimateBasis(dto.getProfitEstimateBasis());
+        s.setPotentialProfitGp(dto.getPotentialProfitGp());
+        s.setTargetSellPrice(dto.getTargetSellPrice());
+        s.setTargetSellTaxGp(dto.getTargetSellTaxGp());
+        s.setProfitModelVersion(dto.getProfitModelVersion());
         if (dto.getExpectedProfit() != null)
         {
             s.setExpectedProfit(dto.getExpectedProfit());

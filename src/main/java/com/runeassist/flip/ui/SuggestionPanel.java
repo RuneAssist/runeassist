@@ -486,6 +486,11 @@ public class SuggestionPanel extends JPanel {
         showStaticSuggestion("Open GE", "Open the Grand Exchange to continue");
     }
 
+    public void suggestAway() {
+        setServerMessage("");
+        showStaticSuggestion("Away", "Open the GE for suggestions");
+    }
+
     public void setIsPausedMessage() {
         showStaticSuggestion("Paused", "Suggestions are paused");
     }
@@ -559,6 +564,11 @@ public class SuggestionPanel extends JPanel {
     public void displaySuggestion() {
         Suggestion suggestion = suggestionManager.getSuggestion();
         setServerMessage("");
+        if (!grandExchange.isOpen() && (suggestion == null || !suggestion.isDecantSuggestion())) {
+            suggestAway();
+            highlightController.removeAll();
+            return;
+        }
         if (suggestion == null) {
             showFetchingWait();
             suggestionManager.setSuggestionNeeded(true);
@@ -580,6 +590,13 @@ public class SuggestionPanel extends JPanel {
         if(accountStatus == null) {
             showFetchingWait();
             suggestionManager.setSuggestionNeeded(true);
+            return;
+        }
+        if (!suggestionController.isSellAvailableNow(suggestion)) {
+            suggestionManager.setSuggestion(null);
+            suggestionManager.setSuggestionNeeded(true);
+            highlightController.removeAll();
+            showFetchingWait();
             return;
         }
         boolean collectNeeded = accountStatus.isCollectNeeded(suggestion, grandExchange.isSetupOfferOpen());
@@ -613,6 +630,7 @@ public class SuggestionPanel extends JPanel {
     public void refresh() {
         log.debug("refreshing suggestion panel {}", client.getGameState());
         if (!ensureEdt(this::refresh)) return;
+        pauseButton.updateState();
         if (pausedManager.isPaused()) {
             hideLoading();
             setIsPausedMessage();
@@ -624,6 +642,14 @@ public class SuggestionPanel extends JPanel {
             hideLoading();
             setServerMessage("");
             showStaticSuggestion("Login", errorMessage);
+            return;
+        }
+
+        Suggestion current = suggestionManager.getSuggestion();
+        if (suggestionController.getTradingContext().isAway()
+                && (current == null || !current.isDecantSuggestion())) {
+            hideLoading();
+            suggestAway();
             return;
         }
 
@@ -727,6 +753,8 @@ public class SuggestionPanel extends JPanel {
         String roiLine = formatRoiTooltipLine(suggestion, suggestionProfit);
         String costLine = formatCostTooltipLine(suggestion);
         StringBuilder tooltip = new StringBuilder("<html>");
+        String profitBasis = SuggestionCardText.profitBasis(suggestion);
+        if (!profitBasis.isEmpty()) appendTooltipLine(tooltip, profitBasis);
         String details = SuggestionCardText.details(suggestion.getMessage(), suggestion.getWhy());
         if (!details.isEmpty()) appendTooltipLine(tooltip, details);
         appendTooltipLine(tooltip, roiLine);

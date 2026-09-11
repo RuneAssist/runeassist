@@ -38,7 +38,7 @@ public class PauseButton extends JButton {
         setToolTipText("Pause suggestions");
         addActionListener(e -> {
             suggestionController.togglePause();
-            update();
+            updateState();
         });
 
         UIUtilities.addHoverIcons(this,
@@ -50,7 +50,7 @@ public class PauseButton extends JButton {
         setContentAreaFilled(false);
     }
 
-    private void update() {
+    public void updateState() {
         boolean isPaused = pausedManager.isPaused();
         setIcon(isPaused ? PLAY_ICON : PAUSE_ICON);
         setToolTipText(isPaused ? "Unpause suggestions" :  "Pause suggestions");

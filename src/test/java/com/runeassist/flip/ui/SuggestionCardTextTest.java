@@ -12,6 +12,16 @@ import net.runelite.client.ui.FontManager;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SuggestionCardTextTest {
+    @Test void profitTooltipsDistinguishEntryHeuristicsFromConditionalExits() {
+        com.runeassist.flip.model.Suggestion suggestion = new com.runeassist.flip.model.Suggestion();
+        suggestion.setType(com.runeassist.flip.model.SuggestionType.BUY);
+        suggestion.setProfitEstimateBasis("heuristic_net");
+        assertTrue(SuggestionCardText.profitBasis(suggestion).contains("not a calibrated expected return"));
+        suggestion.setType(com.runeassist.flip.model.SuggestionType.SELL);
+        assertTrue(SuggestionCardText.profitBasis(suggestion).contains("if the full quantity sells"));
+        suggestion.setType(com.runeassist.flip.model.SuggestionType.WAIT);
+        assertEquals("", SuggestionCardText.profitBasis(suggestion));
+    }
     @Test void centeredInstructionEscapesNamesAndHighlightsTradeNumbers() {
         String html = SuggestionCardText.instruction("Buy and hold", "Rune <warhammer>",70,23283,true);
         assertTrue(html.contains("<center>Buy and hold"));
