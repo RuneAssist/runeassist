@@ -47,11 +47,14 @@ public class SuggestionManager {
     }
 
     public boolean suggestionOutOfDate() {
-        Instant tenSecondsAgo = Instant.now().minusSeconds(10L);
-        if (suggestionReceivedAt == null || tenSecondsAgo.isAfter(suggestionReceivedAt)) {
-            return lastFailureAt == null || tenSecondsAgo.isAfter(lastFailureAt);
-        }
-        return false;
+        return suggestionOutOfDate(Instant.now());
+    }
+
+    boolean suggestionOutOfDate(Instant now) {
+        // Faster routine refresh; failures retain a longer cooldown. Explicit offer
+        // events still use suggestionNeeded and the controller's single-flight guard.
+        return (suggestionReceivedAt == null || !suggestionReceivedAt.plusSeconds(5).isAfter(now))
+                && (lastFailureAt == null || !lastFailureAt.plusSeconds(10).isAfter(now));
     }
 
     public boolean suggestionVeryOutOfDate() {
