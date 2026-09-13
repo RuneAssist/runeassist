@@ -30,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import javax.inject.Named;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,7 +39,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 /** Next flip {@link Suggestion} via Ares {@code POST /v1/suggestion}. */
 @Slf4j
@@ -59,6 +63,10 @@ public class RuneAssistSuggestionSource
     @Inject private OfferManager offerPersistence;
     @Inject private com.runeassist.flip.controller.GrandExchange grandExchange;
     @Inject private ExecutorService executor;
+    @Inject @Named("runeAssistSuggestionExecutor") private SuggestionTaskExecutor suggestionExecutor;
+    private final AtomicBoolean portfolioRequestInProgress = new AtomicBoolean();
+    private long lastPortfolioRequestAt;
+    private Long lastPortfolioAccount;
 
     public void getSuggestionAsync(Consumer<Suggestion> consumer)
     {
@@ -68,6 +76,7 @@ public class RuneAssistSuggestionSource
     /** @param includeGraph ask Ares to bundle graph data (skip in low-data mode). */
     public void getSuggestionAsync(Consumer<Suggestion> consumer, boolean includeGraph)
     {
+        final long requestedAt = System.nanoTime();
         final net.runelite.api.Player localPlayer = client.getLocalPlayer();
         final String displayName = localPlayer != null ? localPlayer.getName() : null;
         final long[][] offersBySlot = readOffers(displayName);
@@ -112,8 +121,12 @@ public class RuneAssistSuggestionSource
             return;
         }
 
-        executor.execute(() ->
+        try {
+        suggestionExecutor.execute(() ->
         {
+            final long workStartedAt = System.nanoTime();
+            long composeStartedAt = 0L;
+            long composeFinishedAt = 0L;
             Suggestion suggestion = null;
             try
             {
@@ -121,7 +134,7 @@ public class RuneAssistSuggestionSource
             Map<Integer, Integer> remainingHint = new HashMap<>();
             for (Map.Entry<Integer, Integer> e : usedLimit.entrySet())
             {
-                int ge = market.geLimit(e.getKey());
+                int ge = market.cachedGeLimit(e.getKey());
                 if (ge > 0) remainingHint.put(e.getKey(), Math.max(0, ge - e.getValue()));
             }
 
@@ -139,6 +152,7 @@ public class RuneAssistSuggestionSource
             }
             try
             {
+                composeStartedAt = System.nanoTime();
                 suggestion = market.composeSuggestion(composeReq);
             }
             catch (Exception e)
@@ -146,6 +160,7 @@ public class RuneAssistSuggestionSource
                 log.warn("composeSuggestion failed; soft-fail to WAIT", e);
                 suggestion = null;
             }
+            finally { composeFinishedAt = System.nanoTime(); }
 
             ensurePickSource(suggestion);
             if (suggestion != null && suggestion.getItemId() > 0)
@@ -183,11 +198,6 @@ public class RuneAssistSuggestionSource
                         suggestion.setMessage(WaitSuggestions.WAIT_ARES_DOWN);
                     }
                 }
-                try {
-                    suggestion.setPortfolioItems(portfolioItems(held, offersBySlot));
-                } catch (Exception e) {
-                    log.warn("portfolio items failed", e);
-                }
                 suggestion.setTimeIssued(Instant.now());
                 ensurePickSource(suggestion);
                 try { stampLimitFields(displayName, suggestion, offersBySlot); }
@@ -200,8 +210,71 @@ public class RuneAssistSuggestionSource
                 result.setTimeIssued(Instant.now());
             }
             final Suggestion delivered = result;
-            clientThread.invokeLater(() -> consumer.accept(delivered));
+            final long composeMs = composeStartedAt == 0L ? 0L : (composeFinishedAt - composeStartedAt) / 1_000_000L;
+            clientThread.invokeLater(() -> {
+                log.debug("suggestion timing queueMs={} composeMs={} deliveryMs={}",
+                    (workStartedAt - requestedAt) / 1_000_000L, composeMs,
+                    (System.nanoTime() - requestedAt) / 1_000_000L);
+                consumer.accept(delivered);
+            });
         });
+        } catch (RejectedExecutionException busy) {
+            // A context change may leave an older HTTP request running. Keep a bounded queue.
+            Suggestion wait = WaitSuggestions.waitFallback(WaitSuggestions.WAIT_ARES_DOWN, offersBySlot, maxSlots);
+            wait.setTimeIssued(Instant.now());
+            clientThread.invokeLater(() -> consumer.accept(wait));
+        }
+    }
+
+    /** Optional valuation, queued only after the controller has delivered a valid suggestion. */
+    public void getPortfolioItemsAsync(BiConsumer<List<Suggestion.PortfolioItem>, Instant> consumer)
+    {
+        Long account = osrsLoginManager.getAccountHash();
+        long now = System.currentTimeMillis();
+        if (java.util.Objects.equals(account, lastPortfolioAccount) && now - lastPortfolioRequestAt < 15_000L) return;
+        if (!portfolioRequestInProgress.compareAndSet(false, true)) return;
+        try {
+            final Instant snapshotAt = Instant.now();
+            String displayName = osrsLoginManager.getPlayerDisplayName();
+            final Map<Integer, long[]> held = heldCostTracker.held(displayName);
+            final long[][] offers = readOffers(displayName);
+            lastPortfolioAccount = account;
+            lastPortfolioRequestAt = now;
+            executor.execute(() -> {
+                long started = System.nanoTime();
+                try {
+                    List<Suggestion.PortfolioItem> items = portfolioItems(held, offers);
+                    clientThread.invokeLater(() -> {
+                        // Slow quotes may outlive a routine card refresh, but never
+                        // another account or changed holdings/offer quantities.
+                        if (!java.util.Objects.equals(account, osrsLoginManager.getAccountHash())
+                                || !osrsLoginManager.isValidLoginState()) return;
+                        if (!samePortfolioSnapshot(held, heldCostTracker.held(displayName), offers, readOffers(displayName))) return;
+                        consumer.accept(items, snapshotAt);
+                    });
+                } catch (Exception e) {
+                    log.debug("optional portfolio enrichment failed", e);
+                } finally {
+                    portfolioRequestInProgress.set(false);
+                    log.debug("suggestion portfolio enrichment elapsedMs={}", (System.nanoTime() - started) / 1_000_000L);
+                }
+            });
+        } catch (RuntimeException e) {
+            portfolioRequestInProgress.set(false);
+            log.debug("optional portfolio snapshot/enqueue failed", e);
+        }
+    }
+
+    static boolean samePortfolioSnapshot(Map<Integer, long[]> held, Map<Integer, long[]> current,
+                                          long[][] offers, long[][] currentOffers) {
+        if (!held.keySet().equals(current.keySet()) || !java.util.Arrays.deepEquals(offers, currentOffers)) return false;
+        for (Integer id : held.keySet()) if (!java.util.Arrays.equals(held.get(id), current.get(id))) return false;
+        return true;
+    }
+
+    public static boolean isUnavailableWait(Suggestion suggestion) {
+        return suggestion != null && suggestion.isWaitSuggestion()
+                && WaitSuggestions.WAIT_ARES_DOWN.equals(suggestion.getMessage());
     }
 
     private boolean aresUnreachable()
@@ -239,7 +312,7 @@ public class RuneAssistSuggestionSource
         int ge = suggestion.getGeLimit();
         if (ge <= 0)
         {
-            try { ge = market.geLimit(itemId); }
+            try { ge = market.cachedGeLimit(itemId); }
             catch (Exception e) { ge = 0; }
         }
         int remaining = heldCostTracker.remainingLimitOrUnknown(displayName, itemId, ge);
@@ -251,6 +324,11 @@ public class RuneAssistSuggestionSource
         else if (ge > 0 && pending >= ge)
         {
             remaining = 0;
+        }
+        // Never widen a server-known limit using an incomplete local observation window.
+        if (suggestion.isLimitKnown() && suggestion.getRemainingLimit() >= 0) {
+            remaining = remaining < 0 ? suggestion.getRemainingLimit()
+                    : Math.min(remaining, suggestion.getRemainingLimit());
         }
         boolean known = ge > 0 && remaining >= 0;
         suggestion.setGeLimit(ge);

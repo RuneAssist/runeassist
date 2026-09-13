@@ -20,6 +20,9 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.*;
 import java.util.Objects;
+import java.time.Instant;
+import java.util.List;
+import okhttp3.Call;
 import java.util.function.Consumer;
 
 
@@ -58,6 +61,12 @@ public class SuggestionController {
     private RuneAssistPanel runeAssistPanel;
     private SuggestionPanel suggestionPanel;
     private final TradingContext tradingContext = new TradingContext();
+    private Call suggestionGraphCall;
+    private int suggestionGraphItemId;
+    private long graphRequestSequence;
+    private Data lastSuggestionGraph;
+    private long lastSuggestionGraphAt;
+    private long portfolioUpdateSequence;
 
     public void skipSuggestion() {
         clientThread.invokeLater(this::skipSuggestionOnClientThread);
@@ -98,7 +107,7 @@ public class SuggestionController {
                 suggestionPanel.refresh();
             }
         }
-        if(suggestionManager.isSuggestionRequestInProgress() || suggestionManager.isGraphDataReadingInProgress()) {
+        if(suggestionManager.isSuggestionRequestInProgress()) {
             return;
         }
         reconcileUncollected();
@@ -252,13 +261,13 @@ public class SuggestionController {
         suggestionManager.setSuggestionRequestInProgress(true);
         suggestionManager.setSuggestionRefreshPending(false);
         boolean skipGraphData = config.lowDataMode();
-        suggestionManager.setGraphDataReadingInProgress(!skipGraphData);
         final long requestGeneration = tradingContext.generation();
         Consumer<Suggestion> suggestionConsumer = (newSuggestion) ->
                 receiveForContext(requestGeneration, oldSuggestion, newSuggestion, accountStatus, !skipGraphData);
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
-        runeAssistSource.getSuggestionAsync(suggestionConsumer, !skipGraphData);
+        // Graphs are optional UI enrichment, never part of the compose critical path.
+        runeAssistSource.getSuggestionAsync(suggestionConsumer, false);
     }
 
     void handleDumpSuggestion(Suggestion suggestion) {
@@ -312,6 +321,8 @@ public class SuggestionController {
     }
 
     private void clearContextSuggestion() {
+        cancelSuggestionGraph();
+        lastSuggestionGraph = null;
         suggestionManager.setSuggestion(null);
         suggestionManager.setSuggestionRequestInProgress(false);
         suggestionManager.setGraphDataReadingInProgress(false);
@@ -393,12 +404,16 @@ public class SuggestionController {
             flipHistorySyncService.reportSuggestionOutcome(oldSuggestion, "superseded");
         }
         suggestionManager.setSuggestion(newSuggestion);
-        portfolioStateRS.updatePortfolioState(
+        suggestionManager.setLastFailureAt(com.runeassist.flip.RuneAssistSuggestionSource.isUnavailableWait(newSuggestion)
+                ? Instant.now() : null);
+        final long acceptedGeneration = tradingContext.generation();
+        if (newSuggestion.getPortfolioItems() != null) portfolioStateRS.updatePortfolioState(
                 newSuggestion.getBankItems(),
                 newSuggestion.getPortfolioItems(),
                 accountStatus.getOffers(),
                 accountStatus.getUncollected(),
-                newSuggestion.getTimeIssued()
+                newSuggestion.getTimeIssued(),
+                () -> tradingContext.accepts(acceptedGeneration) && suggestionManager.getSuggestion() == newSuggestion
         );
         suggestionManager.setSuggestionRequestInProgress(false);
         log.debug("Received suggestion: {}", newSuggestion.toString());
@@ -406,7 +421,6 @@ public class SuggestionController {
         offerManager.setOfferJustPlaced(false);
         suggestionPanel.refresh();
         showNotifications(oldSuggestion, newSuggestion, accountStatus);
-        final long acceptedGeneration = tradingContext.generation();
         SwingUtilities.invokeLater(() -> {
             if (!tradingContext.accepts(acceptedGeneration) || suggestionManager.getSuggestion() != newSuggestion) return;
             if (flipDialogController.priceGraphPanel == null) {
@@ -428,42 +442,70 @@ public class SuggestionController {
             });
         }
         feedSuggestionGraph(newSuggestion, loadGraph);
+        runeAssistSource.getPortfolioItemsAsync((items, snapshotAt) -> receivePortfolioForContext(
+                acceptedGeneration, newSuggestion, items, snapshotAt));
+    }
+
+    void receivePortfolioForContext(long generation, Suggestion suggestion, List<Suggestion.PortfolioItem> items, Instant snapshotAt) {
+        syncTradingContext();
+        // The source separately verifies unchanged held/offer snapshots. A newer
+        // routine card alone must not starve a slow portfolio quote forever.
+        if (!tradingContext.accepts(generation)) return;
+        AccountStatus status = accountStatusManager.getAccountStatus();
+        if (status == null) return;
+        final long sequence = ++portfolioUpdateSequence;
+        portfolioStateRS.updatePortfolioState(suggestion.getBankItems(), items,
+                status.getOffers(), status.getUncollected(), snapshotAt,
+                () -> tradingContext.accepts(generation) && sequence == portfolioUpdateSequence);
     }
 
     /** Bundled compose graph and/or GET /v1/graph. */
-    private void feedSuggestionGraph(Suggestion suggestion, boolean loadGraph) {
+    void feedSuggestionGraph(Suggestion suggestion, boolean loadGraph) {
         if (!loadGraph) {
-            suggestionManager.setGraphDataReadingInProgress(false);
+            cancelSuggestionGraph();
             return;
         }
-        suggestionManager.setGraphDataReadingInProgress(true);
-        final long graphGeneration = tradingContext.generation();
-        Consumer<Data> graphDataConsumer = (d) -> {
-            if (!tradingContext.accepts(graphGeneration) || suggestionManager.getSuggestion() != suggestion) return;
-            SwingUtilities.invokeLater(() -> {
-                if (!tradingContext.accepts(graphGeneration) || suggestionManager.getSuggestion() != suggestion) return;
-                if (flipDialogController.priceGraphPanel != null) {
-                    flipDialogController.priceGraphPanel.setSuggestionPriceData(d);
-                }
-            });
-            suggestionManager.setGraphDataReadingInProgress(false);
-        };
         if (suggestion == null || suggestion.isWaitSuggestion() || suggestion.getItemId() <= 0) {
+            cancelSuggestionGraph();
             Data d = new Data();
             if (suggestion != null && suggestion.isWaitSuggestion()) {
                 d.fromWaitSuggestion = true;
             } else {
                 d.loadingErrorMessage = "No graph data loaded for this item.";
             }
-            graphDataConsumer.accept(d);
+            displaySuggestionGraph(d, tradingContext.generation(), suggestion == null ? 0 : suggestion.getItemId());
             return;
         }
         if (suggestion.getGraphData() != null) {
-            graphDataConsumer.accept(suggestion.getGraphData());
+            cancelSuggestionGraph();
+            displaySuggestionGraph(suggestion.getGraphData(), tradingContext.generation(), suggestion.getItemId());
             return;
         }
         final int itemId = suggestion.getItemId();
-        apiRequestHandler.asyncGetRuneAssistGraph(itemId,
+        // A routine refresh of the same item must not cancel/restart a slow graph.
+        if (suggestionGraphCall != null && suggestionGraphItemId == itemId) return;
+        cancelSuggestionGraph();
+        if (lastSuggestionGraph != null && lastSuggestionGraph.itemId == itemId
+                && System.currentTimeMillis() - lastSuggestionGraphAt < 60_000L) {
+            displaySuggestionGraph(lastSuggestionGraph, tradingContext.generation(), itemId);
+            return;
+        }
+        suggestionGraphItemId = itemId;
+        suggestionManager.setGraphDataReadingInProgress(true);
+        final long graphGeneration = tradingContext.generation();
+        final long sequence = graphRequestSequence;
+        final long startedAt = System.nanoTime();
+        Consumer<Data> graphDataConsumer = d -> clientThread.invokeLater(() -> {
+            if (sequence != graphRequestSequence || !tradingContext.accepts(graphGeneration)) return;
+            suggestionGraphCall = null;
+            suggestionManager.setGraphDataReadingInProgress(false);
+            d.itemId = itemId;
+            lastSuggestionGraph = d;
+            lastSuggestionGraphAt = System.currentTimeMillis();
+            log.debug("suggestion graph enrichment elapsedMs={}", (System.nanoTime() - startedAt) / 1_000_000L);
+            displaySuggestionGraph(d, graphGeneration, itemId);
+        });
+        suggestionGraphCall = apiRequestHandler.asyncGetRuneAssistGraph(itemId,
                 graphDataConsumer,
                 (Throwable err) -> {
                     log.debug("suggestion graph fetch failed for item {}: {}", itemId, err.toString());
@@ -472,6 +514,21 @@ public class SuggestionController {
                     d.loadingErrorMessage = "No graph data loaded for this item.";
                     graphDataConsumer.accept(d);
                 });
+    }
+
+    private void displaySuggestionGraph(Data data, long generation, int itemId) {
+        SwingUtilities.invokeLater(() -> {
+            Suggestion current = suggestionManager.getSuggestion();
+            if (!tradingContext.accepts(generation) || current == null || current.getItemId() != itemId) return;
+            if (flipDialogController.priceGraphPanel != null) flipDialogController.priceGraphPanel.setSuggestionPriceData(data);
+        });
+    }
+
+    private void cancelSuggestionGraph() {
+        graphRequestSequence++;
+        if (suggestionGraphCall != null) suggestionGraphCall.cancel();
+        suggestionGraphCall = null;
+        suggestionManager.setGraphDataReadingInProgress(false);
     }
 
     /** Drop refreshes that would switch away from an in-progress MODIFY of a different item. */
