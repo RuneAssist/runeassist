@@ -41,12 +41,13 @@ public class ApiRequestHandler {
     /**
      * Fetch an item's price-history graph from RuneAssist's backend (JSON matching {@link Data}).
      */
-    public void asyncGetRuneAssistGraph(int itemId, Consumer<Data> onData, Consumer<Throwable> onError) {
+    public Call asyncGetRuneAssistGraph(int itemId, Consumer<Data> onData, Consumer<Throwable> onError) {
         Request request = new Request.Builder()
                 .url(ARES_ORIGIN + "/v1/graph?id=" + itemId)
                 .header("User-Agent", UA)
                 .build();
-        client.newCall(request).enqueue(new Callback() {
+        Call graphCall = client.newBuilder().callTimeout(15, TimeUnit.SECONDS).build().newCall(request);
+        graphCall.enqueue(new Callback() {
             @Override
             public void onFailure(Call call, java.io.IOException e) {
                 onError.accept(e);
@@ -70,6 +71,7 @@ public class ApiRequestHandler {
                 }
             }
         });
+        return graphCall;
     }
 
     /**
