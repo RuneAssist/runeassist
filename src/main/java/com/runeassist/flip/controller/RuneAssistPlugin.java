@@ -53,6 +53,8 @@ public class RuneAssistPlugin extends Plugin {
 	@Inject
 	@Named("runeAssistExecutor")
 	private ScheduledExecutorService executorService;
+	@Inject @Named("runeAssistSuggestionExecutor")
+	private com.runeassist.flip.SuggestionTaskExecutor suggestionExecutor;
 	@Inject
 	private ClientToolbar clientToolbar;
 	@Inject
@@ -144,12 +146,19 @@ public class RuneAssistPlugin extends Plugin {
 		return scheduledExecutor;
 	}
 
+	@Provides @Singleton @Named("runeAssistSuggestionExecutor")
+	public com.runeassist.flip.SuggestionTaskExecutor provideSuggestionExecutor() {
+		// Optional graph/history/portfolio work cannot occupy the compose worker.
+		return new com.runeassist.flip.SuggestionTaskExecutor();
+	}
+
 	private MainPanel mainPanel;
 	private StatsPanelV2 statsPanel;
 	private NavigationButton navButton;
 
 	@Override
 	protected void startUp() throws Exception {
+		suggestionExecutor.start();
 		boolean hadExistingInstallation = Persistance.hasExistingInstallation();
 		keybindHandler.register();
 		overlayManager.add(inventorySlotTooltipOverlay);
@@ -202,6 +211,8 @@ public class RuneAssistPlugin extends Plugin {
 
 	@Override
 	protected void shutDown() throws Exception {
+		clientThread.invokeLater(suggestionController::onSessionEnded);
+		suggestionExecutor.shutdownNow();
 		overlayManager.remove(inventorySlotTooltipOverlay);
 		overlayManager.remove(inventoryPortfolioBadgeOverlay);
 		overlayManager.remove(portfolioBankTabBadgeOverlay);

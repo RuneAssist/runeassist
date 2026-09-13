@@ -250,6 +250,14 @@ public class AresMarketClient
         return postJson(url, body, label, false);
     }
 
+    /** Optional hint only: suggestion delivery must never wait for a cold limits download. */
+    public int cachedGeLimit(int itemId)
+    {
+        if (System.currentTimeMillis() - limitsFetchedAt >= LIMITS_TTL) return 0;
+        Integer limit = geLimits.get(itemId);
+        return limit != null ? limit : 0;
+    }
+
     private JsonObject postJson(String url, String body, String label, boolean authed)
     {
         Request.Builder builder = new Request.Builder()

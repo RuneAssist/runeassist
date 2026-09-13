@@ -9,6 +9,7 @@ import net.runelite.client.callback.ClientThread;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.function.BooleanSupplier;
 import net.runelite.api.ItemID;
 
 @Slf4j
@@ -87,7 +88,18 @@ public class PortfolioStateRS extends ReactiveStateImpl<PortfolioState> {
                                      StatusOfferList offers,
                                      Map<Integer, Long> uncollected,
                                      Instant portfolioItemsTime) {
+        updatePortfolioState(suggestionBank, portfolioItems, offers, uncollected, portfolioItemsTime, () -> true);
+    }
+
+    /** Recheck the owning account/context on the client thread, not only before queuing. */
+    public void updatePortfolioState(Map<Integer, Integer> suggestionBank,
+                                     List<Suggestion.PortfolioItem> portfolioItems,
+                                     StatusOfferList offers,
+                                     Map<Integer, Long> uncollected,
+                                     Instant portfolioItemsTime,
+                                     BooleanSupplier stillCurrent) {
         clientThread.invokeLater(() -> {
+            if (!stillCurrent.getAsBoolean()) return true;
             if (portfolioItems != null && portfolioItemsTime != null) {
                 Instant current = portfolioItemsServerTime;
                 if (current != null && !portfolioItemsTime.isAfter(current)) {
