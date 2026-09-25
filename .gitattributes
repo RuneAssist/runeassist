@@ -1,0 +1,4 @@
+# Keep every file's existing line endings exactly as committed. Some sources are
+# CRLF, some LF; converting either way produces whole-file diffs that swamp Hub
+# review. CI fails a PR that rewrites line endings (scripts/pr-size.sh).
+* -text
