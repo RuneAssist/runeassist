@@ -170,7 +170,10 @@ public class GrandExchangeOfferEventHandler {
             Transaction transaction;
             while ((transaction = transactionsToProcess.poll()) != null) {
                 long profit = transactionManager.addTransaction(transaction, displayName);
-                if (grandExchange.isHomeScreenOpen() && profit != 0) {
+                // Only a sale realises profit or loss. A buy that adds to an open position
+                // used to be valued as if it had closed it, flashing a red "-x gp" on fills.
+                if (grandExchange.isHomeScreenOpen() && profit != 0
+                        && transaction.getType() == OfferStatus.SELL) {
                     new GpDropOverlay(overlayManager, client, profit, transaction.getBoxId());
                 }
             }
