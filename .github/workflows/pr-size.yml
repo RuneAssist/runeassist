@@ -1,0 +1,50 @@
+name: PR size
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  size:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Measure change set
+        id: size
+        env:
+          SIZE_EXEMPT: ${{ contains(github.event.pull_request.labels.*.name, 'size-exempt') && '1' || '0' }}
+          PR_SIZE_REPORT: pr-size.md
+        run: |
+          set +e
+          scripts/pr-size.sh "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}"
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+      - name: Measure what the next Hub submission would carry
+        if: always()
+        env:
+          PR_SIZE_REPORT: hub-size.md
+        run: |
+          set +e
+          scripts/pr-size.sh --hub "${{ github.event.pull_request.head.sha }}" || echo "(Hub manifest unavailable)" > hub-size.md
+          true
+      - name: Comment on the pull request
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          marker="<!-- pr-size-report -->"
+          body="$(printf '%s\n%s\n\n%s' "$marker" "$(cat pr-size.md)" "$(cat hub-size.md 2>/dev/null)")"
+          existing=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n1)
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$existing" -f body="$body" >/dev/null
+          else
+            gh pr comment "${{ github.event.pull_request.number }}" --body "$body"
+          fi
+      - name: Enforce
+        run: exit ${{ steps.size.outputs.exit }}
