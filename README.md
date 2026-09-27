@@ -6,6 +6,8 @@ BSD-2 derivative of [Flipping Copilot](https://github.com/cbrewitt/flipping-copi
 
 Sideload the built jar, or wait for Plugin Hub publishing. Plugin class: `com.runeassist.flip.controller.RuneAssistPlugin`.
 
+Community and support: [RuneAssist Flipping on Discord](https://discord.gg/3CPGh9GPaT) (help, flip chat, dump alerts, release notes), also reachable from the plugin's Preferences panel.
+
 Plugin Hub maintainers: see `plugin-hub/README.md` for the manifest draft and submission steps. Installing from the Hub shows a warning before install covering coin stack, held stock with cost basis, GE offers/transactions, and IP.
 
 ## Data sent to servers
