@@ -37,7 +37,7 @@ import java.util.concurrent.*;
 // Self-wiring flipping plugin. Suggestions come from RuneAssistSuggestionSource
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
-		description = "Grand Exchange flipping assistant with server compose suggestions, held-cost tracking, and Ares market data.",
+		description = "Grand Exchange flipping that fits how you play: what to buy, what to list at, when to sell and when to cut a loss, sized to your coins and slots, with held-cost tracking. Free, with an optional web dashboard and Discord.",
 		tags = {"runeassist", "flipping", "ge", "grand exchange", "merch", "money making", "profit"}
 )
 // No @PluginDependency(BankTagsPlugin): sideloaded installs refuse to load with it.
