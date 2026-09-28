@@ -24,14 +24,14 @@ public final class SuggestionTaskExecutor extends AbstractExecutorService {
         delegate.execute(() -> {
             // A canceled HTTP call may still be finishing. The permit spans pool
             // generations, including several quick disable/re-enable cycles.
-            try { executionPermit.acquire(); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
+            executionPermit.acquireUninterruptibly();
             try { command.run(); }
             finally { executionPermit.release(); }
         });
     }
     @Override public synchronized void shutdown() { delegate.shutdown(); }
-    @Override public synchronized List<Runnable> shutdownNow() { return delegate.shutdownNow(); }
+    /** Orderly only: the Plugin Hub forbids thread interrupts, so an in-flight request finishes on its own. */
+    @Override public synchronized List<Runnable> shutdownNow() { delegate.shutdown(); return List.of(); }
     @Override public synchronized boolean isShutdown() { return delegate.isShutdown(); }
     @Override public synchronized boolean isTerminated() { return delegate.isTerminated(); }
     @Override public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
