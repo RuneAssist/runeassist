@@ -18,6 +18,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.Collections;
@@ -30,6 +31,7 @@ public class StatsPanelV2 extends JPanel {
     private CollapsibleStatsCard sessionCard;
     private final StatsUi.IconPair flipsDialogIcons = StatsUi.toolbarIcon(getClass(), "/popout-flips.png");
     private final StatsUi.IconPair webAnalyticsIcons = StatsUi.toolbarIcon(getClass(), "/internet.png");
+    private final StatsUi.IconPair shareIcons = StatsUi.toolbarIcon(getClass(), "/discord.png");
 
     private JPanel sessionTimeRow;
     private JPanel hourlyProfitRow;
@@ -61,6 +63,7 @@ public class StatsPanelV2 extends JPanel {
     private final Paginator paginator;
     private final JButton flipsDialogButton = new JButton();
     private final JButton webAnalyticsButton = new JButton();
+    private final JButton shareButton = new JButton();
 
     private volatile boolean lastValidState = false;
 
@@ -108,6 +111,9 @@ public class StatsPanelV2 extends JPanel {
                     }
                 });
 
+        StatsUi.shellIconButton(shareButton, shareIcons,
+                "Copy a one-line summary of this period to paste into Discord #wins", 2, e -> copyShareSummary());
+
         flipsPanel.setLayout(new BoxLayout(flipsPanel, BoxLayout.Y_AXIS));
         flipsPanel.setBackground(RuneAssistColors.CARD);
         flipsPanel.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
@@ -140,6 +146,7 @@ public class StatsPanelV2 extends JPanel {
 
         JPanel bottomButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         bottomButtons.setOpaque(false);
+        bottomButtons.add(shareButton);
         bottomButtons.add(webAnalyticsButton);
         bottomButtons.add(flipsDialogButton);
 
@@ -153,6 +160,22 @@ public class StatsPanelV2 extends JPanel {
         if (flipHistorySyncService != null) {
             flipHistorySyncService.addStatusListener(() -> refresh(true, lastValidState));
         }
+    }
+
+    /** Puts "RuneAssist \u00b7 Today: 12 flips, +728.5K gp \u00b7 best: ..." on the clipboard. */
+    private void copyShareSummary() {
+        String text = ShareSummary.format(String.valueOf(intervalDropdown.getSelectedItem()),
+                flipManager.getRealizedIntervalStats(), flipManager.bestClosedFlipInInterval());
+        try {
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+            shareButton.setToolTipText("Copied: " + text);
+        } catch (Exception ex) {
+            shareButton.setToolTipText("Could not copy to the clipboard");
+        }
+        Timer reset = new Timer(4000, ev -> shareButton.setToolTipText(
+                "Copy a one-line summary of this period to paste into Discord #wins"));
+        reset.setRepeats(false);
+        reset.start();
     }
 
     private void setupSessionResetButton() {
