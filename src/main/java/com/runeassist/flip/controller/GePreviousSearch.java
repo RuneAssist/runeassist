@@ -28,20 +28,6 @@ public class GePreviousSearch {
             return;
         }
 
-        if (isScanningForDumpsSuggested(suggestion)) {
-            if ((grandExchange.isPreviousSearchSet() || previousSearchItemExists()) && grandExchange.showLastSearchEnabled()) {
-                setScanningForDumpsMessage();
-            } else {
-                createPreviousSearchWidget(-1, "");
-                createPreviousSearchItemNameWidget("");
-                createPreviousSearchItemWidget(-1);
-                createPreviousSearchTextWidget();
-                setScanningForDumpsMessage();
-            }
-            highlightController.redraw();
-            return;
-        }
-
         if (suggestion.getType() == SuggestionType.BUY) {
             if ((grandExchange.isPreviousSearchSet() || previousSearchItemExists()) && grandExchange.showLastSearchEnabled()) {
                 setPreviousSearch(suggestion.getItemId(), suggestion.getName());
@@ -55,15 +41,6 @@ public class GePreviousSearch {
         }
     }
 
-    private boolean isScanningForDumpsSuggested(Suggestion suggestion) {
-        AccountStatus accountStatus = accountStatusManager.getAccountStatus();
-        return accountStatus != null
-                && suggestion.isWaitSuggestion()
-                && grandExchange.isOpen()
-                && accountStatus.emptySlotExists()
-                && !accountStatus.moreGpNeeded()
-                && suggestionPreferencesManager.isReceiveDumpSuggestions();
-    }
 
     private boolean previousSearchItemExists() {
         Widget searchResults = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
@@ -109,41 +86,6 @@ public class GePreviousSearch {
         Widget item = searchResults.getChild(3);
         item.setItemId(itemId);
         item.revalidate();
-    }
-
-    private void setScanningForDumpsMessage() {
-        Widget searchResults = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
-        if (searchResults == null) {
-            return;
-        }
-
-        Widget previousSearch = searchResults.getChild(0);
-        if (previousSearch != null) {
-            previousSearch.setHasListener(false);
-            previousSearch.setName("");
-            previousSearch.setAction(0, "");
-            previousSearch.revalidate();
-        }
-
-        Widget previousSearchText = searchResults.getChild(1);
-        if (previousSearchText != null) {
-            previousSearchText.setText("Waiting for dumps...");
-            previousSearchText.setOriginalWidth(256);
-            previousSearchText.setXTextAlignment(WidgetTextAlignment.CENTER);
-            previousSearchText.revalidate();
-        }
-
-        Widget itemNameWidget = searchResults.getChild(2);
-        if (itemNameWidget != null) {
-            itemNameWidget.setText("");
-            itemNameWidget.revalidate();
-        }
-
-        Widget item = searchResults.getChild(3);
-        if (item != null) {
-            item.setItemId(-1);
-            item.revalidate();
-        }
     }
 
     private void createPreviousSearchWidget(int itemId, String itemName) {
