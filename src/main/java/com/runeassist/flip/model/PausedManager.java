@@ -9,10 +9,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.io.IOException;
 import java.nio.file.NoSuchFileException;
+import net.runelite.client.util.Filepath;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
@@ -30,14 +29,14 @@ public class PausedManager {
 
     // state
     private final Map<Long, Boolean> cachedPaused = new HashMap<>();
-    private final Map<Long, File> accountHashToFile = new HashMap<>();
+    private final Map<Long, Filepath> accountHashToFile = new HashMap<>();
 
     public synchronized boolean isPaused() {
         Long accountHash = osrsLoginManager.getAccountHash();
         return cachedPaused.computeIfAbsent(accountHash, (k) -> {
-            File file = getFile(k);
+            Filepath file = getFile(k);
             try {
-                String text = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+                String text = Persistance.readString(file);
                 return text.contains("true");
             } catch (NoSuchFileException e ){
                 return false;
@@ -56,12 +55,12 @@ public class PausedManager {
 
     private void saveAsync(Long accountHash) {
         executorService.submit(() -> {
-            File file = getFile(accountHash);
+            Filepath file = getFile(accountHash);
             synchronized (file) {
                 boolean isPaused = cachedPaused.getOrDefault(accountHash, false);
                 String text = isPaused ? "{\"isPaused\":true}" : "{\"isPaused\":false}";
                 try {
-                    Files.write(file.toPath(), text.getBytes());
+                    file.write(text);
                 } catch (IOException e) {
                     log.warn("error storing paused.json file {}", file, e);
                 }
@@ -69,8 +68,8 @@ public class PausedManager {
         });
     }
 
-    private File getFile(Long accountHash) {
+    private Filepath getFile(Long accountHash) {
         return accountHashToFile.computeIfAbsent(accountHash,
-                (k) -> new File(Persistance.PLUGIN_DIR, String.format(PAUSED_FILE_TEMPLATE, accountHash)));
+                (k) -> Persistance.file(String.format(PAUSED_FILE_TEMPLATE, accountHash)));
     }
 }

@@ -38,12 +38,17 @@ import java.util.concurrent.*;
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
 		description = "Grand Exchange flipping that fits how you play: what to buy, what to list at, when to sell and when to cut a loss, sized to your coins and slots, with held-cost tracking. Free, with an optional web dashboard and Discord.",
-		tags = {"runeassist", "flipping", "ge", "grand exchange", "merch", "money making", "profit"}
+		tags = {"runeassist", "flipping", "ge", "grand exchange", "merch", "money making", "profit"},
+		internalName = "runeassist-flipping",
+		legacyDataDirectory = "runeassist-flip"
 )
 // No @PluginDependency(BankTagsPlugin): sideloaded installs refuse to load with it.
 // Bank Tags is resolved at runtime via BankTagsLookup when the portfolio tab is enabled.
 public class RuneAssistPlugin extends Plugin {
 
+	/** Resolved first so every manager below can rely on Persistance.dataDir(). */
+	@Inject @Named("runeAssistDataDir")
+	private net.runelite.client.util.Filepath dataDir;
 	@Inject
 	private RuneAssistConfig config;
 	@Inject
@@ -150,6 +155,19 @@ public class RuneAssistPlugin extends Plugin {
 	public com.runeassist.flip.SuggestionTaskExecutor provideSuggestionExecutor() {
 		// Optional graph/history/portfolio work cannot occupy the compose worker.
 		return new com.runeassist.flip.SuggestionTaskExecutor();
+	}
+
+	/**
+	 * RuneLite's sandboxed data directory (.runelite/plugin-data/runeassist-flipping). The
+	 * legacy .runelite/runeassist-flip folder is moved there the first time this runs, so
+	 * existing players keep their history. The Plugin Hub requires all file access to go
+	 * through this Filepath.
+	 */
+	@Provides @Singleton @Named("runeAssistDataDir")
+	public net.runelite.client.util.Filepath provideDataDir() throws java.io.IOException {
+		net.runelite.client.util.Filepath dir = getPluginDirectory();
+		Persistance.setDataDir(dir);
+		return dir;
 	}
 
 	private MainPanel mainPanel;
