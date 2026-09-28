@@ -2,42 +2,65 @@ package com.runeassist.flip.controller;
 
 import com.google.gson.Gson;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.client.RuneLite;
+import net.runelite.client.util.Filepath;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
+import java.util.stream.Stream;
 
 @Slf4j
 public class Persistance {
     public static Gson gson;
-    public static final File PLUGIN_DIR = new File(RuneLite.RUNELITE_DIR, "runeassist-flip");
     public static final String LOGIN_RESPONSE_JSON_FILE = "login-response.json";
     public static final String UNACKED_TRANSACTIONS_FILE_TEMPLATE = "%s_unacked.jsonl";
-    public static File directory;
+    /**
+     * The plugin's data directory as handed out by RuneLite (Plugin.getPluginDirectory()), which
+     * the Plugin Hub requires for all file access. Set once by the plugin's Guice provider.
+     */
+    private static volatile Filepath dataDir;
 
-    public static void setUp(String directoryPath) throws IOException {
-        directory = new File(directoryPath);
-        createDirectory(directory);
-        createRequiredFiles();
+    public static void setDataDir(Filepath dir) {
+        dataDir = dir;
+    }
+
+    public static Filepath dataDir() {
+        Filepath dir = dataDir;
+        if (dir == null) {
+            throw new IllegalStateException("RuneAssist data directory is not initialised yet");
+        }
+        return dir;
+    }
+
+    /** A file directly inside the data directory; a name with separators or dots-only is rejected. */
+    public static Filepath file(String name) {
+        return dataDir().joinSegment(name);
     }
 
     public static void setUp(Gson gson) throws IOException {
         Persistance.gson = gson;
-        directory = PLUGIN_DIR;
-        createDirectory(PLUGIN_DIR);
+        Filepath dir = dataDir();
+        if (!dir.exists()) {
+            dir.createDirectories();
+        }
         createRequiredFiles();
     }
 
     public static boolean hasExistingInstallation() {
-        if (!PLUGIN_DIR.exists() || !PLUGIN_DIR.isDirectory()) {
+        Filepath dir = dataDir;
+        if (dir == null || !dir.isDirectory()) {
             return false;
         }
-
-        String[] files = PLUGIN_DIR.list();
-        return files != null && files.length > 0;
+        try (Stream<Filepath> entries = dir.walk(1)) {
+            return entries.anyMatch(p -> !p.equals(dir));
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private static void createRequiredFiles() throws IOException {
@@ -45,31 +68,28 @@ public class Persistance {
     }
 
     private static void generateFileIfDoesNotExist(String filename) throws IOException {
-        File file = new File(directory, filename);
+        Filepath file = file(filename);
         if (!file.exists()) {
-            if (!file.createNewFile()) {
-                log.info("Failed to generate file {}", file.getPath());
-            }
+            file.write(new byte[0]);
         }
     }
 
-    private static void createDirectory(File directory) throws IOException {
-        if (!directory.exists()) {
-            if (!directory.mkdir()) {
-                throw new IOException("unable to create parent directory!");
-            }
+    /** Read a whole UTF-8 text file. */
+    public static String readString(Filepath file) throws IOException {
+        try (InputStream in = file.openInputStream()) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 
 
     public static List<com.runeassist.flip.model.Transaction> loadUnackedTransactions(String displayName) {
         java.util.List<com.runeassist.flip.model.Transaction> transactions = new java.util.ArrayList<>();
-        java.io.File file = new java.io.File(PLUGIN_DIR, String.format(UNACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
+        Filepath file = file(String.format(UNACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
         if (!file.exists()) {
             return transactions;
         }
         java.util.Set<java.util.UUID> added = new java.util.HashSet<>();
-        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
+        try (BufferedReader reader = file.openBufferedReader()) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.isEmpty() || gson == null) {
@@ -92,8 +112,8 @@ public class Persistance {
     }
 
     public static void storeUnackedTransactions(java.util.List<com.runeassist.flip.model.Transaction> transactions, String displayName) {
-        java.io.File file = new java.io.File(PLUGIN_DIR, String.format(UNACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
-        try (java.io.BufferedWriter w = new java.io.BufferedWriter(new java.io.FileWriter(file, false))) {
+        Filepath file = file(String.format(UNACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
+        try (BufferedWriter w = file.openBufferedWriter()) {
             if (transactions != null && gson != null) {
                 for (com.runeassist.flip.model.Transaction transaction : transactions) {
                     w.write(gson.toJson(transaction));

@@ -1,7 +1,6 @@
 package com.runeassist.flip;
 
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 import com.runeassist.flip.controller.Persistance;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.GrandExchangeOfferState;
@@ -293,7 +292,8 @@ public class HeldCostTracker
         {
             String json = configManager.getConfiguration(GROUP, configKey(displayName));
             if (json == null || json.isEmpty()) return;
-            Map<String, Object> saved = gson.fromJson(json, new TypeToken<Map<String, Object>>(){}.getType());
+            @SuppressWarnings("unchecked")
+            Map<String, Object> saved = (Map<String, Object>) gson.fromJson(json, Map.class);
             if (saved == null) return;
             Map<String, Object> pos = (Map<String, Object>) saved.get("positions");
             if (pos != null) for (Map.Entry<String, Object> e : pos.entrySet())

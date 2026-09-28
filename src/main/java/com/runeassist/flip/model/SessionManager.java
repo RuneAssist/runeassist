@@ -7,7 +7,10 @@ import lombok.extern.slf4j.Slf4j;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import net.runelite.client.util.Filepath;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -26,7 +29,7 @@ public class SessionManager {
     private final Gson gson;
 
     private final Map<String, SessionData> cachedSessionData =  new HashMap<>();
-    private final Map<String, File> displayNameToFile = new HashMap<>();
+    private final Map<String, Filepath> displayNameToFile = new HashMap<>();
 
     private Instant lastSessionUpdateTime;
 
@@ -96,10 +99,10 @@ public class SessionManager {
 
     private void saveAsync(String displayName) {
         executorService.submit(() -> {
-            File file = getFile(displayName);
+            Filepath file = getFile(displayName);
             synchronized (file) {
                 SessionData data = cachedSessionData.computeIfAbsent(displayName, this::load);
-                try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, false))) {
+                try (BufferedWriter writer = file.openBufferedWriter()) {
                     String json = gson.toJson(data);
                     writer.write(json);
                     writer.newLine();
@@ -111,11 +114,11 @@ public class SessionManager {
     }
 
      private SessionData load(String displayName) {
-        File file = getFile(displayName);
+        Filepath file = getFile(displayName);
         if (!file.exists()) {
             return new SessionData((int) Instant.now().getEpochSecond(), 0 ,0);
         }
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+        try (BufferedReader reader = file.openBufferedReader()) {
             SessionData sd =  gson.fromJson(reader, SessionData.class);
             if (sd != null) {
                 return sd;
@@ -126,9 +129,9 @@ public class SessionManager {
         return new SessionData((int) Instant.now().getEpochSecond(), 0 ,0);
     }
 
-    private File getFile(String displayName) {
+    private Filepath getFile(String displayName) {
         return displayNameToFile.computeIfAbsent(displayName,
-                (k) -> new File(Persistance.PLUGIN_DIR, String.format(SESSION_DATA_FILE_TEMPLATE, Persistance.hashDisplayName(displayName))));
+                (k) -> Persistance.file(String.format(SESSION_DATA_FILE_TEMPLATE, Persistance.hashDisplayName(displayName))));
     }
 
     private SessionData getSessionData(String displayName) {
