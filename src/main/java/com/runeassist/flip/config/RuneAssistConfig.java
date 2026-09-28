@@ -17,6 +17,10 @@ public interface RuneAssistConfig extends Config
             description = "Remember the compact statistics card state", hidden = true)
     default boolean sessionStatsCollapsed() { return true; }
 
+    @ConfigItem(keyName = "onboardingSeen", name = "Welcome card dismissed",
+            description = "Set once the first-run welcome card has been dismissed", hidden = true)
+    default boolean onboardingSeen() { return false; }
+
     public enum PriceGraphWebsite
     {
         RUNEASSIST("RuneAssist"),
