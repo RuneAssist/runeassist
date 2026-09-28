@@ -164,7 +164,7 @@ class SuggestionLatencyTest {
         try {
             executor.execute(() -> {
                 started.countDown();
-                try { release.await(5, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                try { release.await(5, TimeUnit.SECONDS); } catch (InterruptedException e) { throw new IllegalStateException(e); }
             });
             assertTrue(started.await(2, TimeUnit.SECONDS));
             executor.execute(queued::countDown);
@@ -172,20 +172,20 @@ class SuggestionLatencyTest {
             assertEquals(1L, queued.getCount());
             release.countDown();
             assertTrue(queued.await(2, TimeUnit.SECONDS));
-        } finally { release.countDown(); executor.shutdownNow(); }
+        } finally { release.countDown(); executor.shutdown(); }
     }
 
     @Test void sameSingletonWorkerCanBeDisabledAndReenabled() throws Exception {
         com.runeassist.flip.SuggestionTaskExecutor executor = new RuneAssistPlugin().provideSuggestionExecutor();
         try {
             executor.submit(() -> {}).get(2, TimeUnit.SECONDS);
-            executor.shutdownNow();
+            executor.shutdown();
             assertThrows(RejectedExecutionException.class, () -> executor.execute(() -> {}));
             assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
             executor.start();
             executor.submit(() -> {}).get(2, TimeUnit.SECONDS);
             assertFalse(executor.isShutdown());
-        } finally { executor.shutdownNow(); }
+        } finally { executor.shutdown(); }
     }
 
     @Test void quickReenableDoesNotOverlapAnOldRequestStillFinishing() throws Exception {
@@ -201,13 +201,13 @@ class SuggestionLatencyTest {
                 }
             });
             assertTrue(started.await(2, TimeUnit.SECONDS));
-            executor.shutdownNow();
+            executor.shutdown();
             executor.start();
             executor.execute(next::countDown);
             assertFalse(next.await(50, TimeUnit.MILLISECONDS));
             release.countDown();
             assertTrue(next.await(2, TimeUnit.SECONDS));
-        } finally { release.countDown(); executor.shutdownNow(); }
+        } finally { release.countDown(); executor.shutdown(); }
     }
 
     private void drain() throws Exception {

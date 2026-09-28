@@ -212,7 +212,7 @@ public class RuneAssistPlugin extends Plugin {
 	@Override
 	protected void shutDown() throws Exception {
 		clientThread.invokeLater(suggestionController::onSessionEnded);
-		suggestionExecutor.shutdownNow();
+		suggestionExecutor.shutdown();
 		overlayManager.remove(inventorySlotTooltipOverlay);
 		overlayManager.remove(inventoryPortfolioBadgeOverlay);
 		overlayManager.remove(portfolioBankTabBadgeOverlay);
@@ -228,7 +228,7 @@ public class RuneAssistPlugin extends Plugin {
 		}
 		keybindHandler.unregister();
 		dumpsStreamController.ensureUnsubscribed();
-		executorService.shutdownNow();
+		executorService.shutdown();
 	}
 
 	@Provides
