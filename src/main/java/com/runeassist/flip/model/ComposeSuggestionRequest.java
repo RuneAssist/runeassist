@@ -53,6 +53,10 @@ public class ComposeSuggestionRequest
     private boolean inventorySnapshotKnown;
     private List<InventoryAvailabilitySnapshot.ItemQuantity> availableInventory = new ArrayList<>();
 
+    /** Tracked held items as last seen in the bank; unknown until the bank has been opened. */
+    private boolean bankSnapshotKnown;
+    private List<InventoryAvailabilitySnapshot.ItemQuantity> availableBank = new ArrayList<>();
+
     /** In-progress GE modify (cancel-then-relist); null if none. */
     private OwnedModifySnapshot ownedModify;
 
