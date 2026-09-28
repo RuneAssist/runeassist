@@ -31,6 +31,10 @@ public final class ComposeSuggestionMapper
         {
             s.setGraphData(response.getGraph());
         }
+        if (s != null && response.getOfferHealth() != null)
+        {
+            s.setOfferHealth(response.getOfferHealth());
+        }
         return s;
     }
 

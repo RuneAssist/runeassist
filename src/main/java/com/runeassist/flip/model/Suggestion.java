@@ -62,6 +62,8 @@ public class Suggestion {
     /** {@code ares} or {@code local} — which scorer produced this pick. Telemetry only. */
     private String pickSource = "";
     private List<String> flags = new ArrayList<>();
+    /** Live GE offers judged against the market, from the same response. */
+    private List<ComposeSuggestionResponse.OfferHealthDto> offerHealth = new ArrayList<>();
 
     @Setter
     @Getter

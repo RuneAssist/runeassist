@@ -27,7 +27,30 @@ public class ComposeSuggestionResponse
      * the client requested {@code includeGraph} and the pick has a concrete item.
      */
     private Data graph;
+    /** Each live offer judged against the market (see server docs/offer-health.md); may be absent. */
+    private List<OfferHealthDto> offerHealth = new ArrayList<>();
     private String error;
+
+    /** One live GE offer against the market right now. */
+    @Getter
+    @Setter
+    public static class OfferHealthDto
+    {
+        private int slot = -1;
+        private int itemId;
+        private boolean buy;
+        /** above-market, thin, on-track, filling, complete, no-price, unknown. */
+        private String verdict = "";
+        private Double gapPct;
+        private Long marketPrice;
+        private long volPerHour;
+        private Double etaHours;
+        private Long repriceTo;
+        private Long repriceCostGp;
+        private boolean stale;
+        private Double listedHours;
+        private String note = "";
+    }
 
     /**
      * Wire form of {@link Suggestion} for compose. Types are lowercase
