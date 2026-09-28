@@ -21,12 +21,15 @@ class OfferHealthOverlayTest {
 
     @Test
     void labelsAndColoursFollowTheVerdict() {
-        assertEquals("2.8% over \u00b7 21/h", OfferHealthOverlay.label(dto("above-market", 2.8, 21, null, false)));
-        assertEquals("3.6% under \u00b7 16/h", OfferHealthOverlay.label(dto("above-market", 3.6, 16, null, true)));
-        assertEquals("12% over \u00b7 0/h", OfferHealthOverlay.label(dto("above-market", 12.4, 0, null, false)));
-        assertEquals("at market \u00b7 22579/h \u00b7 ~0.4h", OfferHealthOverlay.label(dto("on-track", 0.0, 22579, 0.4, false)));
-        assertEquals("filling \u00b7 9/h \u00b7 ~12h", OfferHealthOverlay.label(dto("filling", 0.0, 9, 12.0, false)));
-        assertEquals("at market \u00b7 0/h", OfferHealthOverlay.label(dto("thin", 0.0, 0, null, false)));
+        assertEquals("Too high by 2.8%", OfferHealthOverlay.label(dto("above-market", 2.8, 21, null, false)));
+        assertEquals("Too low by 3.6%", OfferHealthOverlay.label(dto("above-market", 3.6, 16, null, true)));
+        assertEquals("Too high by 12%", OfferHealthOverlay.label(dto("above-market", 12.4, 0, null, false)));
+        assertEquals("Should fill in ~24 min", OfferHealthOverlay.label(dto("on-track", 0.0, 22579, 0.4, false)));
+        assertEquals("Should fill in ~12h", OfferHealthOverlay.label(dto("on-track", 0.0, 9, 12.0, false)));
+        assertEquals("Filling", OfferHealthOverlay.label(dto("filling", 0.0, 9, 12.0, false)));
+        assertEquals("No buyers right now", OfferHealthOverlay.label(dto("thin", 0.0, 0, null, false)));
+        assertEquals("No sellers right now", OfferHealthOverlay.label(dto("thin", 0.0, 0, null, true)));
+        assertEquals("one two three</br>four", OfferHealthOverlay.wrap("one two three four", 13));
         assertEquals("Done", OfferHealthOverlay.label(dto("complete", null, 0, null, false)));
         assertEquals("", OfferHealthOverlay.label(dto("unknown", null, 0, null, false)));
         Color above = OfferHealthOverlay.color(dto("above-market", 1.0, 1, null, false));

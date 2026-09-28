@@ -78,19 +78,20 @@ public class OfferHealthOverlay extends Overlay {
         return null;
     }
 
+    /** Plain words on the slot; the tooltip carries the numbers. */
     static String label(ComposeSuggestionResponse.OfferHealthDto row) {
         String v = row.getVerdict() == null ? "" : row.getVerdict();
         switch (v) {
             case "complete":
                 return "Done";
             case "above-market":
-                return signed(row.getGapPct()) + (row.isBuy() ? " under" : " over") + " \u00b7 " + row.getVolPerHour() + "/h";
+                return (row.isBuy() ? "Too low by " : "Too high by ") + signed(row.getGapPct());
             case "thin":
-                return "at market \u00b7 0/h";
-            case "on-track":
+                return row.isBuy() ? "No sellers right now" : "No buyers right now";
             case "filling":
-                return (v.equals("filling") ? "filling" : "at market") + " \u00b7 " + row.getVolPerHour() + "/h"
-                        + (row.getEtaHours() != null ? " \u00b7 ~" + trim(row.getEtaHours()) + "h" : "");
+                return "Filling";
+            case "on-track":
+                return row.getEtaHours() != null ? "Should fill in ~" + eta(row.getEtaHours()) : "Should fill";
             default:
                 return "";
         }
@@ -104,13 +105,25 @@ public class OfferHealthOverlay extends Overlay {
     }
 
     private static String tooltip(ComposeSuggestionResponse.OfferHealthDto row) {
-        StringBuilder sb = new StringBuilder(row.getNote());
-        if (row.getRepriceTo() != null && row.getRepriceCostGp() != null) {
-            sb.append("</br>Match the market: ").append(UIUtilities.quantityToRSDecimalStack(row.getRepriceTo(), false))
-                    .append(" (").append(row.isBuy() ? "costs " : "gives up ")
-                    .append(UIUtilities.quantityToRSDecimalStack(row.getRepriceCostGp(), false)).append(" gp)");
+        // The server's note already says what to do and what it costs; wrap it for the tooltip.
+        return wrap(row.getNote(), 48);
+    }
+
+    static String wrap(String text, int width) {
+        StringBuilder out = new StringBuilder();
+        int lineLen = 0;
+        for (String word : text.split(" ")) {
+            if (lineLen > 0 && lineLen + 1 + word.length() > width) {
+                out.append("</br>");
+                lineLen = 0;
+            } else if (lineLen > 0) {
+                out.append(' ');
+                lineLen++;
+            }
+            out.append(word);
+            lineLen += word.length();
         }
-        return sb.toString();
+        return out.toString();
     }
 
     private static String signed(Double pct) {
@@ -119,7 +132,8 @@ public class OfferHealthOverlay extends Overlay {
         return (abs >= 10 ? String.format("%.0f", abs) : String.format("%.1f", abs)) + "%";
     }
 
-    private static String trim(Double hours) {
-        return hours >= 10 ? String.format("%.0f", hours) : String.format("%.1f", hours);
+    private static String eta(Double hours) {
+        if (hours < 1) return Math.max(1, Math.round(hours * 60)) + " min";
+        return hours >= 10 ? String.format("%.0fh", hours) : String.format("%.1fh", hours);
     }
 }
