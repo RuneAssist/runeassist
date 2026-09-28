@@ -2,6 +2,7 @@ package com.runeassist.flip.controller;
 
 import com.google.gson.Gson;
 import net.runelite.client.util.Filepath;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -10,6 +11,11 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PersistanceFilepathTest {
+
+    @AfterEach
+    void resetDataDir() {
+        Persistance.setDataDir(null);
+    }
 
     @Test
     void dataDirectoryIsSandboxedAndFilesRoundTrip(@TempDir Path tmp) throws Exception {
