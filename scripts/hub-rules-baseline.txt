@@ -1,0 +1,13 @@
+# Existing Plugin Hub rule violations, grandfathered until fixed.
+# rule<TAB>file<TAB>count. Regenerate with: python3 scripts/hub_rules.py --update-baseline
+# The count may only go down; a new hit anywhere fails the check.
+file-io	src/main/java/com/runeassist/flip/controller/PatchNotesController.java	5
+file-io	src/main/java/com/runeassist/flip/controller/Persistance.java	7
+file-io	src/main/java/com/runeassist/flip/manager/PriceGraphConfigManager.java	4
+file-io	src/main/java/com/runeassist/flip/model/OfferManager.java	3
+file-io	src/main/java/com/runeassist/flip/model/PausedManager.java	4
+file-io	src/main/java/com/runeassist/flip/model/SessionManager.java	3
+file-io	src/main/java/com/runeassist/flip/model/SuggestionPreferencesManager.java	22
+file-io	src/main/java/com/runeassist/flip/rs/AccountSuggestionPreferencesRS.java	7
+reflection	src/main/java/com/runeassist/flip/AresMarketClient.java	2
+reflection	src/main/java/com/runeassist/flip/HeldCostTracker.java	1
