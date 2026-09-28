@@ -1,12 +1,31 @@
 # RuneAssist Flipping
 
-RuneLite plugin for Grand Exchange flipping. Suggestions come from Ares server composition (`POST /v1/suggestion`) with held-cost tracking. Pseudonymous suggestion-lifecycle training contribution is enabled by default and can be disabled under Configuration → Privacy.
+**Grand Exchange flipping that fits how you play.** RuneAssist watches the market and your GE slots, then tells you what to buy, what price to list at, when to sell, and when to cut a loss. Set how often you come back to check your offers (5 minutes, 30 minutes, 2 hours, 8 hours) and it picks flips that suit that rhythm.
 
-BSD-2 derivative of [Flipping Copilot](https://github.com/cbrewitt/flipping-copilot) — see `LICENSE` and `THIRD_PARTY_LICENSES.md`.
+[![RuneAssist dashboard](https://raw.githubusercontent.com/RuneAssist/runeassist/main/docs/img/dashboard.png)](https://runeassist.com)
 
-Sideload the built jar, or wait for Plugin Hub publishing. Plugin class: `com.runeassist.flip.controller.RuneAssistPlugin`.
+## What you get
 
-Plugin Hub maintainers: see `plugin-hub/README.md` for the manifest draft and submission steps. Installing from the Hub shows a warning before install covering coin stack, held stock with cost basis, GE offers/transactions, and IP.
+- **One card at a time.** Buy this, at this price, this many. Sell what you hold when it's worth it. Abort an offer that isn't filling. No spreadsheets.
+- **Honest sizing.** Every suggestion is sized to your coin stack, your free slots and the item's buy limit, with the 2% GE tax already taken off the profit it shows you.
+- **It learns from real fills.** Suggestions are ranked on live OSRS wiki prices plus the outcomes of every RuneAssist player's flips, so items that only look profitable on paper drop out.
+- **Held-stock tracking.** It knows what you bought and for how much, across logins, so sell cards use your real cost, not a guess.
+- **Cut a loss on purpose.** From the web dashboard you can tell the plugin to sell a stuck position at the current price, even below cost.
+- **Dump alerts, F2P mode, block list, risk level** and a profit overlay on your GE offers.
+
+## Get started in two minutes
+
+1. Install from the Plugin Hub and open the Grand Exchange. The side panel wakes up and shows your first card.
+2. Optional: pair the plugin with [runeassist.com](https://runeassist.com) (Preferences → Get pairing code) for a dashboard of your flips, profit graphs and open positions on any device.
+3. Optional: [join the Discord](https://discord.gg/3CPGh9GPaT) for help, flip chat, dump alerts, release notes and profit-tier roles.
+
+## Privacy, in one paragraph
+
+The plugin sends the server what it needs to make a suggestion: your coin stack, your live GE offers, the stock it is tracking with its cost, and the quantities of those tracked items in your inventory. It never sends your bank, your chat, your location or your full inventory. Suggestion outcomes are recorded under a pseudonymous account hash to improve the model; turn that off under Configuration → Privacy. The full list of every request is below.
+
+RuneAssist is a BSD-2 derivative of [Flipping Copilot](https://github.com/cbrewitt/flipping-copilot) (see `LICENSE` and `THIRD_PARTY_LICENSES.md`). If Flipping Copilot is also enabled, RuneAssist steps aside automatically; run one or the other.
+
+---
 
 ## Data sent to servers
 
@@ -26,7 +45,7 @@ If Plugin Hub Flipping Copilot is also enabled, RuneAssist yields (see `HubPlugi
 
 ## Build
 
-Requires JDK 11+.
+Requires JDK 11+. Plugin Hub maintainers: see `plugin-hub/README.md` for the manifest and submission notes; the Hub install warning covers coin stack, held stock with cost basis, GE offers/transactions, and IP.
 
 ```
 ./gradlew jar

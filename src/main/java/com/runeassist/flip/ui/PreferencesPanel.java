@@ -78,6 +78,9 @@ public class PreferencesPanel extends JPanel {
     private final JPanel pairingCodePanel;
     private final JTextField pairingCodeField;
     private final JLabel pairingCodeHint;
+    /** Permanent invite to the RuneAssist Flipping server. */
+    public static final String DISCORD_INVITE_URL = "https://discord.gg/3CPGh9GPaT";
+
     private final JButton copyCodeButton;
     private final JButton openLinkButton;
     private final JButton linkDeviceBtn;
@@ -316,6 +319,12 @@ public class PreferencesPanel extends JPanel {
         openWebsiteBtn.addActionListener(e ->
                 LinkBrowser.browse(WebAnalyticsLinks.url(flipHistorySyncService.websiteUrl(), null)));
         preferencesContent.add(openWebsiteBtn);
+        addVerticalGap(preferencesContent, 4);
+
+        JButton discordBtn = PrefsUi.ghostAction("Join the Discord",
+                "Help, flip chat, dump alerts and profit-tier roles");
+        discordBtn.addActionListener(e -> LinkBrowser.browse(DISCORD_INVITE_URL));
+        preferencesContent.add(discordBtn);
         addVerticalGap(preferencesContent, 4);
 
         linkDeviceBtn = PrefsUi.ghostAction("Get pairing code", "Code for another PC or the website");

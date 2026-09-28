@@ -1,0 +1,37 @@
+name: Discord release notes
+
+# When a GitHub Release is published (do this after the Plugin Hub merges a
+# version), post its title and notes to #changelog and #announcements on the
+# RuneAssist Flipping Discord. Secrets: DISCORD_CHANGELOG_WEBHOOK_URL and
+# DISCORD_ANNOUNCEMENTS_WEBHOOK_URL. Drafts and pre-releases post nothing.
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  post:
+    if: github.event.release.draft == false && github.event.release.prerelease == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Discord
+        env:
+          NAME: ${{ github.event.release.name }}
+          TAG: ${{ github.event.release.tag_name }}
+          BODY: ${{ github.event.release.body }}
+          URL: ${{ github.event.release.html_url }}
+          CHANGELOG_WEBHOOK: ${{ secrets.DISCORD_CHANGELOG_WEBHOOK_URL }}
+          ANNOUNCE_WEBHOOK: ${{ secrets.DISCORD_ANNOUNCEMENTS_WEBHOOK_URL }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, urllib.request
+          title = os.environ.get('NAME') or os.environ.get('TAG') or 'Release'
+          body = re.sub(r'\n{3,}', '\n\n', (os.environ.get('BODY') or '').replace('\r', '')).strip()
+          content = f"**RuneAssist Flipping {title}** is on the Plugin Hub. Restart RuneLite to update.\n{body}"[:1900] + f"\n<{os.environ['URL']}>"
+          payload = json.dumps({'content': content, 'allowed_mentions': {'parse': []}}).encode()
+          for name in ('CHANGELOG_WEBHOOK', 'ANNOUNCE_WEBHOOK'):
+              hook = os.environ.get(name)
+              if not hook: print(name, 'unset; skipped'); continue
+              req = urllib.request.Request(hook, data=payload, headers={'Content-Type': 'application/json', 'User-Agent': 'runeassist-release'})
+              with urllib.request.urlopen(req, timeout=15) as r: print(name, 'posted', r.status)
+          PY
