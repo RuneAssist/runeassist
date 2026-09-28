@@ -44,6 +44,29 @@ class InventoryAvailabilitySnapshotTest
     }
 
     @Test
+    void bankIsASeparateWeakerProofAndUnknownUntilSeen()
+    {
+        Map<Integer, long[]> held = Map.of(11943, new long[]{670, 5500}, 561, new long[]{100, 200});
+        InventoryAvailabilitySnapshot unseen = InventoryAvailabilitySnapshot.from(held, Map.of(561, 100L), true, null, true);
+        assertTrue(unseen.isInventorySnapshotKnown());
+        assertFalse(unseen.isBankSnapshotKnown());
+        assertTrue(unseen.getAvailableBank().isEmpty());
+        InventoryAvailabilitySnapshot seen = InventoryAvailabilitySnapshot.from(held, Collections.emptyMap(), true,
+                Map.of(11943, 670L, 995, 5000000L), true);
+        assertTrue(seen.isInventorySnapshotKnown());
+        assertTrue(seen.getAvailableInventory().isEmpty());
+        assertTrue(seen.isBankSnapshotKnown());
+        assertEquals(1, seen.getAvailableBank().size());
+        assertEquals(11943, seen.getAvailableBank().get(0).getItemId());
+        assertEquals(670, seen.getAvailableBank().get(0).getQuantity());
+        // A bad login state hides both proofs; the three-argument form never claims a bank.
+        InventoryAvailabilitySnapshot none = InventoryAvailabilitySnapshot.from(held, Map.of(561, 100L), false, Map.of(11943, 670L), false);
+        assertFalse(none.isInventorySnapshotKnown());
+        assertFalse(none.isBankSnapshotKnown());
+        assertFalse(InventoryAvailabilitySnapshot.from(held, Map.of(561, 100L), true).isBankSnapshotKnown());
+    }
+
+    @Test
     void invalidRowsAndUntrackedStockAreExcluded()
     {
         Map<Integer, long[]> held = new HashMap<>();
@@ -70,7 +93,8 @@ class InventoryAvailabilitySnapshotTest
         inventory.put(561, 0L);
         assertEquals(20, snapshot.getAvailableInventory().get(0).getQuantity());
         assertThrows(UnsupportedOperationException.class, () -> snapshot.getAvailableInventory().clear());
-        assertEquals("{\"inventorySnapshotKnown\":true,\"availableInventory\":[{\"itemId\":561,\"quantity\":20}]}",
+        assertEquals("{\"inventorySnapshotKnown\":true,\"availableInventory\":[{\"itemId\":561,\"quantity\":20}],"
+                + "\"bankSnapshotKnown\":false,\"availableBank\":[]}",
                 new Gson().toJson(snapshot));
     }
 }

@@ -83,9 +83,15 @@ public class RuneAssistSuggestionSource
         final Map<Integer, SavedOffer> savedOffers = readSavedOffers(client.getAccountHash(), offersBySlot);
         final Map<Integer, long[]> held = heldCostTracker.held(displayName);
         final ItemContainer currentInventory = client.getItemContainer(InventoryID.INVENTORY);
+        // The bank container keeps the client's last look at the bank after it closes
+        // and is null until it has been opened this session.
+        final ItemContainer lastSeenBank = client.getItemContainer(InventoryID.BANK);
+        final boolean loginOk = osrsLoginManager.isValidLoginState() && !osrsLoginManager.hasJustLoggedIn();
         final InventoryAvailabilitySnapshot availability = InventoryAvailabilitySnapshot.from(held,
             Inventory.fromRunelite(currentInventory, client).getItemAmounts(),
-            currentInventory != null && osrsLoginManager.isValidLoginState() && !osrsLoginManager.hasJustLoggedIn());
+            currentInventory != null && loginOk,
+            Inventory.fromRunelite(lastSeenBank, client).getItemAmounts(),
+            lastSeenBank != null && loginOk);
         final long coins = inventoryCoins();
         // grandExchange slot helpers are client-thread-only — snapshot before background work.
         final OwnedModifySnapshot ownedModifySnap = computeOwnedModify();
@@ -145,6 +151,8 @@ public class RuneAssistSuggestionSource
                 deviceId, timeAbortEnabled, timeAbortMinutes);
             composeReq.setInventorySnapshotKnown(availability.isInventorySnapshotKnown());
             composeReq.setAvailableInventory(availability.getAvailableInventory());
+            composeReq.setBankSnapshotKnown(availability.isBankSnapshotKnown());
+            composeReq.setAvailableBank(availability.getAvailableBank());
             if (linkedAccount != null && !linkedAccount.isEmpty())
             {
                 composeReq.setContributeTrainingData(true);

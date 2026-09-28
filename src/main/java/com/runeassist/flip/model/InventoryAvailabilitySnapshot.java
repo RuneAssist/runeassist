@@ -5,16 +5,24 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-/** Request-scoped physical inventory proof, restricted to tracked item IDs. */
+/**
+ * Request-scoped physical proof, restricted to tracked item IDs: what is in the
+ * inventory now, and (separately) what the client last saw in the bank.
+ */
 public final class InventoryAvailabilitySnapshot
 {
     private final boolean inventorySnapshotKnown;
     private final List<ItemQuantity> availableInventory;
+    private final boolean bankSnapshotKnown;
+    private final List<ItemQuantity> availableBank;
 
-    private InventoryAvailabilitySnapshot(boolean known, List<ItemQuantity> items)
+    private InventoryAvailabilitySnapshot(boolean known, List<ItemQuantity> items,
+            boolean bankKnown, List<ItemQuantity> bankItems)
     {
         inventorySnapshotKnown = known;
         availableInventory = Collections.unmodifiableList(items);
+        bankSnapshotKnown = bankKnown;
+        availableBank = Collections.unmodifiableList(bankItems);
     }
 
     /**
@@ -25,10 +33,27 @@ public final class InventoryAvailabilitySnapshot
     public static InventoryAvailabilitySnapshot from(Map<Integer, long[]> trackedHeld,
             Map<Integer, Long> physicalInventory, boolean known)
     {
-        if (!known || physicalInventory == null)
-        {
-            return new InventoryAvailabilitySnapshot(false, Collections.emptyList());
-        }
+        return from(trackedHeld, physicalInventory, known, null, false);
+    }
+
+    /**
+     * Bank contents are the client's last look at the bank (null until it has been
+     * opened this session), so they are carried as a separate, weaker proof: enough
+     * to say "withdraw this first", never enough to say it is in hand.
+     */
+    public static InventoryAvailabilitySnapshot from(Map<Integer, long[]> trackedHeld,
+            Map<Integer, Long> physicalInventory, boolean known,
+            Map<Integer, Long> bankInventory, boolean bankKnown)
+    {
+        boolean inventoryOk = known && physicalInventory != null;
+        boolean bankOk = bankKnown && bankInventory != null;
+        return new InventoryAvailabilitySnapshot(
+                inventoryOk, inventoryOk ? tracked(trackedHeld, physicalInventory) : Collections.emptyList(),
+                bankOk, bankOk ? tracked(trackedHeld, bankInventory) : Collections.emptyList());
+    }
+
+    private static List<ItemQuantity> tracked(Map<Integer, long[]> trackedHeld, Map<Integer, Long> physicalInventory)
+    {
         List<ItemQuantity> items = new ArrayList<>();
         if (trackedHeld != null)
         {
@@ -43,7 +68,7 @@ public final class InventoryAvailabilitySnapshot
             }
         }
         items.sort((left, right) -> Integer.compare(left.itemId, right.itemId));
-        return new InventoryAvailabilitySnapshot(true, items);
+        return items;
     }
 
     public boolean isInventorySnapshotKnown()
@@ -54,6 +79,16 @@ public final class InventoryAvailabilitySnapshot
     public List<ItemQuantity> getAvailableInventory()
     {
         return availableInventory;
+    }
+
+    public boolean isBankSnapshotKnown()
+    {
+        return bankSnapshotKnown;
+    }
+
+    public List<ItemQuantity> getAvailableBank()
+    {
+        return availableBank;
     }
 
     public static final class ItemQuantity
