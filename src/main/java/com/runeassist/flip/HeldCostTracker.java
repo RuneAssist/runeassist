@@ -38,7 +38,7 @@ public class HeldCostTracker
     }
 
     public synchronized void onOffer(String displayName, int slot, GrandExchangeOfferState state, int itemId,
-                                     int price, int totalQty, int qtySold, int spent)
+                                     long price, int totalQty, int qtySold, long spent)
     {
         HeldCostLots.Account acc = account(displayName);
         ensureLoaded(displayName, acc);
