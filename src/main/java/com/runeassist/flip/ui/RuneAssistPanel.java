@@ -1,5 +1,8 @@
 package com.runeassist.flip.ui;
 
+import com.runeassist.flip.config.RuneAssistConfig;
+import net.runelite.client.config.ConfigManager;
+
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.*;
@@ -24,7 +27,9 @@ public class RuneAssistPanel extends JPanel {
                         StatsPanelV2 statsPanel,
                         ControlPanel controlPanel,
                         StatusStrip statusStrip,
-                        PreferencesPanel preferencesPanel) {
+                        PreferencesPanel preferencesPanel,
+                        RuneAssistConfig config,
+                        ConfigManager configManager) {
         this.statsPanel = statsPanel;
         this.suggestionPanel = suggestionPanel;
         this.controlPanel = controlPanel;
@@ -38,6 +43,18 @@ public class RuneAssistPanel extends JPanel {
         JPanel topPanel = new JPanel();
         topPanel.setOpaque(false);
         topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
+        if (!config.onboardingSeen()) {
+            OnboardingCard[] card = new OnboardingCard[1];
+            card[0] = new OnboardingCard(() -> {
+                configManager.setConfiguration("runeassistflip", "onboardingSeen", true);
+                topPanel.remove(card[0]);
+                topPanel.remove(0); // the spacer under it
+                topPanel.revalidate();
+                topPanel.repaint();
+            }, this::openSettings);
+            topPanel.add(card[0]);
+            topPanel.add(Box.createRigidArea(new Dimension(MainPanel.CONTENT_WIDTH, 8)));
+        }
         topPanel.add(suggestionPanel);
         topPanel.add(Box.createRigidArea(new Dimension(MainPanel.CONTENT_WIDTH, 8)));
         topPanel.add(controlPanel);
