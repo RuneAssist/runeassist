@@ -53,6 +53,8 @@ Requires JDK 11+. Plugin Hub maintainers: see `plugin-hub/README.md` for the man
 
 On Windows: `gradlew.bat jar`. The jar is written to `build/libs/`.
 
+Before opening a pull request, run `python3 scripts/hub_rules.py`: it checks the code against the Plugin Hub's review rules (no thread interrupts, no reflection, file access through `Filepath`, and so on) and the same checks run in CI. The rules and their replacements are listed in [docs/hub-rules.md](docs/hub-rules.md).
+
 ## License
 
 BSD 2-Clause. Copyright holders of the original Flipping Copilot plugin are listed in `LICENSE`. RuneAssist modifications are provided under the same license.
