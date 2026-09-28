@@ -206,6 +206,20 @@ public class FlipManager {
         }
     }
 
+    /** The most profitable closed flip in the current interval and account, named; null if none. */
+    public synchronized FlipV2 bestClosedFlipInInterval() {
+        FlipV2[] best = new FlipV2[1];
+        aggregateFlips(intervalStartTime, intervalAccount, false, f -> {
+            if (f.getClosedTime() > 0 && (best[0] == null || f.getProfit() > best[0].getProfit())) {
+                best[0] = f;
+            }
+        });
+        if (best[0] != null && best[0].getCachedItemName() == null) {
+            best[0].setCachedItemName(itemController.getItemName(best[0].getItemId()));
+        }
+        return best[0];
+    }
+
     /** Open and closed flips within the interval, merged and sorted by most-recent-activity */
     public synchronized List<FlipV2> getPageFlips(int page, int pageSize, int intervalStartTime, Integer accountId) {
         if (Objects.equals(accountId,-1)) {
