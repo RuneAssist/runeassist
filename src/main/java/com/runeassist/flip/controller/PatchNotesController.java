@@ -8,9 +8,7 @@ import javax.inject.Singleton;
 import javax.swing.*;
 import java.awt.*;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import net.runelite.client.util.Filepath;
 
 @Singleton
 @Slf4j
@@ -42,13 +40,13 @@ public class PatchNotesController {
     }
 
     private Integer loadLastSeenVersion() {
-        Path patchNotesVersionPath = patchNotesVersionPath();
-        if (!Files.exists(patchNotesVersionPath)) {
+        Filepath patchNotesVersionPath = patchNotesVersionPath();
+        if (!patchNotesVersionPath.exists()) {
             return null;
         }
 
         try {
-            String rawVersion = Files.readString(patchNotesVersionPath, StandardCharsets.UTF_8).trim();
+            String rawVersion = Persistance.readString(patchNotesVersionPath).trim();
             return rawVersion.isEmpty() ? null : Integer.parseInt(rawVersion);
         } catch (IOException | NumberFormatException e) {
             log.warn("error loading patch notes version from {}", patchNotesVersionPath, e);
@@ -57,16 +55,16 @@ public class PatchNotesController {
     }
 
     private void persistSeenVersion(int version) {
-        Path patchNotesVersionPath = patchNotesVersionPath();
+        Filepath patchNotesVersionPath = patchNotesVersionPath();
 
         try {
-            Files.writeString(patchNotesVersionPath, Integer.toString(version), StandardCharsets.UTF_8);
+            patchNotesVersionPath.write(Integer.toString(version));
         } catch (IOException e) {
             log.warn("error saving patch notes version to {}", patchNotesVersionPath, e);
         }
     }
 
-    private Path patchNotesVersionPath() {
-        return Persistance.PLUGIN_DIR.toPath().resolve(PATCH_NOTES_VERSION_FILE);
+    private Filepath patchNotesVersionPath() {
+        return Persistance.file(PATCH_NOTES_VERSION_FILE);
     }
 }

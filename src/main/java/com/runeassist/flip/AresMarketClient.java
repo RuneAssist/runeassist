@@ -3,7 +3,6 @@ package com.runeassist.flip;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.reflect.TypeToken;
 import com.runeassist.flip.model.ComposeSuggestionMapper;
 import com.runeassist.flip.model.ComposeSuggestionRequest;
 import com.runeassist.flip.model.ComposeSuggestionResponse;
@@ -19,7 +18,6 @@ import okhttp3.Response;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -45,7 +43,6 @@ public class AresMarketClient
     private static final String ARES_QUOTE = BASE + "/v1/market/quote";
     private static final long LIMITS_TTL = 6 * 60 * 60 * 1000L;
     private static final MediaType JSON = MediaType.parse("application/json");
-    private static final Type ROW_LIST = new TypeToken<List<Map<String, Object>>>(){}.getType();
 
     private final OkHttpClient httpClient;
     private final Gson gson;
@@ -225,7 +222,7 @@ public class AresMarketClient
             lastAresUnreachable = true;
             return null;
         }
-        List<Map<String, Object>> rows = gson.fromJson(root.get("candidates"), ROW_LIST);
+        List<Map<String, Object>> rows = rowsOf(root.get("candidates"));
         if (rows == null)
         {
             lastAresUnreachable = true;
@@ -299,7 +296,7 @@ public class AresMarketClient
     {
         Map<Integer, Map<String, Object>> out = new LinkedHashMap<>();
         if (root == null || !root.has(arrayKey)) return out;
-        List<Map<String, Object>> rows = gson.fromJson(root.get(arrayKey), ROW_LIST);
+        List<Map<String, Object>> rows = rowsOf(root.get(arrayKey));
         if (rows == null) return out;
         for (Map<String, Object> row : rows)
         {
@@ -351,5 +348,18 @@ public class AresMarketClient
             out.add(row);
         }
         return out;
+    }
+
+    /** Rows as plain maps (numbers arrive as Double) without Gson's reflection-based TypeToken. */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> rowsOf(JsonElement element)
+    {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        if (element == null || !element.isJsonArray()) return rows;
+        for (JsonElement row : element.getAsJsonArray())
+        {
+            if (row != null && row.isJsonObject()) rows.add((Map<String, Object>) gson.fromJson(row, Map.class));
+        }
+        return rows;
     }
 }

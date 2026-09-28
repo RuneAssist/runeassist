@@ -8,8 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.io.*;
-import java.nio.file.Files;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.file.NoSuchFileException;
+import net.runelite.client.util.Filepath;
 import java.util.concurrent.ScheduledExecutorService;
 
 
@@ -20,7 +22,7 @@ public class PriceGraphConfigManager {
 
     public static final String JSON_FILE = "price_graph_config.json";
 
-    private final File file = new File(Persistance.PLUGIN_DIR, JSON_FILE);
+    private final Object fileLock = new Object();
 
     // dependencies
     private final Gson gson;
@@ -47,11 +49,10 @@ public class PriceGraphConfigManager {
 
     public void saveAsync() {
         executorService.submit(() -> {
-            synchronized (file) {
+            synchronized (fileLock) {
                 Config config = getConfig();
                 try {
-                    String json = gson.toJson(config);
-                    Files.write(file.toPath(), json.getBytes());
+                    Persistance.file(JSON_FILE).write(gson.toJson(config));
                 } catch (IOException e) {
                     log.warn("error saving graph config {}", e.getMessage(), e);
                 }
@@ -60,9 +61,10 @@ public class PriceGraphConfigManager {
     }
 
     public Config load() {
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+        Filepath file = Persistance.file(JSON_FILE);
+        try (BufferedReader reader = file.openBufferedReader()) {
             return gson.fromJson(reader, Config.class);
-        } catch (FileNotFoundException ignored) {
+        } catch (NoSuchFileException ignored) {
             return new Config();
         } catch (JsonSyntaxException | JsonIOException | IOException e) {
             log.warn("error loading saved graph config json file {}", file, e);

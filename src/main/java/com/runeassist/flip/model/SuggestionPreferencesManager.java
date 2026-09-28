@@ -13,7 +13,9 @@ import javax.inject.Singleton;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
-import java.nio.file.*;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import net.runelite.client.util.Filepath;
 import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -32,18 +34,20 @@ public class SuggestionPreferencesManager {
     /** Default age (minutes) for opt-in time-based abort/modify when enabled. */
     public static final int DEFAULT_TIME_BASED_ABORT_MINUTES = 15;
 
-    public static final Path DEFAULT_PROFILE_PATH = Paths.get(Persistance.PLUGIN_DIR.getPath(), "Default profile.profile.json");
+    public static final String DEFAULT_PROFILE_NAME = "Default profile";
     public static final String PROFILE_SUFFIX = ".profile.json";
 
     // dependencies
     private final Gson gson;
     private final ScheduledExecutorService executorService;
     private final AccountSuggestionPreferencesRS osrsAccountPreferences;
+    private final Filepath dataDir;
+    private final Filepath defaultProfile;
 
     // state
     private ProfileSuggestionPreferences cachedPreferences;
-    private Path selectedProfile;
-    private List<Path> availableProfiles;
+    private Filepath selectedProfile;
+    private List<Filepath> availableProfiles;
 
     @Getter
     @Setter
@@ -52,12 +56,15 @@ public class SuggestionPreferencesManager {
     @Inject
     public SuggestionPreferencesManager(Gson gson,
                                         @Named("runeAssistExecutor") ScheduledExecutorService executorService,
-                                        AccountSuggestionPreferencesRS osrsAccountPreferences) {
+                                        AccountSuggestionPreferencesRS osrsAccountPreferences,
+                                        @Named("runeAssistDataDir") Filepath dataDir) {
         this.gson = gson;
         this.executorService = executorService;
         this.osrsAccountPreferences = osrsAccountPreferences;
+        this.dataDir = dataDir;
+        this.defaultProfile = profilePath(DEFAULT_PROFILE_NAME);
         loadAvailableProfiles();
-        selectedProfile = DEFAULT_PROFILE_PATH;
+        selectedProfile = defaultProfile;
         loadCurrentProfile();
         executorService.scheduleAtFixedRate(() -> {
             this.loadAvailableProfiles();
@@ -226,7 +233,7 @@ public class SuggestionPreferencesManager {
     }
 
     public synchronized boolean isDefaultProfileSelected() {
-        return DEFAULT_PROFILE_PATH.equals(selectedProfile);
+        return defaultProfile.equals(selectedProfile);
     }
 
     public synchronized String getCurrentProfile() {
@@ -239,33 +246,38 @@ public class SuggestionPreferencesManager {
     }
 
     public synchronized void addProfile(String name) throws IOException {
-        Path p = Paths.get(Persistance.PLUGIN_DIR.toString(), name + PROFILE_SUFFIX);
+        Filepath p;
+        try {
+            p = profilePath(name);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("invalid profile name: " + name, e);
+        }
         createProfileFile(p);
         availableProfiles.add(p);
         selectedProfile = p;
         loadCurrentProfile();
     }
 
-    private synchronized void updateProfile(Path profile, Consumer<ProfileSuggestionPreferences> changes) {
-        Path lockFile = Paths.get(profile+ ".lock");
-        Path tmpFile = Paths.get(profile+ ".tmp");
+    private synchronized void updateProfile(Filepath profile, Consumer<ProfileSuggestionPreferences> changes) {
+        Filepath lockFile = sibling(profile, ".lock");
+        Filepath tmpFile = sibling(profile, ".tmp");
         try {
             ProfileSuggestionPreferences preferences;
-            if (Files.exists(profile)) {
-                preferences = gson.fromJson(Files.readString(profile), ProfileSuggestionPreferences.class);
+            if (profile.exists()) {
+                preferences = gson.fromJson(Persistance.readString(profile), ProfileSuggestionPreferences.class);
             } else {
                 preferences = new ProfileSuggestionPreferences();
             }
             changes.accept(preferences);
             String toWrite = gson.toJson(preferences);
             // acquire <file>.lock
-            try (FileChannel lockChannel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock l = lockChannel.lock()) {
+            try (FileChannel lockChannel = lockFile.openFileChannel(StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock l = lockChannel.lock()) {
                 // write as .tmp file then re-name
-                Files.writeString(tmpFile,toWrite );
-                Files.move(tmpFile, profile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                tmpFile.write(toWrite);
+                tmpFile.moveTo(profile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             } finally {
-                Files.deleteIfExists(lockFile);
-                Files.deleteIfExists(tmpFile);
+                lockFile.deleteIfExists();
+                tmpFile.deleteIfExists();
             }
             // Keep the in-memory cache consistent with what was just written, for the same
             // profile only. Without this, blockItem()/setBlockedItems() apply their change to
@@ -285,8 +297,8 @@ public class SuggestionPreferencesManager {
 
     private synchronized void loadCurrentProfile() {
         try {
-            if (Files.exists(selectedProfile)) {
-                cachedPreferences = gson.fromJson(Files.readString(selectedProfile), ProfileSuggestionPreferences.class);
+            if (selectedProfile.exists()) {
+                cachedPreferences = gson.fromJson(Persistance.readString(selectedProfile), ProfileSuggestionPreferences.class);
             } else {
                 cachedPreferences = new ProfileSuggestionPreferences();
             }
@@ -296,48 +308,57 @@ public class SuggestionPreferencesManager {
     }
 
     private synchronized void loadAvailableProfiles() {
-        try (Stream<Path> paths = Files.list(Persistance.PLUGIN_DIR.toPath())) {
+        try (Stream<Filepath> paths = dataDir.walk(1)) {
             availableProfiles = paths
-                    .filter(p -> p.toString().endsWith(PROFILE_SUFFIX))
+                    .filter(p -> p.getFileName().endsWith(PROFILE_SUFFIX))
                     .collect(Collectors.toList());
         } catch (IOException e) {
             availableProfiles = new ArrayList<>();
-            availableProfiles.add(DEFAULT_PROFILE_PATH);
+            availableProfiles.add(defaultProfile);
             log.error("loading available profiles", e);
         }
     }
 
-    private String toDisplayName(Path p ) {
-        return p == null ? null : p.getFileName().toString().replaceAll("\\.profile\\.json$", "");
+    private String toDisplayName(Filepath p ) {
+        return p == null ? null : p.getFileName().replaceAll("\\.profile\\.json$", "");
     }
 
-    private Path fromDisplayName(String name) {
-        return Paths.get(Persistance.PLUGIN_DIR.toString(), name + PROFILE_SUFFIX);
+    private Filepath fromDisplayName(String name) {
+        return profilePath(name);
+    }
+
+    private Filepath profilePath(String name) {
+        return dataDir.joinSegment(name + PROFILE_SUFFIX);
+    }
+
+    /** The lock or temp file that sits next to a profile. */
+    private Filepath sibling(Filepath profile, String suffix) {
+        return dataDir.joinSegment(profile.getFileName() + suffix);
     }
 
     public synchronized void deleteSelectedProfile() throws IOException {
-        Path lockFile = Paths.get(selectedProfile+ ".lock");
-        try (FileChannel lockChannel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock l = lockChannel.lock()) {
-            Files.delete(selectedProfile);
+        Filepath lockFile = sibling(selectedProfile, ".lock");
+        try (FileChannel lockChannel = lockFile.openFileChannel(StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock l = lockChannel.lock()) {
+            selectedProfile.delete();
         } finally {
-            Files.deleteIfExists(lockFile);
+            lockFile.deleteIfExists();
         }
-        selectedProfile = DEFAULT_PROFILE_PATH;
+        selectedProfile = defaultProfile;
         loadCurrentProfile();
         loadAvailableProfiles();
     }
 
-    private void createProfileFile(Path profile) throws IOException {
-        Path lockFile = Paths.get(profile + ".lock");
-        Path tmpFile = Paths.get(profile + ".tmp");
+    private void createProfileFile(Filepath profile) throws IOException {
+        Filepath lockFile = sibling(profile, ".lock");
+        Filepath tmpFile = sibling(profile, ".tmp");
         String toWrite = "{}";
         // acquire <file>.lock
-        try (FileChannel lockChannel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock l = lockChannel.lock()) {
+        try (FileChannel lockChannel = lockFile.openFileChannel(StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock l = lockChannel.lock()) {
             // write as .tmp file then re-name
-            Files.writeString(tmpFile, toWrite);
-            Files.move(tmpFile, profile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            tmpFile.write(toWrite);
+            tmpFile.moveTo(profile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } finally {
-            Files.deleteIfExists(lockFile);
+            lockFile.deleteIfExists();
         }
     }
 

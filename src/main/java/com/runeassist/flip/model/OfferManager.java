@@ -7,7 +7,11 @@ import lombok.extern.slf4j.Slf4j;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.nio.file.NoSuchFileException;
+import net.runelite.client.util.Filepath;
 import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -35,16 +39,16 @@ public class OfferManager {
     boolean offerJustPlaced = false;
 
     private final Map<Long, Map<Integer, SavedOffer>> cachedOffers = new HashMap<>();
-    private final Map<Long, Map<Integer, File>> files = new HashMap<>();
+    private final Map<Long, Map<Integer, Filepath>> files = new HashMap<>();
     private final Map<Long, Map<Integer, SavedOffer>> lastSaved = new HashMap<>();
 
     public synchronized SavedOffer loadOffer(Long accountHash, Integer slot) {
         Map<Integer, SavedOffer> slotToOffer = cachedOffers.computeIfAbsent(accountHash, (k) -> new HashMap<>());
         return slotToOffer.computeIfAbsent(slot, (k) -> {
-            File file = getFile(accountHash, k);
-            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            Filepath file = getFile(accountHash, k);
+            try (BufferedReader reader = file.openBufferedReader()) {
                 return gson.fromJson(reader, SavedOffer.class);
-            } catch (FileNotFoundException ignored) {
+            } catch (NoSuchFileException ignored) {
                 return null;
             } catch (JsonSyntaxException | JsonIOException | IOException e) {
                 log.warn("error loading saved offer json file {}", file, e);
@@ -72,13 +76,13 @@ public class OfferManager {
     }
 
     private void save(Long accountHash, Integer slot) {
-        File file = getFile(accountHash,slot);
+        Filepath file = getFile(accountHash,slot);
         synchronized (file) {
             SavedOffer offer = loadOffer(accountHash, slot);
             Map<Integer, SavedOffer> slotToLastSaved = lastSaved.computeIfAbsent(accountHash, (k)->new HashMap<>());
             SavedOffer lastSaved = slotToLastSaved.get(slot);
             if(!Objects.equals(offer, lastSaved)) {
-                try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, false))) {
+                try (BufferedWriter writer = file.openBufferedWriter()) {
                     String json = gson.toJson(offer);
                     writer.write(json);
                     writer.newLine();
@@ -92,8 +96,8 @@ public class OfferManager {
     }
 
 
-    private File getFile(Long accountHash, Integer slot) {
-        Map<Integer, File> slotToFile = files.computeIfAbsent(accountHash, (k) -> new HashMap<>());
-        return slotToFile.computeIfAbsent(slot, (k) -> new File(Persistance.PLUGIN_DIR, String.format(OFFER_FILE_TEMPLATE, accountHash, slot)));
+    private Filepath getFile(Long accountHash, Integer slot) {
+        Map<Integer, Filepath> slotToFile = files.computeIfAbsent(accountHash, (k) -> new HashMap<>());
+        return slotToFile.computeIfAbsent(slot, (k) -> Persistance.file(String.format(OFFER_FILE_TEMPLATE, accountHash, slot)));
     }
 }
