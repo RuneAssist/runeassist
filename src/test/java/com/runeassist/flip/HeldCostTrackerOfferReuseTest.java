@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class HeldCostTrackerOfferReuseTest
 {
-    private static final String ACCOUNT = "Bof118";
+    private static final String ACCOUNT = "PlayerOne";
     private static final int ITEM = 11943;
 
     private static void offer(HeldCostTracker tracker, String account, int slot,
@@ -94,11 +94,11 @@ class HeldCostTrackerOfferReuseTest
         HeldCostTracker tracker = new HeldCostTracker();
         offer(tracker, ACCOUNT, 0, GrandExchangeOfferState.BOUGHT, 10, 10, 100);
         offer(tracker, ACCOUNT, 1, GrandExchangeOfferState.BOUGHT, 10, 10, 100);
-        offer(tracker, "Ghaelvyn", 0, GrandExchangeOfferState.BOUGHT, 10, 10, 100);
+        offer(tracker, "PlayerThree", 0, GrandExchangeOfferState.BOUGHT, 10, 10, 100);
         empty(tracker, ACCOUNT, 0);
         offer(tracker, ACCOUNT, 1, GrandExchangeOfferState.BOUGHT, 10, 10, 100);
-        offer(tracker, "Ghaelvyn", 0, GrandExchangeOfferState.BOUGHT, 10, 10, 100);
+        offer(tracker, "PlayerThree", 0, GrandExchangeOfferState.BOUGHT, 10, 10, 100);
         assertEquals(20, tracker.held(ACCOUNT).get(ITEM)[0]);
-        assertEquals(10, tracker.held("Ghaelvyn").get(ITEM)[0]);
+        assertEquals(10, tracker.held("PlayerThree").get(ITEM)[0]);
     }
 }

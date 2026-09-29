@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class HeldCostTrackerRemoveTest {
 
-    private static final String ACC = "Bof118";
+    private static final String ACC = "PlayerOne";
     private static final int ANTIFIRE_4 = 2452;
     private static final int WHIP = 4151;
 
@@ -60,11 +60,11 @@ public class HeldCostTrackerRemoveTest {
         HeldCostTracker t = new HeldCostTracker();
         t.addManualLot(ACC, ANTIFIRE_4, 2000, 837);
         t.addManualLot(ACC, WHIP, 3, 1_500_000);
-        t.addManualLot("ColdTyres", WHIP, 7, 1_400_000);
+        t.addManualLot("PlayerTwo", WHIP, 7, 1_400_000);
 
         assertEquals(2003, t.clearLots(ACC));
 
         assertTrue(t.held(ACC).isEmpty());
-        assertEquals(7, t.held("ColdTyres").get(WHIP)[0]);
+        assertEquals(7, t.held("PlayerTwo").get(WHIP)[0]);
     }
 }
