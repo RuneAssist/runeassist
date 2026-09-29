@@ -17,6 +17,8 @@ public class SavedOffer
 	private GrandExchangeOfferState state;
 	private boolean runeAssistSuggestion;
 	private String suggestionId;
+	/** Expected fill time from the card that placed this offer, in seconds; 0 when unknown. */
+	private long expectedSeconds;
 	// Observation metadata is session-local; never restore it as placement proof.
 	private transient long observedAt;
 	private transient long placedAt;

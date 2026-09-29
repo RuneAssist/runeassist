@@ -24,6 +24,7 @@ public class SuggestionManager {
     private int submittedItemId;
     private OfferStatus submittedOfferStatus;
     private int submittedTick = -1;
+    private long submittedFillSeconds;
 
     public volatile int suggestionsDelayedUntil = 0;
 
@@ -44,6 +45,7 @@ public class SuggestionManager {
         submittedItemId = 0;
         submittedOfferStatus = null;
         submittedTick = -1;
+        submittedFillSeconds = 0L;
     }
 
     public boolean suggestionOutOfDate() {
@@ -67,6 +69,12 @@ public class SuggestionManager {
         submittedItemId = suggestion.getItemId();
         submittedOfferStatus = suggestion.isBuySuggestion() ? OfferStatus.BUY : OfferStatus.SELL;
         submittedTick = tick;
+        submittedFillSeconds = suggestion.offerFillSeconds();
+    }
+
+    /** Expected fill time of the card behind a just-placed offer; 0 when none matches or none was given. */
+    public synchronized long matchingSubmittedFillSeconds(int itemId, OfferStatus status, int tick) {
+        return matchingSubmittedSuggestion(itemId, status, tick) == null ? 0L : submittedFillSeconds;
     }
 
     public synchronized String matchingSubmittedSuggestion(int itemId, OfferStatus status, int tick) {

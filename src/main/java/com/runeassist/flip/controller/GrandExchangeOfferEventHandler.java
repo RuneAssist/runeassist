@@ -83,9 +83,12 @@ public class GrandExchangeOfferEventHandler {
                     o.getItemId(), o.getOfferStatus(), client.getTickCount());
             o.setSuggestionId(suggestionId);
             o.setRuneAssistSuggestion(suggestionId != null);
+            o.setExpectedSeconds(suggestionManager.matchingSubmittedFillSeconds(
+                    o.getItemId(), o.getOfferStatus(), client.getTickCount()));
         } else if (prev != null) {
             o.setSuggestionId(prev.getSuggestionId());
             o.setRuneAssistSuggestion(prev.isRuneAssistSuggestion());
+            o.setExpectedSeconds(prev.getExpectedSeconds());
         }
 
         boolean consistent = isConsistent(prev, o);
