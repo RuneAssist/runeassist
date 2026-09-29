@@ -2,8 +2,6 @@
 
 **Grand Exchange flipping that fits how you play.** RuneAssist watches the market and your GE slots, then tells you what to buy, what price to list at, when to sell, and when to cut a loss. Set how often you come back to check your offers (5 minutes, 30 minutes, 2 hours, 8 hours) and it picks flips that suit that rhythm.
 
-[![RuneAssist dashboard](https://raw.githubusercontent.com/RuneAssist/runeassist/main/docs/img/dashboard.png)](https://runeassist.com)
-
 ## What you get
 
 - **One card at a time.** Buy this, at this price, this many. Sell what you hold when it's worth it. Abort an offer that isn't filling. No spreadsheets.
