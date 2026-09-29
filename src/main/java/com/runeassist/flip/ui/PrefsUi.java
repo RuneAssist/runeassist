@@ -12,6 +12,9 @@ final class PrefsUi {
     private PrefsUi() {
     }
 
+    /** Left inset that clears the floating settings gear (6px offset, 20px wide) inside the 10px panel border. */
+    static final int GEAR_CLEARANCE = 22;
+
     static JLabel sectionTitle(String text) {
         JLabel label = new JLabel(text);
         label.setForeground(Color.WHITE);
