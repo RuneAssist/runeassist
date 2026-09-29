@@ -300,6 +300,18 @@ public interface RuneAssistConfig extends Config
         return new Color(0xFF5E5E);
     }
 
+    @ConfigItem(
+            keyName = "slotOfferAge",
+            name = "Show offer age",
+            description = "Show how long each offer has been listed in the corner of its GE slot",
+            section = slotPriceColorSection,
+            position = 4
+    )
+    default boolean slotOfferAge()
+    {
+        return true;
+    }
+
     @ConfigSection(
             name = "Notifications",
             description = "Configure notification settings for flipping actions",
