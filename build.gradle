@@ -26,6 +26,16 @@ test {
     useJUnitPlatform()
 }
 
+// Real RuneLite client with this checkout of the plugin: look before every Hub submission.
+tasks.register('runClient', JavaExec) {
+    group = 'verification'
+    description = 'Starts RuneLite with the RuneAssist plugin from this checkout.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.runeassist.flip.dev.RuneAssistDevClient'
+    jvmArgs '-ea'
+    args '--developer-mode'
+}
+
 group = 'com.runeassist.flip'
 version = '1.0.1'
 
