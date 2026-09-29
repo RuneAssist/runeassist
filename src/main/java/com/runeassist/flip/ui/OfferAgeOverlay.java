@@ -3,6 +3,8 @@ package com.runeassist.flip.ui;
 import com.runeassist.flip.HeldCostTracker;
 import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.controller.GrandExchange;
+import com.runeassist.flip.model.OfferManager;
+import com.runeassist.flip.model.SavedOffer;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.GrandExchangeOffer;
@@ -23,7 +25,10 @@ import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 
-/** How long each live offer has been listed, drawn in the corner of its Grand Exchange slot. */
+/**
+ * How long each live offer has been listed, drawn in the corner of its Grand Exchange slot,
+ * with the time its card expected when one is known: "12m / ~50m".
+ */
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class OfferAgeOverlay extends Overlay {
@@ -38,8 +43,10 @@ public class OfferAgeOverlay extends Overlay {
     private final RuneAssistConfig config;
     private final GrandExchange grandExchange;
     private final HeldCostTracker heldCostTracker;
+    private final OfferManager offerManager;
 
     private final String[] labels = new String[GE_SLOT_COUNT];
+    private final String[] shortLabels = new String[GE_SLOT_COUNT];
     private long refreshedAtMs;
 
     {
@@ -66,6 +73,9 @@ public class OfferAgeOverlay extends Overlay {
             if (bounds == null || bounds.width <= 0) {
                 continue;
             }
+            if (graphics.getFontMetrics().stringWidth(label) > bounds.width - 2 * MARGIN) {
+                label = shortLabels[slot];
+            }
             int x = bounds.x + bounds.width - MARGIN - graphics.getFontMetrics().stringWidth(label);
             int y = bounds.y + MARGIN + graphics.getFontMetrics().getAscent();
             OverlayUtil.renderTextLocation(graphics, new net.runelite.api.Point(x, y), label, TEXT_COLOR);
@@ -83,6 +93,7 @@ public class OfferAgeOverlay extends Overlay {
         GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
         for (int slot = 0; slot < GE_SLOT_COUNT; slot++) {
             labels[slot] = null;
+            shortLabels[slot] = null;
             if (displayName == null || offers == null || slot >= offers.length || offers[slot] == null) {
                 continue;
             }
@@ -91,8 +102,26 @@ public class OfferAgeOverlay extends Overlay {
                 continue;
             }
             long listedMs = heldCostTracker.listedMs(displayName, slot, offers[slot].getItemId());
-            labels[slot] = formatAge(nowMs - listedMs, listedMs);
+            shortLabels[slot] = formatAge(nowMs - listedMs, listedMs);
+            labels[slot] = formatProgress(shortLabels[slot], expectedSeconds(slot, offers[slot].getItemId()));
         }
+    }
+
+    private long expectedSeconds(int slot, int itemId) {
+        try {
+            SavedOffer saved = offerManager.loadOffer(client.getAccountHash(), slot);
+            return saved != null && saved.getItemId() == itemId ? saved.getExpectedSeconds() : 0L;
+        } catch (RuntimeException e) {
+            return 0L;
+        }
+    }
+
+    /** "12m / ~50m" when the card gave an estimate, the age alone otherwise. */
+    static String formatProgress(String age, long expectedSeconds) {
+        if (age == null || expectedSeconds <= 0) {
+            return age;
+        }
+        return age + " / ~" + formatAge(Math.max(60_000L, expectedSeconds * 1000L), 1L);
     }
 
     /** "under 1m", "12m", "1h 05m", "2d 3h"; null when the listing time is unknown. */
