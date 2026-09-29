@@ -123,7 +123,10 @@ public class PreferencesPanel extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(8, 10, 10, 28));
 
         preferencesContent = PrefsUi.scrollBody();
-        preferencesContent.add(PrefsUi.sectionTitle("Suggestion Settings"));
+        // The settings gear floats over the top-left corner (x 6 to 26): keep the title clear of it.
+        JLabel settingsTitle = PrefsUi.sectionTitle("Suggestion Settings");
+        settingsTitle.setBorder(BorderFactory.createEmptyBorder(0, PrefsUi.GEAR_CLEARANCE, 0, 0));
+        preferencesContent.add(settingsTitle);
         addVerticalGap(preferencesContent, 8);
 
         loginPromptPanel = darkPanel(new GridBagLayout(), ColorScheme.DARKER_GRAY_COLOR);
