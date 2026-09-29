@@ -39,6 +39,7 @@ public class Suggestion {
     private Long targetSellTaxGp;
     private String profitModelVersion;
     private Double expectedDuration;
+    private Double estimatedBuyHours;
     @SerializedName("is_hold")
     private boolean isHold;
     private Map<Integer, Integer> bankItems;
@@ -153,6 +154,17 @@ public class Suggestion {
 
     public boolean isSellSuggestion() {
         return type == SuggestionType.SELL || type == SuggestionType.MODIFY_SELL;
+    }
+
+    /** Expected seconds for the offer this card asks for to fill; 0 when the server gave no estimate. */
+    public long offerFillSeconds() {
+        if (type == SuggestionType.BUY && estimatedBuyHours != null && estimatedBuyHours > 0) {
+            return Math.round(estimatedBuyHours * 3600);
+        }
+        if (type == SuggestionType.SELL && expectedDuration != null && expectedDuration > 0) {
+            return Math.round(expectedDuration);
+        }
+        return 0L;
     }
 
     public boolean isModifySuggestion() {
