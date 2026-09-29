@@ -25,6 +25,12 @@ Run the real client with the plugin from `main`:
 ./gradlew runClient
 ```
 
+This is the supported way to try an unreleased build: it starts RuneLite in
+developer mode with the plugin from this checkout loaded, which is what dropping
+a jar into `sideloaded-plugins` would do. It needs Java 11 and a clone of this
+repository on the machine you play on. With a Jagex account, follow RuneLite's
+wiki page "Using Jagex Accounts" once so the development client can log in.
+
 Then, on a fresh RuneLite profile and on your normal one:
 
 - [ ] Panel opens; nothing is cut off, overlapping or pushed sideways.
