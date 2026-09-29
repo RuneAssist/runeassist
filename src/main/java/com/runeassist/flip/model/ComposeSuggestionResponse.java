@@ -53,6 +53,8 @@ public class ComposeSuggestionResponse
         private String profitModelVersion;
         /** Expected fill duration in <em>seconds</em> (same as local {@link Suggestion}). */
         private Double expectedDuration;
+        /** Expected time for the buy offer alone, in hours; absent on older servers and on sells. */
+        private Double estimatedBuyHours;
         private int geLimit;
         /** Remaining 4h buy-limit; {@code -1} if unknown. */
         private int remainingLimit = -1;
