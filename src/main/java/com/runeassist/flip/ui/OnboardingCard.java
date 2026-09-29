@@ -12,8 +12,10 @@ import java.awt.*;
 public class OnboardingCard extends JPanel {
     // Swing only wraps HTML text when it is given a width (in points, about 4/3 px).
     private static final int TEXT_WIDTH_PT = (MainPanel.CONTENT_WIDTH - 24) * 3 / 4;
+    // The settings gear is drawn over the top left corner of the panel: the heading starts after it.
+    private static final int TITLE_INDENT_PT = PrefsUi.GEAR_CLEARANCE * 3 / 4;
     private static final String TEXT = "<html><div style='width:" + TEXT_WIDTH_PT + "pt'>"
-            + "<b>Welcome to RuneAssist</b><br>"
+            + "<div style='margin-left:" + TITLE_INDENT_PT + "pt'><b>Welcome to RuneAssist</b></div>"
             + "1. Set the <b>check-in interval</b> below to how often you come back to your offers. "
             + "It decides which flips you get; it is not a time limit.<br>"
             + "2. You get <b>one card at a time</b>: buy, sell, or abort. Skip a card you don't like; "
