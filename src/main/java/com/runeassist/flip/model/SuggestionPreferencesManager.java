@@ -308,6 +308,12 @@ public class SuggestionPreferencesManager {
     }
 
     private synchronized void loadAvailableProfiles() {
+        // A fresh install has no data folder until the first save: that is not an error.
+        if (!dataDir.exists()) {
+            availableProfiles = new ArrayList<>();
+            availableProfiles.add(defaultProfile);
+            return;
+        }
         try (Stream<Filepath> paths = dataDir.walk(1)) {
             availableProfiles = paths
                     .filter(p -> p.getFileName().endsWith(PROFILE_SUFFIX))
