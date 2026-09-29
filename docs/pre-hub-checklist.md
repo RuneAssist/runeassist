@@ -37,7 +37,7 @@ Then, on a fresh RuneLite profile and on your normal one:
 - [ ] Welcome card: all three buttons visible; "Got it" hides it and it stays hidden after a restart.
 - [ ] Settings: gear opens and closes it; every heading and control is readable.
 - [ ] Log in, open the Grand Exchange: a card appears; buy, sell, skip and pause work.
-- [ ] Grand Exchange slots: each live offer shows its age in the top right corner, clear of the slot title.
+- [ ] Grand Exchange slots: each live offer shows its age in the top right corner, and an offer placed from a card shows the expected time on a second line under it. Neither line touches the slot title or the item name.
 - [ ] Existing data is still there (flip history, profiles, blocklist).
 - [ ] RuneLite's log has no errors from `com.runeassist` (Help, Open logs folder).
 

@@ -27,7 +27,8 @@ import java.awt.Rectangle;
 
 /**
  * How long each live offer has been listed, drawn in the corner of its Grand Exchange slot,
- * with the time its card expected when one is known: "12m / ~50m".
+ * with the time its card expected on a second line when one is known: "12m" over "~50m".
+ * Two short lines stay clear of the slot title, which one long line would run into.
  */
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
@@ -38,6 +39,7 @@ public class OfferAgeOverlay extends Overlay {
     private static final int MARGIN = 5;
     private static final long REFRESH_MS = 1000L;
     private static final Color TEXT_COLOR = new Color(0xC8C8C8);
+    private static final Color EXPECTED_COLOR = new Color(0x969696);
 
     private final Client client;
     private final RuneAssistConfig config;
@@ -46,7 +48,7 @@ public class OfferAgeOverlay extends Overlay {
     private final OfferManager offerManager;
 
     private final String[] labels = new String[GE_SLOT_COUNT];
-    private final String[] shortLabels = new String[GE_SLOT_COUNT];
+    private final String[] expectedLabels = new String[GE_SLOT_COUNT];
     private long refreshedAtMs;
 
     {
@@ -73,14 +75,19 @@ public class OfferAgeOverlay extends Overlay {
             if (bounds == null || bounds.width <= 0) {
                 continue;
             }
-            if (graphics.getFontMetrics().stringWidth(label) > bounds.width - 2 * MARGIN) {
-                label = shortLabels[slot];
-            }
-            int x = bounds.x + bounds.width - MARGIN - graphics.getFontMetrics().stringWidth(label);
             int y = bounds.y + MARGIN + graphics.getFontMetrics().getAscent();
-            OverlayUtil.renderTextLocation(graphics, new net.runelite.api.Point(x, y), label, TEXT_COLOR);
+            drawRightAligned(graphics, bounds, y, label, TEXT_COLOR);
+            if (expectedLabels[slot] != null) {
+                drawRightAligned(graphics, bounds, y + graphics.getFontMetrics().getHeight(),
+                    expectedLabels[slot], EXPECTED_COLOR);
+            }
         }
         return null;
+    }
+
+    private static void drawRightAligned(Graphics2D graphics, Rectangle bounds, int y, String text, Color color) {
+        int x = bounds.x + bounds.width - MARGIN - graphics.getFontMetrics().stringWidth(text);
+        OverlayUtil.renderTextLocation(graphics, new net.runelite.api.Point(x, y), text, color);
     }
 
     private void refreshLabels(long nowMs) {
@@ -93,7 +100,7 @@ public class OfferAgeOverlay extends Overlay {
         GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
         for (int slot = 0; slot < GE_SLOT_COUNT; slot++) {
             labels[slot] = null;
-            shortLabels[slot] = null;
+            expectedLabels[slot] = null;
             if (displayName == null || offers == null || slot >= offers.length || offers[slot] == null) {
                 continue;
             }
@@ -102,8 +109,9 @@ public class OfferAgeOverlay extends Overlay {
                 continue;
             }
             long listedMs = heldCostTracker.listedMs(displayName, slot, offers[slot].getItemId());
-            shortLabels[slot] = formatAge(nowMs - listedMs, listedMs);
-            labels[slot] = formatProgress(shortLabels[slot], expectedSeconds(slot, offers[slot].getItemId()));
+            labels[slot] = formatAge(nowMs - listedMs, listedMs);
+            expectedLabels[slot] = labels[slot] == null ? null
+                : formatExpected(expectedSeconds(slot, offers[slot].getItemId()));
         }
     }
 
@@ -116,12 +124,12 @@ public class OfferAgeOverlay extends Overlay {
         }
     }
 
-    /** "12m / ~50m" when the card gave an estimate, the age alone otherwise. */
-    static String formatProgress(String age, long expectedSeconds) {
-        if (age == null || expectedSeconds <= 0) {
-            return age;
+    /** "~50m" when the card gave an estimate, null otherwise. */
+    static String formatExpected(long expectedSeconds) {
+        if (expectedSeconds <= 0) {
+            return null;
         }
-        return age + " / ~" + formatAge(Math.max(60_000L, expectedSeconds * 1000L), 1L);
+        return "~" + formatAge(Math.max(60_000L, expectedSeconds * 1000L), 1L);
     }
 
     /** "under 1m", "12m", "1h 05m", "2d 3h"; null when the listing time is unknown. */

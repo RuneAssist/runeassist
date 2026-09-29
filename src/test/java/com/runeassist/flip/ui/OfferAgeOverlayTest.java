@@ -24,11 +24,10 @@ class OfferAgeOverlayTest {
     }
 
     @Test
-    void progressShowsTheEstimateWhenTheCardGaveOne() {
-        assertEquals("12m / ~50m", OfferAgeOverlay.formatProgress("12m", 3000L));
-        assertEquals("1h 05m / ~2h 40m", OfferAgeOverlay.formatProgress("1h 05m", 9600L));
-        assertEquals("<1m / ~1m", OfferAgeOverlay.formatProgress("<1m", 20L));
-        assertEquals("12m", OfferAgeOverlay.formatProgress("12m", 0L));
-        assertNull(OfferAgeOverlay.formatProgress(null, 3000L));
+    void expectedTimeShowsOnlyWhenTheCardGaveOne() {
+        assertEquals("~50m", OfferAgeOverlay.formatExpected(3000L));
+        assertEquals("~2h 40m", OfferAgeOverlay.formatExpected(9600L));
+        assertEquals("~1m", OfferAgeOverlay.formatExpected(20L));
+        assertNull(OfferAgeOverlay.formatExpected(0L));
     }
 }
