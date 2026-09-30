@@ -27,6 +27,7 @@ public class GrandExchange {
     /** The typed offer price since the 30 Sep 2026 max cash update: a 64-bit varp, unnamed in RuneLite 1.13.1. */
     public static final int OFFER_SETUP_PRICE_VARP = 5753;
     private final Client client;
+    private final GeSearchResults geSearchResults;
 
     boolean isHomeScreenOpen() {
         return isOpen() && !isSlotOpen();
@@ -245,7 +246,7 @@ public class GrandExchange {
     }
 
     private boolean isSearchOpen() {
-        Widget searchResults = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
+        Widget searchResults = geSearchResults.layer();
         return searchResults != null && !searchResults.isHidden();
     }
 }

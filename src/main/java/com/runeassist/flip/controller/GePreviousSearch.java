@@ -21,6 +21,7 @@ public class GePreviousSearch {
     private final GrandExchange grandExchange;
     private final HighlightController highlightController;
     private final Client client;
+    private final GeSearchResults geSearchResults;
 
 
     public void showSuggestedItemInSearch() {
@@ -44,7 +45,7 @@ public class GePreviousSearch {
 
 
     private boolean previousSearchItemExists() {
-        Widget searchResults = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
+        Widget searchResults = geSearchResults.layer();
         if(searchResults == null || searchResults.getChildren() == null || searchResults.getChildren().length < 2) {
             return false;
         }
@@ -65,7 +66,7 @@ public class GePreviousSearch {
     }
 
     private void setPreviousSearch(int itemId, String itemName) {
-        Widget searchResults = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
+        Widget searchResults = geSearchResults.layer();
         Widget previousSearch = searchResults.getChild(0);
         previousSearch.setHasListener(true);
         previousSearch.setOnOpListener(754, itemId, 84);
@@ -90,7 +91,7 @@ public class GePreviousSearch {
     }
 
     private void createPreviousSearchWidget(int itemId, String itemName) {
-        Widget parentWidget = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
+        Widget parentWidget = geSearchResults.layer();
         Widget widget = parentWidget.createChild(0, WidgetType.RECTANGLE);
         widget.setTextColor(0xFFFFFF);
         widget.setOpacity(255);
@@ -118,7 +119,7 @@ public class GePreviousSearch {
     }
 
     private void createPreviousSearchTextWidget() {
-        Widget parentWidget = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
+        Widget parentWidget = geSearchResults.layer();
         Widget widget = parentWidget.createChild(1, WidgetType.TEXT);
         widget.setText("RuneAssist:");
         widget.setFontId(495);
@@ -131,7 +132,7 @@ public class GePreviousSearch {
     }
 
     private void createPreviousSearchItemNameWidget(String itemName) {
-        Widget parentWidget = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
+        Widget parentWidget = geSearchResults.layer();
         Widget widget = parentWidget.createChild(2, WidgetType.TEXT);
         widget.setText(itemName);
         widget.setFontId(495);
@@ -144,7 +145,7 @@ public class GePreviousSearch {
     }
 
     private void createPreviousSearchItemWidget(int itemId) {
-        Widget parentWidget = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
+        Widget parentWidget = geSearchResults.layer();
         Widget widget = parentWidget.createChild(3, WidgetType.GRAPHIC);
         widget.setItemId(itemId);
         widget.setItemQuantity(1);

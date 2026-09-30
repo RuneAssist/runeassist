@@ -34,7 +34,7 @@ class SuggestionTradingContextTest {
         OsrsLoginManager login = new OsrsLoginManager(client) {
             @Override public boolean isValidLoginState() { return loggedIn; }
         };
-        GrandExchange ge = new GrandExchange(client) {
+        GrandExchange ge = new GrandExchange(client, new GeSearchResults(client)) {
             @Override public boolean isOpen() { return geOpen; }
             @Override boolean hasFillingSellOffer(int itemId) { return fillingSell; }
             @Override public boolean isSetupOfferOpen() { return setupOpen; }
@@ -48,7 +48,7 @@ class SuggestionTradingContextTest {
             @Override public boolean isPaused() { return pauses.getOrDefault(account, false); }
         };
         HighlightController highlights = new HighlightController(null, null, null, null,
-                null, null, null, null, null, null, null, null) {
+                null, null, null, null, null, null, null, null, null) {
             @Override public void removeAll() { clearHighlights++; }
         };
         RuneAssistSuggestionSource source = new RuneAssistSuggestionSource() {
