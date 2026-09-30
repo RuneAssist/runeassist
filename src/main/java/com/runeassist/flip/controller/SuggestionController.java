@@ -574,7 +574,7 @@ public class SuggestionController {
         if (why.contains("in your bank")) {
             return "Withdraw " + name + " to sell it";
         }
-        return name + " is not in your inventory or bank. Withdraw it, or remove it from the portfolio if it is gone";
+        return name + " is not in your inventory or bank. Open the GE History tab to update, or remove it from the portfolio";
     }
 
     public boolean isSellAvailableNow(Suggestion suggestion) {

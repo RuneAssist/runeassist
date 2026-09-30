@@ -348,6 +348,34 @@ public class FlipHistorySyncService {
         }
     }
 
+    /** The GE History tab as read: the server recovers any trade the plugin missed. */
+    public void sendGeHistory(List<GeHistoryReader.Row> rows) {
+        String displayName = osrsLoginManager.getPlayerDisplayName();
+        String osrsAccountId = linkedOsrsAccountId(displayName);
+        if (osrsAccountId == null || rows == null || rows.isEmpty()) return;
+        JsonObject body = new JsonObject();
+        body.addProperty("osrsAccountId", osrsAccountId);
+        JsonArray list = new JsonArray();
+        for (GeHistoryReader.Row r : rows) {
+            JsonObject o = new JsonObject();
+            o.addProperty("itemId", r.itemId);
+            o.addProperty("quantity", r.quantity);
+            o.addProperty("price", r.price);
+            o.addProperty("side", r.buy ? "buy" : "sell");
+            list.add(o);
+        }
+        body.add("rows", list);
+        async("ge history", () -> {
+            JsonObject reply = api.post("/v1/account/ge-history", body, true);
+            if (reply == null) return;
+            int recovered = reply.has("recovered") ? reply.get("recovered").getAsInt() : 0;
+            if (recovered > 0) {
+                log.info("GE history: server recovered {} trade(s) the plugin missed", recovered);
+                suggestionManager.setSuggestionNeeded(true);
+            }
+        });
+    }
+
     /** Report an exact GE state transition; periodic board snapshots remain the fallback. */
     public void reportOfferEvent(int slot, SavedOffer offer, SavedOffer previous) {
         if (!config.contributeTrainingData() || offer == null) return;

@@ -122,6 +122,8 @@ public class RuneAssistPlugin extends Plugin {
 	private PortfolioBankTabBadgeOverlay portfolioBankTabBadgeOverlay;
 	@Inject
 	private BankStateRS bankStateRS;
+	@Inject
+	private GeHistoryReader geHistoryReader;
 
 	@Inject
 	private PatchNotesController patchNotesController;
@@ -336,6 +338,7 @@ public class RuneAssistPlugin extends Plugin {
 	@Subscribe
 	public void onGameTick(GameTick event) {
 		bankStateRS.onGameTick();
+		geHistoryReader.onGameTick();
 		grandExchangeOpenRS.set(grandExchange.isOpen());
 
 		suggestionController.onGameTick();
