@@ -66,6 +66,20 @@ public class AccountHttp {
         return auth(b, authed) ? execute(b.build()) : null;
     }
 
+    /** Like post(authed) but proceeds without a token when the device has none yet. */
+    public JsonObject postWithTokenIfAny(String path, JsonObject json) {
+        Request.Builder b = new Request.Builder()
+                .url(origin() + path)
+                .header("User-Agent", UA)
+                .header("Content-Type", "application/json")
+                .post(RequestBody.create(JSON, gson.toJson(json)));
+        String token = deviceToken();
+        if (token != null) {
+            b.header("Authorization", "Bearer " + token);
+        }
+        return execute(b.build());
+    }
+
     public JsonObject post(String path, JsonObject json, boolean authed) {
         Request.Builder b = new Request.Builder()
                 .url(origin() + path)
