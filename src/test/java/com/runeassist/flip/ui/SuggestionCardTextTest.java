@@ -103,6 +103,14 @@ class SuggestionCardTextTest {
         assertEquals("Waiting for a suitable flip", SuggestionCardText.waitStatus(null));
     }
 
+    @Test void anUnseenHoldingIsNamedInsteadOfLookingLikeAnEmptyMarket() {
+        assertEquals("Withdraw Dragon hunter wand to sell it",
+                SuggestionCardText.waitStatus("Withdraw Dragon hunter wand to sell it"));
+        assertEquals("Dragon hunter wand is not in your inventory or bank. Withdraw it, or remove it from the portfolio if it is gone",
+                SuggestionCardText.waitStatus("Dragon hunter wand is not in your inventory or bank. Withdraw it, or remove it from the portfolio if it is gone"));
+        assertEquals("Waiting for a suitable flip", SuggestionCardText.waitStatus("Waiting for inventory update"));
+    }
+
     @Test void actionableWaitStatesRemainDistinct() {
         assertEquals("Waiting for offers to fill", SuggestionCardText.waitStatus("All GE slots are full."));
         assertEquals("More coins needed", SuggestionCardText.waitStatus("Not enough coins for the next flip."));
