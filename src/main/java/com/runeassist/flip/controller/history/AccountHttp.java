@@ -1,5 +1,6 @@
 package com.runeassist.flip.controller.history;
 
+import com.runeassist.flip.util.Version;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.runeassist.flip.controller.BugReportClient;
@@ -22,7 +23,7 @@ import java.nio.charset.StandardCharsets;
 public class AccountHttp {
 
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
-    private static final String UA = "RuneAssist-flip/1.0";
+    private static final String UA = Version.USER_AGENT;
 
     private final OkHttpClient http;
     private final Gson gson;

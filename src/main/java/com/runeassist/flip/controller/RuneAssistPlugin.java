@@ -176,6 +176,7 @@ public class RuneAssistPlugin extends Plugin {
 
 	@Override
 	protected void startUp() throws Exception {
+		log.info("RuneAssist Flipping {} starting", com.runeassist.flip.util.Version.VERSION);
 		suggestionExecutor.start();
 		boolean hadExistingInstallation = Persistance.hasExistingInstallation();
 		keybindHandler.register();
