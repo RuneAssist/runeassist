@@ -41,6 +41,7 @@ public class HighlightController {
     private final GrandExchange grandExchange;
     private final AccountStatusManager accountStatusManager;
     private final Client client;
+    private final GeSearchResults geSearchResults;
     private final OfferManager offerManager;
     private final OverlayManager overlayManager;
     private final HighlightColorController highlightColorController;
@@ -385,7 +386,7 @@ public class HighlightController {
         if (!client.getVarcStrValue(VarClientStr.INPUT_TEXT).isEmpty()) {
             return;
         }
-        Widget searchResults = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
+        Widget searchResults = geSearchResults.layer();
         if (searchResults == null) {
             return;
         }

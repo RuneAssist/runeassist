@@ -16,7 +16,7 @@ class GrandExchangeVisibilityTest {
                     if (method.getName().equals("getWidget")) return (int) args[1] == 7 ? home : editor;
                     throw new AssertionError("Unexpected client call: " + method.getName());
                 });
-        GrandExchange ge = new GrandExchange(client);
+        GrandExchange ge = new GrandExchange(client, new GeSearchResults(client));
         assertTrue(ge.isOpen());
         visible[0] = false;
         visible[1] = true;

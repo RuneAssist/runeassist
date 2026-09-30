@@ -35,6 +35,7 @@ public class GameUiChangesHandler {
     // dependencies
     private final ClientThread clientThread;
     private final Client client;
+    private final GeSearchResults geSearchResults;
     private final GePreviousSearch gePreviousSearch;
     private final HighlightController highlightController;
     private final SuggestionManager suggestionManager;
@@ -132,7 +133,7 @@ public class GameUiChangesHandler {
      * with nothing typed yet. Safe to call again: an existing row is updated, not doubled.
      */
     private void showCardItemInSearchIfOpen() {
-        Widget results = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
+        Widget results = geSearchResults.layer();
         int mode = client.getVarcIntValue(VarClientID.MESLAYERMODE);
         String typed = client.getVarcStrValue(VarClientStr.INPUT_TEXT);
         if (DEV) {
