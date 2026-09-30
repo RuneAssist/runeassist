@@ -24,8 +24,6 @@ import net.runelite.api.gameval.InterfaceID;
 public class GameUiChangesHandler {
     private static final int SCRIPT_GE_COLLECT = 782;
     private static final int MESLAYER_MODE_ITEM_SEARCH = 14;
-    /** Extra search logging in a development client (the launcher sets this flag). */
-    private static final boolean DEV = Boolean.getBoolean(com.runeassist.flip.HubPluginConflict.ALLOW_PROPERTY);
     private static final int SCRIPT_GE_SLOT_REDRAW = 804;
     private static final String BANK_TAG_TAB_VIEW_OPTION = "View tag tab";
     // Bank tag tab widgets exist before bank item bounds settle.
@@ -62,10 +60,8 @@ public class GameUiChangesHandler {
             requestBankRebuildHighlightRedraw();
         }
 
-        // The item search is chat input mode 14 (still, after the 30 Sep 2026 GE update; the
-        // chatbox title widget keeps the previous prompt's text, so it cannot identify it).
-        // The results list is built by the game after the mode changes, wiping anything
-        // placed early, so the placing happens when its build script fires (onScriptPostFired).
+        // Item search is chat input mode 14. The game builds the results list after the mode
+        // changes, so the placing happens when its build script fires (onScriptPostFired).
         if (event.getIndex() == VarClientID.MESLAYERMODE
                 && client.getVarcIntValue(VarClientID.MESLAYERMODE) == MESLAYER_MODE_ITEM_SEARCH) {
             itemSearchChatboxOpen = true;
@@ -93,10 +89,8 @@ public class GameUiChangesHandler {
             return;
         }
 
-        // Check that it was a chat input that got enabled while the offer setup is showing.
-        // The quantity prompt is input mode 7; since the 30 Sep 2026 GE update the price
-        // prompt takes figures beyond max cash and arrives in a mode of its own, so the
-        // prompt text decides rather than the mode number.
+        // A chat input opened over the offer setup: the prompt text decides whether it is the
+        // quantity or the price step (the price prompt has had its own input mode since 30 Sep 2026).
         int mode = client.getVarcIntValue(VarClientID.MESLAYERMODE);
         if (event.getIndex() != VarClientID.MESLAYERMODE
                 || mode == 0
@@ -108,7 +102,6 @@ public class GameUiChangesHandler {
         clientThread.invokeLater(() ->
         {
             if (!offerHandler.isSettingPrice() && !offerHandler.isSettingQuantity()) {
-                log.debug("chatbox mode {} opened over the offer setup but is not a price or quantity prompt", mode);
                 return;
             }
             quantityOrPriceChatboxOpen = true;
@@ -128,21 +121,11 @@ public class GameUiChangesHandler {
         });
     }
 
-    /**
-     * Client thread. Puts the card's item at the top of the item search while it is open
-     * with nothing typed yet. Safe to call again: an existing row is updated, not doubled.
-     */
+    /** Client thread. Puts the card's item at the top of the open, still empty, item search. Idempotent. */
     private void showCardItemInSearchIfOpen() {
         Widget results = geSearchResults.layer();
         int mode = client.getVarcIntValue(VarClientID.MESLAYERMODE);
         String typed = client.getVarcStrValue(VarClientStr.INPUT_TEXT);
-        if (DEV) {
-            Widget[] kids = results == null ? null : results.getDynamicChildren();
-            log.info("search check: mode={} results={} typed='{}' lastSearched={} card={}", mode,
-                    results == null ? "null" : (results.isHidden() ? "hidden" : "kids=" + (kids == null ? -1 : kids.length)),
-                    typed, client.getVarpValue(VarPlayerID.GE_LAST_SEARCHED),
-                    suggestionManager.getSuggestion() == null ? null : suggestionManager.getSuggestion().getType());
-        }
         if (mode != MESLAYER_MODE_ITEM_SEARCH || results == null || results.isHidden()
                 || (typed != null && !typed.isEmpty())) {
             return;
@@ -300,7 +283,6 @@ public class GameUiChangesHandler {
         }
         if (grandExchange.isOpen()) {
             slotProfitColorizer.updateAllSlots();
-            // The typed price no longer arrives as a varbit change; watch the price box instead.
             long offerPrice = grandExchange.getOfferPrice();
             if (offerPrice != lastOfferPrice) {
                 lastOfferPrice = offerPrice;

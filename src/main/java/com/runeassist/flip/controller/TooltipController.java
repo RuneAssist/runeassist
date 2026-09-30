@@ -54,8 +54,7 @@ public class TooltipController {
         if (text != null && background != null && border != null) {
 
             if (text.getText().contains("Profit:") || text.getText().contains("Listed ")) {
-                // Already carries our lines; the script re-fires while the mouse rests on the slot.
-                return;
+                return; // already carries our lines; the script re-fires while the mouse rests
             }
 
             int added = 0;
@@ -85,7 +84,7 @@ public class TooltipController {
         }
     }
 
-    /** The slot under the mouse, which is the one the game built the tooltip for; -1 if none. */
+    /** The slot under the mouse, the one the tooltip is for; -1 if none. */
     private int hoveredSlot() {
         Point mouse = client.getMouseCanvasPosition();
         if (mouse == null) {
