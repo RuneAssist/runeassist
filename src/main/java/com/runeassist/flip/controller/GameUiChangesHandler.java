@@ -48,6 +48,7 @@ public class GameUiChangesHandler {
     boolean quantityOrPriceChatboxOpen;
     boolean itemSearchChatboxOpen = false;
     int bankRebuildHighlightRedrawFramesRemaining = 0;
+    long lastOfferPrice = 0L;
     @Getter
     OfferEditor flippingWidget = null;
 
@@ -170,7 +171,6 @@ public class GameUiChangesHandler {
         if (event.getVarpId() == 375
                 || event.getVarpId() == VarPlayerID.TRADINGPOST_SEARCH
                 || event.getVarbitId() == VarbitID.GE_NEWOFFER_QUANTITY
-                || event.getVarbitId() == VarbitID.GE_NEWOFFER_PRICE
                 || event.getVarbitId() == VarbitID.GE_SELECTEDSLOT) {
             clientThread.invokeLater(highlightController::redraw);
         }
@@ -251,6 +251,12 @@ public class GameUiChangesHandler {
         }
         if (grandExchange.isOpen()) {
             slotProfitColorizer.updateAllSlots();
+            // The typed price no longer arrives as a varbit change; watch the price box instead.
+            long offerPrice = grandExchange.getOfferPrice();
+            if (offerPrice != lastOfferPrice) {
+                lastOfferPrice = offerPrice;
+                highlightController.redraw();
+            }
         }
     }
 
