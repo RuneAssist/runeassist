@@ -15,7 +15,6 @@ public class StatsPanel extends BaseStatsPanel {
             "Last high price", "24h change", "Week change"
     };
 
-    // Set custom cell renderer for value column to color the change percentages (rows 5 and 6)
     public StatsPanel(PriceGraphConfigManager configManager, RuneAssistConfig pluginConfig) {
         super(configManager, ROWS, 400,
                 new ValueRenderer(pluginConfig, "0%", Arrays.asList(5, 6), Collections.emptyList()));

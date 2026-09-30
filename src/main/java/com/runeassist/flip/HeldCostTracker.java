@@ -16,13 +16,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** FIFO cost-basis tracker for held GE stock; persisted per OSRS display name. */
 @Slf4j
 @Singleton
 public class HeldCostTracker
 {
     private static final String GROUP = "runeassistflip";
-    private static final String KEY_PREFIX = "heldcost_"; // ConfigManager rejects ':' in keys
+    private static final String KEY_PREFIX = "heldcost_";
     private static final long LIMIT_WINDOW_MS = 4L * 60 * 60 * 1000;
 
     @Inject private ConfigManager configManager;
@@ -44,9 +43,6 @@ public class HeldCostTracker
         if (state == null) return;
         if (state == GrandExchangeOfferState.EMPTY)
         {
-            // Collection ends this offer instance, not ownership of the items.
-            // Keeping the cumulative counters would make a same-item replacement
-            // look like another update of the old offer and lose its fills.
             if (acc.slots.remove(slot) != null) save(displayName, acc);
             return;
         }
@@ -89,7 +85,6 @@ public class HeldCostTracker
         save(displayName, acc);
     }
 
-    /** Dose-conserving bank decant: carry FIFO cost from {@code fromItemId} into {@code toItemId}. */
     public synchronized void applyDecant(String displayName, int fromItemId, int fromQty, int toItemId, int toQty)
     {
         if (fromQty <= 0 || toQty <= 0 || fromItemId <= 0 || toItemId <= 0) return;
@@ -105,7 +100,6 @@ public class HeldCostTracker
         save(displayName, acc);
     }
 
-    /** Manual held lot (Add to portfolio); {@code unitCost} is typically a market quote estimate. */
     public synchronized void addManualLot(String displayName, int itemId, int qty, long unitCost)
     {
         if (itemId <= 0 || qty <= 0 || unitCost < 0) return;
@@ -116,7 +110,6 @@ public class HeldCostTracker
         save(displayName, acc);
     }
 
-    /** Drop held stock for item; {@code qty <= 0} clears all lots. Returns qty removed. */
     public synchronized int removeLots(String displayName, int itemId, int qty)
     {
         if (itemId <= 0) return 0;
@@ -132,7 +125,6 @@ public class HeldCostTracker
         return removed;
     }
 
-    /** Drop every tracked lot for this account. */
     public synchronized int clearLots(String displayName)
     {
         HeldCostLots.Account acc = account(displayName);
@@ -148,10 +140,6 @@ public class HeldCostTracker
         return removed;
     }
 
-    /**
-     * Replace cost-basis lots from server held snapshot. Slots / 4h limit trackers unchanged.
-     * @param held itemId -&gt; [qty, avgBuy]; null/empty clears positions
-     */
     public synchronized void replaceServerHeld(String displayName, Map<Integer, long[]> held)
     {
         HeldCostLots.Account acc = account(displayName);
@@ -159,7 +147,6 @@ public class HeldCostTracker
         replaceServerHeld(displayName, acc, held);
     }
 
-    /** Apply a response only if no local fill changed held stock while it was in flight. */
     public synchronized boolean replaceServerHeldIfUnchanged(
         String displayName, Map<Integer, long[]> held, long expectedRevision)
     {
@@ -262,11 +249,6 @@ public class HeldCostTracker
         return out;
     }
 
-    /**
-     * Remaining for card display; -1 only if wiki limit unknown.
-     * With no local fill samples for this item, assume the full wiki limit remains
-     * (same assumption the server scorer uses when remainingBuyLimit is omitted).
-     */
     public synchronized int remainingLimitOrUnknown(String displayName, int itemId, int geLimit)
     {
         if (geLimit <= 0) return -1;

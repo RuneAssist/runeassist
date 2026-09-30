@@ -165,16 +165,13 @@ public class GraphPanel extends JPanel {
         g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
-        // First draw the legend above the plot area
         renderer.drawLegend(g2d, config, pricePa, data.predictionTimes != null);
 
-        // Draw the plot area background with dynamic padding
         g2d.setColor(config.plotAreaColor);
         g2d.fillRect(pricePa.x, pricePa.y, pricePa.width, pricePa.height);
         g2d.fillRect(volumePa.x, volumePa.y,  volumePa.width, volumePa.height);
         
         TimeAxis xAxis = AxisCalculator.calculateTimeAxis(bounds, AxisCalculator.getLocalTimeOffsetSeconds());
-        // trailing args are (max labelled ticks, max grid lines) for each axis
         YAxis yAxis = AxisCalculator.calculateNumericAxis(bounds.yMin, bounds.yMax, bounds.yDelta(), 18, 28);
         YAxis y2Axis = AxisCalculator.calculateNumericAxis(bounds.y2Min, bounds.y2Max, bounds.y2Delta(), 8, 16);
 
@@ -220,7 +217,6 @@ public class GraphPanel extends JPanel {
             renderer.drawTxsDatapoints(g2d, pricePa, bounds, this.dataManager.flipCloseDatapoints, hoveredPoint, config);
         }
 
-        // Draw tooltip for hovered point
         if (hoveredPoint != null) {
             if (hoveredPoint.type == Datapoint.Type.VOLUME_1H) {
                 DatapointTooltip.drawVolume(g2d, config, volumePa, bounds, hoveredPoint);

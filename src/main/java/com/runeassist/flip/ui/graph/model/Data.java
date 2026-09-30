@@ -11,7 +11,6 @@ public class Data {
     @Getter
     public boolean fromWaitSuggestion;
 
-    // 6 months 1h data
     public int[] low1hTimes;
 
     public long[] low1hPrices;
@@ -20,7 +19,6 @@ public class Data {
 
     public long[] high1hPrices;
 
-    // 1 month 5m data
     public int[] low5mTimes;
 
     public long[] low5mPrices;
@@ -29,7 +27,6 @@ public class Data {
 
     public long[] high5mPrices;
 
-    // several days latest data
     public int[] lowLatestTimes;
 
     public long[] lowLatestPrices;
@@ -52,7 +49,6 @@ public class Data {
 
     public long[] predictionHighIQRLower;
 
-    // the volumes are for UTC hour bins and the current time is assumed to be (predictionTimes[0] - 60) epoch seconds
     public int[] volume1hLows;
     public int[] volume1hHighs;
     public int[] volume1hTimes;
@@ -61,7 +57,6 @@ public class Data {
     public int[] volume5mHighs;
     public int[] volume5mTimes;
     
-    // stats
     public int itemId;
 
     public String name;

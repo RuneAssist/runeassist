@@ -14,7 +14,6 @@ public class FlipStatsPanel extends BaseStatsPanel {
             "Avg. buy price", "Avg. sell price", "Tax", "Profit", "Profit ea.", "ROI"
     };
 
-    // Set custom cell renderer for value column to color the Profit (row 8) and ROI (row 10) rows
     public FlipStatsPanel(PriceGraphConfigManager configManager, RuneAssistConfig pluginConfig) {
         super(configManager, ROWS, 450,
                 new ValueRenderer(pluginConfig, "0.00%", Collections.singletonList(10), Collections.singletonList(8)));

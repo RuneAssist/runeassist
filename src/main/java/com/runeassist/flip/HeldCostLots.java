@@ -7,7 +7,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** FIFO lot / slot helpers for {@link HeldCostTracker}. */
 final class HeldCostLots {
 
     private HeldCostLots() {
@@ -46,7 +45,6 @@ final class HeldCostLots {
         }
     }
 
-    /** Per-account state — never shared across accounts under one RuneLite profile. */
     static final class Account {
         final Map<Integer, Deque<Lot>> positions = new LinkedHashMap<>();
         final Map<Integer, Slot> slots = new HashMap<>();
@@ -76,7 +74,6 @@ final class HeldCostLots {
         }
     }
 
-    /** Returns {qtyActuallyConsumed, totalCostOfThat}. */
     static long[] consumeUpTo(Account acc, int itemId, int qty) {
         Deque<Lot> lots = acc.positions.get(itemId);
         int remaining = qty;
@@ -111,7 +108,6 @@ final class HeldCostLots {
         return qty;
     }
 
-    /** itemId -> {qty, avgBuy} for stock with a known cost basis. */
     static Map<Integer, long[]> summarize(Account acc) {
         Map<Integer, long[]> out = new HashMap<>();
         for (Map.Entry<Integer, Deque<Lot>> e : acc.positions.entrySet()) {

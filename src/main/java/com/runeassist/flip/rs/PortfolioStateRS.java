@@ -91,7 +91,6 @@ public class PortfolioStateRS extends ReactiveStateImpl<PortfolioState> {
         updatePortfolioState(suggestionBank, portfolioItems, offers, uncollected, portfolioItemsTime, () -> true);
     }
 
-    /** Recheck the owning account/context on the client thread, not only before queuing. */
     public void updatePortfolioState(Map<Integer, Integer> suggestionBank,
                                      List<Suggestion.PortfolioItem> portfolioItems,
                                      StatusOfferList offers,

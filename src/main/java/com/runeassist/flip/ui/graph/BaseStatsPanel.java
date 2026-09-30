@@ -93,10 +93,6 @@ abstract class BaseStatsPanel extends JPanel {
         return timestamp == 0 ? "n/a" : Constants.SECOND_DATE_FORMAT.format(new Date(timestamp * 1000L));
     }
 
-    /**
-     * Colours the value column: percentage rows green/red unless they equal the (format specific)
-     * zero literal, plain number rows green/red by sign, everything else left at the table default.
-     */
     static class ValueRenderer extends DefaultTableCellRenderer {
         private final RuneAssistConfig config;
         private final String percentZero;
@@ -140,7 +136,6 @@ abstract class BaseStatsPanel extends JPanel {
                     return config.profitAmountColor();
                 }
             } catch (NumberFormatException ignored) {
-                // fall through to the default colour
             }
             return table.getForeground();
         }

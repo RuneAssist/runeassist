@@ -5,18 +5,10 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginManager;
 
-/**
- * Detects the Plugin Hub flipping plugin ({@code com.flippingcopilot.*} /
- * descriptor name "Flipping Copilot") so RuneAssist does not emit competing GE suggestions.
- */
 @Slf4j
 public final class HubPluginConflict
 {
     public static final String WAIT_MESSAGE = "Turn off Plugin Hub Flipping Copilot";
-    /**
-     * JVM property that lets both plugins run at once, for side-by-side research on a
-     * developer launch. It cannot be set from the Plugin Hub build, so players keep the guard.
-     */
     public static final String ALLOW_PROPERTY = "runeassist.allowCopilot";
 
     private HubPluginConflict()

@@ -37,10 +37,6 @@ public class AccountSuggestionPreferencesRS extends ReactiveStateImpl<AccountSug
         this.executorService.submit(() -> loadAccountPreferences(accountHash));
     }
 
-    /**
-     * True once an OSRS account hash is known. The hash is retained after logout, so preferences
-     * remain editable and persistable for the last account seen in this client run.
-     */
     public boolean hasAccount() {
         return accountHashState.get() != null;
     }
@@ -48,7 +44,6 @@ public class AccountSuggestionPreferencesRS extends ReactiveStateImpl<AccountSug
     public void updateAndPersist(AccountSuggestionPreferences preferences) {
         Long osrsAccountHash = accountHashState.get();
         if (osrsAccountHash == null) {
-            // Callers must gate on hasAccount(); reaching here drops the change on the floor.
             log.error("updateAndPersist called before any OSRS account hash is known, discarding {}", preferences);
         } else {
             forceSet(preferences);

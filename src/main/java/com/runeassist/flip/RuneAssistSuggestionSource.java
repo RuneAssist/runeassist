@@ -47,7 +47,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.BiConsumer;
 
-/** Next flip {@link Suggestion} via Ares {@code POST /v1/suggestion}. */
 @Slf4j
 @Singleton
 public class RuneAssistSuggestionSource
@@ -76,7 +75,6 @@ public class RuneAssistSuggestionSource
         getSuggestionAsync(consumer, true);
     }
 
-    /** @param includeGraph ask Ares to bundle graph data (skip in low-data mode). */
     public void getSuggestionAsync(Consumer<Suggestion> consumer, boolean includeGraph)
     {
         final long requestedAt = System.nanoTime();
@@ -86,8 +84,6 @@ public class RuneAssistSuggestionSource
         final Map<Integer, SavedOffer> savedOffers = readSavedOffers(client.getAccountHash(), offersBySlot);
         final Map<Integer, long[]> held = heldCostTracker.held(displayName);
         final ItemContainer currentInventory = client.getItemContainer(InventoryID.INVENTORY);
-        // The bank container keeps the client's last look at the bank after it closes
-        // and is null until it has been opened this session.
         final ItemContainer lastSeenBank = client.getItemContainer(InventoryID.BANK);
         final boolean loginOk = osrsLoginManager.isValidLoginState() && !osrsLoginManager.hasJustLoggedIn();
         final InventoryAvailabilitySnapshot availability = InventoryAvailabilitySnapshot.from(held,
@@ -96,7 +92,6 @@ public class RuneAssistSuggestionSource
             Inventory.fromRunelite(lastSeenBank, client).getItemAmounts(),
             lastSeenBank != null && loginOk);
         final long coins = inventoryCoins();
-        // grandExchange slot helpers are client-thread-only — snapshot before background work.
         final OwnedModifySnapshot ownedModifySnap = computeOwnedModify();
         final boolean membersWorld = osrsLoginManager.isMembersWorld();
         final boolean accountMember = osrsLoginManager.isAccountMember();
@@ -230,14 +225,12 @@ public class RuneAssistSuggestionSource
             });
         });
         } catch (RejectedExecutionException busy) {
-            // A context change may leave an older HTTP request running. Keep a bounded queue.
             Suggestion wait = WaitSuggestions.waitFallback(WaitSuggestions.WAIT_ARES_DOWN, offersBySlot, maxSlots);
             wait.setTimeIssued(Instant.now());
             clientThread.invokeLater(() -> consumer.accept(wait));
         }
     }
 
-    /** Optional valuation, queued only after the controller has delivered a valid suggestion. */
     public void getPortfolioItemsAsync(BiConsumer<List<Suggestion.PortfolioItem>, Instant> consumer)
     {
         Long account = osrsLoginManager.getAccountHash();
@@ -256,8 +249,6 @@ public class RuneAssistSuggestionSource
                 try {
                     List<Suggestion.PortfolioItem> items = portfolioItems(held, offers);
                     clientThread.invokeLater(() -> {
-                        // Slow quotes may outlive a routine card refresh, but never
-                        // another account or changed holdings/offer quantities.
                         if (!java.util.Objects.equals(account, osrsLoginManager.getAccountHash())
                                 || !osrsLoginManager.isValidLoginState()) return;
                         if (!samePortfolioSnapshot(held, heldCostTracker.held(displayName), offers, readOffers(displayName))) return;
@@ -336,7 +327,6 @@ public class RuneAssistSuggestionSource
         {
             remaining = 0;
         }
-        // Never widen a server-known limit using an incomplete local observation window.
         if (suggestion.isLimitKnown() && suggestion.getRemainingLimit() >= 0) {
             remaining = remaining < 0 ? suggestion.getRemainingLimit()
                     : Math.min(remaining, suggestion.getRemainingLimit());
@@ -393,7 +383,6 @@ public class RuneAssistSuggestionSource
         return out;
     }
 
-    /** Floor held qty with units already filled on live buy offers. */
     private static Map<Integer, long[]> mergeHeldWithOfferFills(Map<Integer, long[]> held, long[][] offers)
     {
         Map<Integer, long[]> merged = new HashMap<>();
@@ -556,7 +545,6 @@ public class RuneAssistSuggestionSource
         return hash != null ? String.valueOf(hash) : "";
     }
 
-    /** Client-thread recheck after a network round trip or an inventory update. */
     public boolean hasInventoryForSale(Suggestion suggestion) {
         if (suggestion == null || suggestion.getItemId() <= 0 || suggestion.getQuantity() <= 0
                 || !osrsLoginManager.isValidLoginState() || osrsLoginManager.hasJustLoggedIn()) return false;
@@ -680,8 +668,6 @@ public class RuneAssistSuggestionSource
                 && offers[open].getItemId() == itemId;
     }
 
-    /** offersBySlot[i] = null or {itemId, buyIs1, price, sold, total, fillingIs1,
-     * lastProgressMs, listedMs, lastPriceChangeMs}. */
     private long[][] readOffers(String displayName)
     {
         long[][] out = new long[8][];
@@ -712,7 +698,6 @@ public class RuneAssistSuggestionSource
         return n;
     }
 
-    /** Coins plus platinum tokens: since 30 Sep 2026 the Grand Exchange spends both. */
     private long inventoryCoins()
     {
         ItemContainer inv = client.getItemContainer(InventoryID.INVENTORY);

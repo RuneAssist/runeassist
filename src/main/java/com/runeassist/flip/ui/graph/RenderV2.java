@@ -49,7 +49,6 @@ public class RenderV2 {
 
         java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("d MMM");
 
-        // Draw date labels (longer ticks)
         for (int time : xAxis.dateOnlyTickTimes) {
             int x = bounds.toX(pa,time);
             g2.drawLine(x, pa.y + pa.height,  x, pa.y + pa.height + Config.TICK_SIZE * 2);
@@ -65,7 +64,6 @@ public class RenderV2 {
             g2.drawString(label,  x - labelWidth / 2, pa.y + pa.height + Config.TICK_SIZE * 2 + 9 + metrics.getHeight());
         }
 
-        // Draw time labels (shorter ticks)
         for (int time : xAxis.timeOnlyTickTimes) {
             int x = bounds.toX(pa,time);
             g2.drawLine(x, pa.y + pa.height, x, pa.y +  pa.height + Config.TICK_SIZE);
@@ -93,14 +91,11 @@ public class RenderV2 {
     public void drawPredictionIQR(Graphics2D g2d,Config config, Rectangle pa, Bounds bounds, int[] times, long[] lowerPrices, long[] upperPrices, boolean isLow) {
         if (times.length < 2) return;
 
-        // Set appropriate color
         g2d.setColor(isLow ? config.lowShadeColor : config.highShadeColor);
 
-        // Create path for shaded area with clipping
         Path2D path = new Path2D.Double();
         boolean started = false;
 
-        // Start at the first point that's in range
         for (int i = 0; i < times.length; i++) {
             int time = times[i];
             if (time >= bounds.xMin && time <=bounds.xMax) {
@@ -116,7 +111,6 @@ public class RenderV2 {
             }
         }
 
-        // Draw the upper bound from right to left (for points in range)
         for (int i = times.length - 1; i >= 0; i--) {
             int time = times[i];
             if (time >= bounds.xMin && time <= bounds.xMax) {
@@ -126,7 +120,6 @@ public class RenderV2 {
             }
         }
 
-        // Close the path if we drew anything
         if (started) {
             path.closePath();
             g2d.fill(path);
@@ -148,7 +141,6 @@ public class RenderV2 {
 
         java.awt.geom.Path2D.Float path = new java.awt.geom.Path2D.Float();
 
-        // Start the path at the first point
         int x = bounds.toX(pa,datapoints.get(0).time);
         int y = bounds.toY(pa,datapoints.get(0).price);
         path.moveTo(x, y);
@@ -193,7 +185,7 @@ public class RenderV2 {
             plotAreaG2.drawLine(x + halfSize, y - halfSize, x - halfSize, y + halfSize);
             plotAreaG2.setStroke(originalStroke);
         }
-        plotAreaG2.setClip(originalClip); // restore original clip
+        plotAreaG2.setClip(originalClip);
     }
 
     public void drawPoints(Graphics2D g2d,
@@ -208,7 +200,6 @@ public class RenderV2 {
         java.awt.Shape originalClip = g2d.getClip();
         g2d.setClip(pa.x, pa.y, pa.width, pa.height);
 
-        // Draw each point as a filled oval
         for (Datapoint d : datapoints) {
             if (d.time < bounds.xMin || d.time > bounds.xMax) {
                 continue;
@@ -220,13 +211,12 @@ public class RenderV2 {
             if (d.type == Datapoint.Type.PREDICTION || d.type == Datapoint.Type.INSTA_SELL_BUY) {
                 g2d.fillOval(ovalX, ovalY, size, size);
             } else {
-                // rectangle for 5m/1h averages
                 int timeDelta = d.type == Datapoint.Type.FIVE_MIN_AVERAGE ? Constants.FIVE_MIN_SECONDS : Constants.HOUR_SECONDS;
                 int w = bounds.toW(pa, timeDelta);
                 g2d.fillRect(x, y, w + size, size);
             }
         }
-        g2d.setClip(originalClip); // restore original clip
+        g2d.setClip(originalClip);
     }
 
     public void drawLegend(Graphics2D g2, Config config, Rectangle pa, boolean addPredictionLabels) {
@@ -234,18 +224,15 @@ public class RenderV2 {
         g2.setFont(g2.getFont().deriveFont(Font.PLAIN, Config.FONT_SIZE));
         FontMetrics metrics = g2.getFontMetrics();
 
-        // Legend item text labels
         String[] labels = addPredictionLabels
                 ? new String[]{"Lows (insta-sell)", "Highs (insta-buy)", "Low prediction", "High prediction", "Low IQR", "High IQR"}
                 : new String[]{"Lows (insta-sell)", "Highs (insta-buy)"};
 
-        // Calculate legend position - above the plot area
         int legendY = pa.y / 2;
         int lineLength = 20;
         int itemHeight = 15;
-        int itemPadding = 30; // Space between text end and next item start
+        int itemPadding = 30;
 
-        // Calculate widths for each legend item based on text length
         int[] itemWidths = new int[labels.length];
         int totalWidth = 0;
 
@@ -259,28 +246,22 @@ public class RenderV2 {
         int legendStartX = xMid - totalWidth / 2;
         int currentX = legendStartX;
 
-        // Low prices
         currentX = drawLegendLineItem(g2, config, currentX, legendY, lineLength, itemHeight,
                 labels[0], itemWidths[0], itemPadding, config.lowColor, Config.NORMAL_STROKE, config.connectPoints, true);
 
-        // High prices
         currentX = drawLegendLineItem(g2, config, currentX, legendY, lineLength, itemHeight,
                 labels[1], itemWidths[1], itemPadding, config.highColor, Config.NORMAL_STROKE, config.connectPoints, true);
 
         if (addPredictionLabels) {
-            // Low prediction
             currentX = drawLegendLineItem(g2, config, currentX, legendY, lineLength, itemHeight,
                     labels[2], itemWidths[2], itemPadding, config.lowColor, Config.DOTTED_STROKE, true, false);
 
-            // High prediction
             currentX = drawLegendLineItem(g2, config, currentX, legendY, lineLength, itemHeight,
                     labels[3], itemWidths[3], itemPadding, config.highColor, Config.DOTTED_STROKE, true, false);
 
-            // Low IQR
             currentX = drawLegendShadeItem(g2, config, currentX, legendY, lineLength, itemHeight,
                     labels[4], itemWidths[4], itemPadding, config.lowShadeColor);
 
-            // High IQR
             drawLegendShadeItem(g2, config, currentX, legendY, lineLength, itemHeight,
                     labels[5], itemWidths[5], itemPadding, config.highShadeColor);
         }
@@ -359,7 +340,7 @@ public class RenderV2 {
                 g2d.drawRect(x1, y1, x2 - x1, y3 - y1);
             }
         }
-        g2d.setClip(originalClip); // restore original clip
+        g2d.setClip(originalClip);
     }
 
     public void drawTxsDatapoints(Graphics2D g2d,
@@ -401,7 +382,7 @@ public class RenderV2 {
             g2d.setColor(Color.WHITE);
             g2d.drawString(text,
                     x - textWidth / 2,
-                    y + textHeight / 3); // Adjust vertical centering
+                    y + textHeight / 3);
         }
 
         g2d.setClip(originalClip);
