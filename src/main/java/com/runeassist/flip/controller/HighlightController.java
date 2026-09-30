@@ -6,6 +6,7 @@ import com.runeassist.flip.ui.NpcHighlightOverlay;
 import com.runeassist.flip.ui.WidgetHighlightOverlay;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.widgets.ComponentID;
@@ -384,7 +385,7 @@ public class HighlightController {
         if (!client.getVarcStrValue(VarClientStr.INPUT_TEXT).isEmpty()) {
             return;
         }
-        Widget searchResults = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
+        Widget searchResults = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
         if (searchResults == null) {
             return;
         }

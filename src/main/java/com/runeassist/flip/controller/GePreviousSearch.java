@@ -3,6 +3,7 @@ package com.runeassist.flip.controller;
 import com.runeassist.flip.model.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.Client;
 import net.runelite.api.widgets.*;
 
@@ -43,7 +44,7 @@ public class GePreviousSearch {
 
 
     private boolean previousSearchItemExists() {
-        Widget searchResults = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
+        Widget searchResults = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
         if(searchResults == null || searchResults.getChildren() == null || searchResults.getChildren().length < 2) {
             return false;
         }
@@ -64,7 +65,7 @@ public class GePreviousSearch {
     }
 
     private void setPreviousSearch(int itemId, String itemName) {
-        Widget searchResults = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
+        Widget searchResults = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
         Widget previousSearch = searchResults.getChild(0);
         previousSearch.setHasListener(true);
         previousSearch.setOnOpListener(754, itemId, 84);
@@ -89,7 +90,7 @@ public class GePreviousSearch {
     }
 
     private void createPreviousSearchWidget(int itemId, String itemName) {
-        Widget parentWidget = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
+        Widget parentWidget = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
         Widget widget = parentWidget.createChild(0, WidgetType.RECTANGLE);
         widget.setTextColor(0xFFFFFF);
         widget.setOpacity(255);
@@ -117,7 +118,7 @@ public class GePreviousSearch {
     }
 
     private void createPreviousSearchTextWidget() {
-        Widget parentWidget = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
+        Widget parentWidget = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
         Widget widget = parentWidget.createChild(1, WidgetType.TEXT);
         widget.setText("RuneAssist:");
         widget.setFontId(495);
@@ -130,7 +131,7 @@ public class GePreviousSearch {
     }
 
     private void createPreviousSearchItemNameWidget(String itemName) {
-        Widget parentWidget = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
+        Widget parentWidget = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
         Widget widget = parentWidget.createChild(2, WidgetType.TEXT);
         widget.setText(itemName);
         widget.setFontId(495);
@@ -143,7 +144,7 @@ public class GePreviousSearch {
     }
 
     private void createPreviousSearchItemWidget(int itemId) {
-        Widget parentWidget = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
+        Widget parentWidget = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
         Widget widget = parentWidget.createChild(3, WidgetType.GRAPHIC);
         widget.setItemId(itemId);
         widget.setItemQuantity(1);

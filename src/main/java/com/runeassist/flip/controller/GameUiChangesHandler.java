@@ -60,7 +60,7 @@ public class GameUiChangesHandler {
 
         if (event.getIndex() == VarClientID.MESLAYERMODE
                 && client.getVarcIntValue(VarClientID.MESLAYERMODE) == 14
-                && client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS) != null) {
+                && client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS) != null) {
             itemSearchChatboxOpen = true;
             clientThread.invokeLater(gePreviousSearch::showSuggestedItemInSearch);
         }
@@ -82,17 +82,25 @@ public class GameUiChangesHandler {
             return;
         }
 
-        //Check that it was the chat input that got enabled.
+        // Check that it was a chat input that got enabled while the offer setup is showing.
+        // The quantity prompt is input mode 7; since the 30 Sep 2026 GE update the price
+        // prompt takes figures beyond max cash and arrives in a mode of its own, so the
+        // prompt text decides rather than the mode number.
+        int mode = client.getVarcIntValue(VarClientID.MESLAYERMODE);
         if (event.getIndex() != VarClientID.MESLAYERMODE
+                || mode == 0 || mode == 14
                 || client.getWidget(ComponentID.CHATBOX_TITLE) == null
-                || client.getVarcIntValue(VarClientID.MESLAYERMODE) != 7
                 || client.getWidget(ComponentID.GRAND_EXCHANGE_OFFER_CONTAINER) == null) {
             return;
         }
-        quantityOrPriceChatboxOpen = true;
 
         clientThread.invokeLater(() ->
         {
+            if (!offerHandler.isSettingPrice() && !offerHandler.isSettingQuantity()) {
+                log.debug("chatbox mode {} opened over the offer setup but is not a price or quantity prompt", mode);
+                return;
+            }
+            quantityOrPriceChatboxOpen = true;
             // A competing Hub flipping plugin may inject its own "Press [X] to set to Y gp" text
             // into this exact same chatbox widget -- if both plugins are enabled at once (see
             // HubPluginConflict's own doc comment), creating ours too makes the two overlap

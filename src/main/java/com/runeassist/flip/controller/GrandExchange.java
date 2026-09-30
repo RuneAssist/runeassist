@@ -234,7 +234,7 @@ public class GrandExchange {
     }
 
     private boolean isSearchOpen() {
-        Widget searchResults = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
+        Widget searchResults = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
         return searchResults != null && !searchResults.isHidden();
     }
 }
