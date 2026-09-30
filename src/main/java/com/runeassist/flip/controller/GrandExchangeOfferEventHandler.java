@@ -68,6 +68,9 @@ public class GrandExchangeOfferEventHandler {
         SavedOffer prev = offerPersistence.loadOffer(accountHash, slot);
         boolean loginBurst = client.getGameState() != GameState.LOGGED_IN
                 || client.getTickCount() <= osrsLoginManager.getLastLoginTick() + GE_LOGIN_BURST_WINDOW;
+        if (o.getState() == GrandExchangeOfferState.CANCELLED_BUY || o.getState() == GrandExchangeOfferState.CANCELLED_SELL) {
+            o.setCancelReason(cancelReason(suggestionManager.getSuggestion(), o.getItemId()));
+        }
         boolean firstObservation = observationTracker.observe(accountHash, slot, o, loginBurst,
                 Instant.now().toEpochMilli());
 
@@ -234,6 +237,15 @@ public class GrandExchangeOfferEventHandler {
                 prev.getItemId() == updated.getItemId()
                 || prev.getPrice() == updated.getPrice()
                 || prev.getTotalQuantity() == updated.getTotalQuantity();
+    }
+
+    /** "card" when the card on show asked the player to cancel or re-price this item. */
+    static String cancelReason(com.runeassist.flip.model.Suggestion shown, int itemId) {
+        if (shown == null || shown.getType() == null || shown.getItemId() != itemId) {
+            return "manual";
+        }
+        return shown.getType() == com.runeassist.flip.model.SuggestionType.ABORT || shown.isModifySuggestion()
+                ? "card" : "manual";
     }
 
     static boolean isNewOffer(SavedOffer prev, SavedOffer updated) {

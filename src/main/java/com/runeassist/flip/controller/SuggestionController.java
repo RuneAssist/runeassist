@@ -72,6 +72,11 @@ public class SuggestionController {
         clientThread.invokeLater(this::skipSuggestionOnClientThread);
     }
 
+    /** The player blocked the item on the card that is showing. */
+    public void reportBlocked(Suggestion blocked) {
+        flipHistorySyncService.reportSuggestionOutcome(blocked, "blocked");
+    }
+
     private void skipSuggestionOnClientThread() {
         if (!syncTradingContext()) return;
         Suggestion current = suggestionManager.getSuggestion();

@@ -9,13 +9,46 @@ import net.runelite.api.GrandExchangeOfferState;
 /** Session-local evidence, independent of persisted offers or suggestion attribution. */
 final class OfferObservationTracker {
     private final Map<Integer, SavedOffer> slots = new HashMap<>();
+    /** A relist counts as an adjustment only this soon after the cancel. */
+    static final long RELIST_WINDOW_MS = 10 * 60_000L;
+    private final Map<String, SavedOffer> cancelled = new HashMap<>();
     private String sessionId = UUID.randomUUID().toString();
     private Long account;
 
     void reset() {
         slots.clear();
+        cancelled.clear();
         sessionId = UUID.randomUUID().toString();
         account = null;
+    }
+
+    private static String key(SavedOffer o) {
+        return o.getItemId() + ":" + o.getOfferStatus();
+    }
+
+    /** Edited in place (the slot never emptied) or cancelled and listed again soon after. */
+    private void markAdjustment(SavedOffer offer, SavedOffer previous, boolean previousActive, long now) {
+        SavedOffer from = null;
+        String kind = null;
+        if (previous != null && previousActive && previous.getItemId() == offer.getItemId()
+                && previous.getOfferStatus() == offer.getOfferStatus()) {
+            from = previous;
+            kind = "modify";
+        } else {
+            SavedOffer last = cancelled.get(key(offer));
+            if (last != null && now - last.getObservedAt() <= RELIST_WINDOW_MS) {
+                from = last;
+                kind = "relist";
+                cancelled.remove(key(offer));
+            }
+        }
+        if (from == null || from.getOfferInstanceId() == null) {
+            return;
+        }
+        offer.setAdjustKind(kind);
+        offer.setAdjustedFromInstanceId(from.getOfferInstanceId());
+        offer.setAdjustedFromPrice(from.getPrice());
+        offer.setAdjustedFromQuantity(Math.max(0, from.getTotalQuantity() - from.getQuantitySold()));
     }
 
     boolean observe(long accountHash, int slot, SavedOffer offer, boolean login, long now) {
@@ -44,6 +77,13 @@ final class OfferObservationTracker {
                 // Timestamp of the actual client placement transition, not a market-price inference.
                 offer.setPlacedAt(now);
             }
+        }
+        if (!empty && !same && active && !login) {
+            markAdjustment(offer, previous, previousActive, now);
+        }
+        if (offer.getState() == GrandExchangeOfferState.CANCELLED_BUY
+                || offer.getState() == GrandExchangeOfferState.CANCELLED_SELL) {
+            cancelled.put(key(offer), offer);
         }
         slots.put(slot, offer);
         return first;
