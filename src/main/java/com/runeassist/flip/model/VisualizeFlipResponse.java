@@ -23,12 +23,8 @@ public class VisualizeFlipResponse {
     public int[] sellVolumes;
     public long[] sellPrices;
     public Data graphData;
-    // set, with everything else empty, when the item has no usable price data
     public String message;
 
-    /**
-     * Parse Ares {@code GET /v1/account/visualize-flip} JSON (FC-shaped lot overlay + graph).
-     */
     public static VisualizeFlipResponse fromJson(JsonObject o, Gson gson) {
         VisualizeFlipResponse r = new VisualizeFlipResponse();
         if (o == null) {
@@ -49,10 +45,6 @@ public class VisualizeFlipResponse {
         return r;
     }
 
-    /**
-     * Overlay local buy/sell lots on an Ares (or other) price series. When the ledger
-     * has no per-lot rows, FlipV2 aggregates become a single buy and/or sell marker.
-     */
     public static VisualizeFlipResponse fromLocalLots(Data graph, FlipV2 flip, List<AckedTransaction> txs) {
         VisualizeFlipResponse r = new VisualizeFlipResponse();
         r.graphData = graph;

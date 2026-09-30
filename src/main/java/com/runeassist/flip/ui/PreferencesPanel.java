@@ -59,7 +59,7 @@ public class PreferencesPanel extends JPanel {
     private final SuggestionPreferencesManager preferencesManager;
     private final AccountSuggestionPreferencesRS accountPreferences;
     private final FlipHistorySyncService flipHistorySyncService;
-    @SuppressWarnings("unused") // Guice: keep stream controller alive with prefs UI
+    @SuppressWarnings("unused")
     private final DumpsStreamController dumpsStreamController;
     private final ScheduledExecutorService executorService;
     private final PreferencesToggleButton sellOnlyModeToggleButton;
@@ -80,7 +80,6 @@ public class PreferencesPanel extends JPanel {
     private final JPanel pairingCodePanel;
     private final JTextField pairingCodeField;
     private final JLabel pairingCodeHint;
-    /** Permanent invite to the RuneAssist Flipping server. */
     public static final String DISCORD_INVITE_URL = "https://discord.gg/3CPGh9GPaT";
 
     private final JButton copyCodeButton;
@@ -125,7 +124,6 @@ public class PreferencesPanel extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(8, 10, 10, 28));
 
         preferencesContent = PrefsUi.scrollBody();
-        // The settings gear floats over the top-left corner (x 6 to 26): keep the title clear of it.
         JLabel settingsTitle = PrefsUi.sectionTitle("Suggestion Settings");
         settingsTitle.setBorder(BorderFactory.createEmptyBorder(0, PrefsUi.GEAR_CLEARANCE, 0, 0));
         preferencesContent.add(settingsTitle);

@@ -6,10 +6,8 @@ import java.util.Map;
 import java.util.UUID;
 import net.runelite.api.GrandExchangeOfferState;
 
-/** Session-local evidence, independent of persisted offers or suggestion attribution. */
 final class OfferObservationTracker {
     private final Map<Integer, SavedOffer> slots = new HashMap<>();
-    /** A relist counts as an adjustment only this soon after the cancel. */
     static final long RELIST_WINDOW_MS = 10 * 60_000L;
     private final Map<String, SavedOffer> cancelled = new HashMap<>();
     private String sessionId = UUID.randomUUID().toString();
@@ -26,7 +24,6 @@ final class OfferObservationTracker {
         return o.getItemId() + ":" + o.getOfferStatus();
     }
 
-    /** Edited in place (the slot never emptied) or cancelled and listed again soon after. */
     private void markAdjustment(SavedOffer offer, SavedOffer previous, boolean previousActive, long now) {
         SavedOffer from = null;
         String kind = null;
@@ -74,7 +71,6 @@ final class OfferObservationTracker {
                 offer.setPlacedAt(previous.getPlacedAt());
             } else if (!login && active && offer.getQuantitySold() == 0 && previous != null
                     && previous.getState() == GrandExchangeOfferState.EMPTY) {
-                // Timestamp of the actual client placement transition, not a market-price inference.
                 offer.setPlacedAt(now);
             }
         }

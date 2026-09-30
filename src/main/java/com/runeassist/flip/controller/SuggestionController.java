@@ -72,7 +72,6 @@ public class SuggestionController {
         clientThread.invokeLater(this::skipSuggestionOnClientThread);
     }
 
-    /** The player blocked the item on the card that is showing. */
     public void reportBlocked(Suggestion blocked) {
         flipHistorySyncService.reportSuggestionOutcome(blocked, "blocked");
     }
@@ -94,7 +93,6 @@ public class SuggestionController {
     }
 
     public void togglePause() {
-        // Account identity, GE widgets and suggestion mutations belong to the client thread.
         clientThread.invokeLater(() -> {
             pausedManager.setPaused(!pausedManager.isPaused());
             syncTradingContext();
@@ -129,7 +127,6 @@ public class SuggestionController {
             return false;
         }
         Suggestion p = suggestionManager.getSuggestion();
-        // Hold dump alerts until Confirm/Skip so backing out of sell setup can't overwrite them.
         if (p != null && p.isRecentUnActionedDumpAlert()) {
             return false;
         }
@@ -141,7 +138,6 @@ public class SuggestionController {
                 return false;
             }
             if (liveOfferItemId(grandExchange.getOpenSlot()) != -1) {
-                // Live offer behind open slot: don't yank the card while the player is using it.
                 return false;
             }
         }
@@ -149,7 +145,6 @@ public class SuggestionController {
         return suggestionManager.isSuggestionNeeded() || suggestionManager.suggestionOutOfDate();
     }
 
-    /** Offer editor open for the current MODIFY card — do not fetch a replacement. */
     private boolean isModifyInProgress(Suggestion p) {
         if (p != null && p.actionedTick != -1 && p.actionedTick <= client.getTickCount()) {
             return false;
@@ -181,7 +176,6 @@ public class SuggestionController {
         return liveOfferItemId(open) == itemId;
     }
 
-    /** Filling BUYING/SELLING only — CANCELLED_* still reports itemId after modify cancel. */
     private int liveOfferItemId(int slot) {
         GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
         if (offers == null || slot < 0 || slot >= offers.length || offers[slot] == null) {
@@ -271,7 +265,6 @@ public class SuggestionController {
                 receiveForContext(requestGeneration, oldSuggestion, newSuggestion, accountStatus, !skipGraphData);
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
-        // Graphs are optional UI enrichment, never part of the compose critical path.
         runeAssistSource.getSuggestionAsync(suggestionConsumer, false);
     }
 
@@ -300,7 +293,6 @@ public class SuggestionController {
         if (tradingContext.accepts(streamGeneration)) handleDumpSuggestion(suggestion);
     }
 
-    /** Invalidate only suggestion/UI work; offer observation and history sync keep running. */
     boolean syncTradingContext() {
         boolean valid = osrsLoginManager.isValidLoginState();
         Suggestion current = suggestionManager.getSuggestion();
@@ -311,8 +303,6 @@ public class SuggestionController {
                 valid && grandExchange.isOpen(), valid && pausedManager.isPaused());
         if (changed) {
             clearContextSuggestion();
-            // Decanting itself requires leaving the GE. Keep only the already
-            // issued local instruction; do not poll or announce new trades.
             if (preserveDecantGuidance) suggestionManager.setSuggestion(current);
             suggestionManager.setSuggestionNeeded(tradingContext.canRequest());
             if (suggestionPanel != null) suggestionPanel.refresh();
@@ -341,8 +331,6 @@ public class SuggestionController {
     void receiveForContext(long generation, Suggestion oldSuggestion, Suggestion newSuggestion,
                            AccountStatus accountStatus, boolean loadGraph) {
         syncTradingContext();
-        // A stale reply must not release a newer request, change another account's
-        // skip/protection state, display a card or emit a notification.
         if (!tradingContext.accepts(generation)) return;
         handleSuggestionReceived(oldSuggestion, newSuggestion, accountStatus, loadGraph);
     }
@@ -382,8 +370,6 @@ public class SuggestionController {
             return;
         }
         if (!isSellAvailableNow(newSuggestion)) {
-            // The server wants this sold but it is not in the inventory: say so, with the
-            // item, instead of a generic wait that looks like an empty market.
             Suggestion wait = new Suggestion();
             wait.setType(SuggestionType.WAIT);
             wait.setMessage(unseenHoldingMessage(newSuggestion));
@@ -456,8 +442,6 @@ public class SuggestionController {
 
     void receivePortfolioForContext(long generation, Suggestion suggestion, List<Suggestion.PortfolioItem> items, Instant snapshotAt) {
         syncTradingContext();
-        // The source separately verifies unchanged held/offer snapshots. A newer
-        // routine card alone must not starve a slow portfolio quote forever.
         if (!tradingContext.accepts(generation)) return;
         AccountStatus status = accountStatusManager.getAccountStatus();
         if (status == null) return;
@@ -467,7 +451,6 @@ public class SuggestionController {
                 () -> tradingContext.accepts(generation) && sequence == portfolioUpdateSequence);
     }
 
-    /** Bundled compose graph and/or GET /v1/graph. */
     void feedSuggestionGraph(Suggestion suggestion, boolean loadGraph) {
         if (!loadGraph) {
             cancelSuggestionGraph();
@@ -490,7 +473,6 @@ public class SuggestionController {
             return;
         }
         final int itemId = suggestion.getItemId();
-        // A routine refresh of the same item must not cancel/restart a slow graph.
         if (suggestionGraphCall != null && suggestionGraphItemId == itemId) return;
         cancelSuggestionGraph();
         if (lastSuggestionGraph != null && lastSuggestionGraph.itemId == itemId
@@ -539,7 +521,6 @@ public class SuggestionController {
         suggestionManager.setGraphDataReadingInProgress(false);
     }
 
-    /** Drop refreshes that would switch away from an in-progress MODIFY of a different item. */
     private boolean shouldKeepOwnedModify(Suggestion oldSuggestion, Suggestion newSuggestion) {
         if (oldSuggestion == null || !oldSuggestion.isModifySuggestion()) {
             return false;
@@ -554,7 +535,6 @@ public class SuggestionController {
                 && newSuggestion.getItemId() == oldSuggestion.getItemId());
     }
 
-    /** MODIFY with no filling offer and editor closed — leftover lock after logout/collect. */
     public boolean isGhostModify(Suggestion s) {
         if (s == null || !s.isModifySuggestion() || s.getItemId() <= 0) {
             return false;
@@ -566,11 +546,6 @@ public class SuggestionController {
                 grandExchange.hasFillingOffer(s.getItemId()));
     }
 
-    /** Direct sales need current physical stock, not only historical purchases. */
-    /**
-     * "Withdraw Dragon hunter wand to sell it" when the bank showed it. Stock seen nowhere is
-     * the server's business (it moves to the missed bucket), so that case stays a plain wait.
-     */
     static String unseenHoldingMessage(Suggestion sell) {
         String name = sell.getName() == null || sell.getName().isEmpty() ? "the item" : sell.getName();
         String why = sell.getWhy() == null ? "" : sell.getWhy().toLowerCase(java.util.Locale.ROOT);
@@ -584,8 +559,6 @@ public class SuggestionController {
         if (suggestion == null || !suggestion.isSellSuggestion()) return true;
         if (suggestion.getType() == SuggestionType.MODIFY_SELL) {
             if (grandExchange.hasFillingSellOffer(suggestion.getItemId())) return true;
-            // Cancel/collect guidance is allowed before the relist editor. Once
-            // preparing a new offer, only physical inventory can back its quantity.
             if (!grandExchange.isSetupOfferOpen() && uncollectedManager.loadAllUncollected(
                     osrsLoginManager.getAccountHash()).getOrDefault(suggestion.getItemId(), 0L) > 0) return true;
         }

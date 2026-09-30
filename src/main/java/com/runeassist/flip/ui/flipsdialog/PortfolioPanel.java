@@ -41,7 +41,6 @@ public class PortfolioPanel extends JPanel {
     static {
         SORT_COMPARATORS.put("Item", Comparator.comparing(
                 PortfolioItemCardData::getItemName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
-        // Numeric columns pre-reversed so default DESC shows largest-first
         SORT_COMPARATORS.put("Market value", Comparator.<PortfolioItemCardData>comparingLong(
                 i -> i.getPostTaxSellUnitPrice() * (long) i.getPortfolioQuantity()).reversed());
         SORT_COMPARATORS.put("Quantity", Comparator.comparingInt(PortfolioItemCardData::getPortfolioQuantity).reversed());
@@ -296,7 +295,6 @@ public class PortfolioPanel extends JPanel {
         }
     }
 
-    /** quantity <= 0 removes all tracked lots for the item. */
     private void removeFromPortfolio(int itemId, int quantity) {
         String displayName = osrsLoginRS.get().displayName;
         if (displayName == null) {

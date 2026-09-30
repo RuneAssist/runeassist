@@ -14,7 +14,6 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-/** Cache of user flips for efficient access and interval statistics. */
 @Slf4j
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
@@ -25,13 +24,11 @@ public class FlipManager {
     public static final Comparator<FlipV2> FLIP_STATUS_TIME_COMPARATOR =
                 Comparator.comparing(FlipV2::isClosed).reversed().thenComparing(f -> f.getClosedTime() > 0 ? f.getClosedTime() : f.getOpenedTime());
 
-    // dependencies
     private final ItemController itemController;
 
     @Setter
     private Runnable flipsChangedCallback = () -> {};
 
-    // state
     @Setter
     private volatile int pluginUserId;
     private Integer intervalAccount;
@@ -41,7 +38,6 @@ public class FlipManager {
     final Map<Integer, Map<Integer, FlipV2>> lastOpenFlipByItemId = new HashMap<>();
     final Map<UUID, Integer> existingCloseTimes = new HashMap<>();
     final List<WeekAggregate> weeks = new ArrayList<>(365*5);
-    // Ghost/disappeared portfolio buckets kept outside week aggregates.
     final Map<Integer, Map<UUID, FlipV2>> missedFlipsByAccount = new HashMap<>();
 
 
@@ -73,7 +69,6 @@ public class FlipManager {
         return intervalStats.copy();
     }
 
-    /** Completed flips only; open purchase costs must not dilute realized ROI. */
     public synchronized Stats getRealizedIntervalStats() {
         Stats stats = new Stats();
         for (WeekAggregate week : weeks) {
@@ -148,11 +143,6 @@ public class FlipManager {
         return stats;
     }
 
-    /**
-     * Open flips are stored in week 0 ({@code closedTime == 0}). Session/interval stats
-     * otherwise skip them, which left Profit/Flips at 0 while 8 slots were filling.
-     * ALL_TIME ({@code startTime <= 0}) already includes week 0 via {@link #getOrInitWeek}.
-     */
     private void addOpenFlipsOpenedSince(Stats stats, int startTime, Integer accountId) {
         if (startTime <= 0) {
             return;
@@ -177,9 +167,6 @@ public class FlipManager {
             return;
         }
 
-        // todo: buying flips also exist in the special Week with closed_time = 0, if arg intervalStartTime <= 0 then we
-        //  can end up with duplicates pushed to the consumer because the BUYING flips gets added here and in the later section
-        //  this is confusing and can lead to bugs - need to clean this up
         if(includeBuyingFlips) {
             WeekAggregate w = getOrInitWeek(0);
             List<FlipV2> f = accountId == null ? w.flipsAfter(-1, false) : w.flipsAfterForAccount(-1, accountId);
@@ -196,7 +183,6 @@ public class FlipManager {
             WeekAggregate w = weeks.get(i);
             List<FlipV2> weekFlips = accountId == null ? w.flipsAfter(intervalStartTime, true) : w.flipsAfterForAccount(intervalStartTime, accountId);
             int n = weekFlips.size();
-            // note: weekFlips are ascending order but we consume in descending order
             for(int ii=n-1; ii >= 0; ii--) {
                 FlipV2 f = weekFlips.get(ii);
                 if (isTrackedFlip(f)) {
@@ -206,7 +192,6 @@ public class FlipManager {
         }
     }
 
-    /** The most profitable closed flip in the current interval and account, named; null if none. */
     public synchronized FlipV2 bestClosedFlipInInterval() {
         FlipV2[] best = new FlipV2[1];
         aggregateFlips(intervalStartTime, intervalAccount, false, f -> {
@@ -220,7 +205,6 @@ public class FlipManager {
         return best[0];
     }
 
-    /** Open and closed flips within the interval, merged and sorted by most-recent-activity */
     public synchronized List<FlipV2> getPageFlips(int page, int pageSize, int intervalStartTime, Integer accountId) {
         if (Objects.equals(accountId,-1)) {
             return new ArrayList<>();
@@ -364,7 +348,6 @@ public class FlipManager {
             WeekAggregate wa = getOrInitWeek(existingCloseTime);
             FlipV2 removed = wa.removeFlipIfUpdatedBefore(existingCloseTime, flip);
             if (removed == null) {
-                // the flip we are merging is an out of date instance of the same flip
                 return;
             }
             if(isInInterval(removed)) {
@@ -446,7 +429,6 @@ public class FlipManager {
             week.deleteAccountFlips(accountId);
         }
         if (intervalAccount != null && intervalAccount == accountId) {
-            // change the intervalAccount if it is the one being deleted
             intervalAccount = null;
             recalculateIntervalStats();
         } else if (intervalAccount == null) {
@@ -459,7 +441,7 @@ public class FlipManager {
 
     class WeekAggregate {
 
-        int pos; // note: only correct when returned by getOrInitWeek
+        int pos;
         int weekStart;
         int weekEnd;
 
@@ -480,7 +462,6 @@ public class FlipManager {
             List<FlipV2> flips = accountIdToFlips.computeIfAbsent(updatedFlip.getAccountId(), (k) -> new ArrayList<>());
             int i = bisect(flips.size(), closedTimeCmp(flips, updatedFlip.getId(), existingCloseTime));
             FlipV2 flip = flips.get(i);
-            // if the existing instance of the flip is updated more recently return null
             if (flip.isNewer(updatedFlip)) {
                 return null;
             }
@@ -531,7 +512,6 @@ public class FlipManager {
 
     private Function<Integer, Integer> closedTimeCmp(List<FlipV2> flips, UUID id, int time) {
         return (a) -> {
-            // sorts time ascending with id as tie-breaker
             int c = Integer.compare(flips.get(a).getClosedTime(), time);
             return c != 0 ? c : id.compareTo(flips.get(a).getId());
         };
@@ -548,9 +528,9 @@ public class FlipManager {
             else if (cmp > 0)
                 high = mid - 1;
             else
-                return mid; // key found
+                return mid;
         }
-        return -(low + 1);  // key not found (low = insertion point)
+        return -(low + 1);
     }
 
     private boolean isTrackedFlip(FlipV2 flip) {

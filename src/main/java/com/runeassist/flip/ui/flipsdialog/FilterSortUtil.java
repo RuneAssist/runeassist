@@ -20,7 +20,6 @@ final class FilterSortUtil {
             comparator = comparator.reversed();
         }
 
-        // Apply sorting
         rows.sort(comparator);
     }
 }

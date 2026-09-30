@@ -23,7 +23,6 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
-/** Near-GE Examine menus: Add/Remove (+ X qty) for portfolio held lots. */
 @Slf4j
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
@@ -289,7 +288,7 @@ public class PortfolioMenuEntries {
         }
         int unnotedItemId = itemController.toUnnotedItemId(itemWidget.getItemId());
         if (unnotedItemId == ItemID.COINS_995 || unnotedItemId == ItemID.PLATINUM_TOKEN) {
-            return null; // cash is counted already; it is never stock
+            return null;
         }
         String menuTarget = resolveMenuTarget(event.getTarget(), unnotedItemId);
         return new InventoryMenuItem(unnotedItemId, menuTarget, location);

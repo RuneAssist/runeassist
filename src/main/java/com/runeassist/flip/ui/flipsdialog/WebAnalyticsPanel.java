@@ -16,10 +16,6 @@ import java.awt.Dimension;
 import java.awt.GridBagLayout;
 import java.util.function.Consumer;
 
-/**
- * Thin Hub-safe stand-in for FC's Flips / Items / Profit / Missed tabs:
- * deep-links to the website dashboard instead of shipping Swing analytics.
- */
 public class WebAnalyticsPanel extends JPanel {
 
     public WebAnalyticsPanel(Consumer<String> openSection) {

@@ -3,7 +3,6 @@ package com.runeassist.flip.ui;
 import com.runeassist.flip.model.Suggestion;
 import java.util.Objects;
 
-/** Presentation state shared by client callbacks and Swing refreshes; WAIT only. */
 final class WaitRefreshState {
     private Suggestion displayed;
     private Long account;

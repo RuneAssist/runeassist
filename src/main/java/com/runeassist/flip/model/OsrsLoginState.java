@@ -16,7 +16,6 @@ public class OsrsLoginState {
 
     public boolean loggedIn;
 
-    // These are not cleared on log out so the last values can still be accessed.
     public boolean isIronMan;
     public EnumSet<WorldType> worldTypes;
     public String displayName;

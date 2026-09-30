@@ -21,10 +21,6 @@ import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 
-/**
- * Small RuneAssist badge on the local "portfolio" Bank Tags tab icon.
- * Bank Tags is looked up at runtime so construction does not require a hard inject.
- */
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class PortfolioBankTabBadgeOverlay extends Overlay {
@@ -44,7 +40,6 @@ public class PortfolioBankTabBadgeOverlay extends Overlay {
         setPosition(OverlayPosition.DYNAMIC);
         setLayer(OverlayLayer.MANUAL);
         setPriority(PRIORITY_LOW);
-        // Keep the badge in the bank's draw order so later modal interfaces cover it.
         drawAfterLayer(InterfaceID.Bankmain.ITEMS_CONTAINER);
     }
 

@@ -14,7 +14,6 @@ public class AccountLoginState {
     public Map<String,Integer> displayNameToAccountId = new HashMap<>();
     public Map<Integer, String> accountIdToDisplayName = new HashMap<>();
 
-    /** Accounts are registered locally from GE fills; flip records still carry a user id field. */
     public int getUserId() {
         return -1;
     }

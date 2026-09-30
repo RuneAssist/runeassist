@@ -35,7 +35,6 @@ public class IntervalDropdown extends JComboBox<String> {
 
     private static final Pattern INTERVAL_PATTERN = Pattern.compile("^-?(\\d+(?:\\.\\d+)?)([hdwmy])[()\\w\\s]*");
 
-    // state
     private final BiConsumer<IntervalTimeUnit, Integer> onIntervalChanged;
     @Getter
     private IntervalTimeUnit selectedIntervalTimeUnit = IntervalTimeUnit.ALL;
@@ -55,7 +54,6 @@ public class IntervalDropdown extends JComboBox<String> {
         extractAndUpdateTimeInterval(initialValue);
         setEditor(new BasicComboBoxEditor());
 
-        // Add action listener for selection changes and manual edits
         addActionListener(e -> {
             String value = (String) getSelectedItem();
             if (PICK_START_DATE.equals(value)) {
@@ -67,7 +65,6 @@ public class IntervalDropdown extends JComboBox<String> {
     }
 
     private void showDatePicker() {
-        // Create a date spinner
         SpinnerDateModel dateModel = new SpinnerDateModel();
         JSpinner dateSpinner = new JSpinner(dateModel);
         JSpinner.DateEditor dateEditor = new JSpinner.DateEditor(dateSpinner, "yyyy-MM-dd");
@@ -91,9 +88,6 @@ public class IntervalDropdown extends JComboBox<String> {
         }
     }
 
-    /**
-     * Converts a selected date to an interval string like "3.5w" or "2d"
-     */
     private String convertDateToIntervalString(Date selectedDate) {
         LocalDate selected = selectedDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
         LocalDate today = LocalDate.now();
@@ -101,23 +95,18 @@ public class IntervalDropdown extends JComboBox<String> {
         long daysDiff = ChronoUnit.DAYS.between(selected, today);
 
         if (daysDiff < 0) {
-            // Future date, return as days
             return Math.abs(daysDiff) + "d (Future)";
         }
 
-        // Convert to appropriate unit
         if (daysDiff < 1) {
-            // Less than a day, use hours
             long hoursDiff = ChronoUnit.HOURS.between(
                     selected.atStartOfDay(ZoneId.systemDefault()),
                     today.atStartOfDay(ZoneId.systemDefault())
             );
             return "-" + hoursDiff + "h";
         } else if (daysDiff < 7) {
-            // Less than a week, use days
             return "-" + daysDiff + "d";
         } else if (daysDiff < 30) {
-            // Less than a month, use weeks (with decimal)
             double weeks = daysDiff / 7.0;
             if (weeks == Math.floor(weeks)) {
                 return "-" + (int)weeks + "w";
@@ -125,7 +114,6 @@ public class IntervalDropdown extends JComboBox<String> {
                 return String.format("-%.1fw", weeks);
             }
         } else if (daysDiff < 365) {
-            // Less than a year, use months (approximation)
             double months = daysDiff / 30.0;
             if (months == Math.floor(months)) {
                 return "-" + (int)months + "m";
@@ -133,7 +121,6 @@ public class IntervalDropdown extends JComboBox<String> {
                 return String.format("-%.1fm", months);
             }
         } else {
-            // More than a year, use years
             double years = daysDiff / 365.0;
             if (years == Math.floor(years)) {
                 return "-" + (int)years + "y";
@@ -155,13 +142,11 @@ public class IntervalDropdown extends JComboBox<String> {
                     selectedIntervalValue = -1;
                     return true;
                 case PICK_START_DATE:
-                    // Don't update here, handled in action listener
                     return false;
                 default:
                     Matcher matcher = INTERVAL_PATTERN.matcher(value);
                     if (matcher.matches()) {
                         String numberStr = matcher.group(1);
-                        // Handle decimal values by rounding
                         double doubleValue = Double.parseDouble(numberStr);
                         selectedIntervalValue = (int) Math.round(doubleValue);
                         selectedIntervalTimeUnit = IntervalTimeUnit.fromString(matcher.group(2));
@@ -173,9 +158,6 @@ public class IntervalDropdown extends JComboBox<String> {
         return false;
     }
 
-    /**
-     * Resets the dropdown to "Session" selection.
-     */
     public void resetToSession() {
         setSelectedItem("Session");
         selectedIntervalTimeUnit = IntervalTimeUnit.SESSION;

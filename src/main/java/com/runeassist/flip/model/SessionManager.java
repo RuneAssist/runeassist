@@ -42,10 +42,6 @@ public class SessionManager {
         return new SessionData(sd.startTime,  sd.durationMillis, sd.averageCash);
     }
 
-    /**
-     * Begin or resume the flipping session for the logged-in OSRS account.
-     * Start the session clock from the OSRS display name (RSN).
-     */
     public synchronized void startOrResume() {
         String displayName = osrsLoginManager.getPlayerDisplayName();
         if (displayName == null) {

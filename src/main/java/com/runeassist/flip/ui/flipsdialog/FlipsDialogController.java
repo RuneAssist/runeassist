@@ -43,7 +43,6 @@ public class FlipsDialogController {
     private JDialog dialog;
     private VisualizeFlipPanel visualizeFlipPanel;
 
-    // Tab indices: Portfolio, Price graph, Visualize flip, Transactions, Analytics (web)
     private static final int TAB_PORTFOLIO = 0;
     private static final int TAB_PRICE_GRAPH = 1;
     private static final int TAB_VISUALIZE_FLIP = 2;
@@ -151,7 +150,7 @@ public class FlipsDialogController {
             dialog.setContentPane(tabbedPane);
 
             GraphicsEnvironment env = GraphicsEnvironment.getLocalGraphicsEnvironment();
-            Rectangle bounds = env.getMaximumWindowBounds(); // Excludes taskbar
+            Rectangle bounds = env.getMaximumWindowBounds();
             dialog.setSize(bounds.width, bounds.height);
             dialog.setLocation(bounds.x, bounds.y);
 
@@ -200,8 +199,6 @@ public class FlipsDialogController {
         if (suggestion == null || suggestion.isWaitSuggestion()) {
             return false;
         }
-        // Fall back to a direct item fetch when the bundled/prefetched suggestion graph
-        // is not ready yet (low-data mode, still in flight, or soft-failed attach).
         return priceGraphPanel == null || priceGraphPanel.suggestionPriceData == null
                 || priceGraphPanel.suggestionPriceData.itemId != suggestion.getItemId();
     }
@@ -218,7 +215,6 @@ public class FlipsDialogController {
         dialog.setVisible(true);
     }
 
-    /** Open website dashboard analytics (null section = full dashboard). */
     public void openWebAnalytics(String section) {
         LinkBrowser.browse(WebAnalyticsLinks.url(flipHistorySyncService.websiteUrl(), section));
     }

@@ -17,8 +17,8 @@ import java.util.function.*;
 @Slf4j
 public class ItemSearchMultiSelect extends JPanel {
 
-    private static final int ITEM_HEIGHT = 20; // Fixed height for each item
-    private static final int VISIBLE_ITEMS = 15; // Number of visible items at once
+    private static final int ITEM_HEIGHT = 20;
+    private static final int VISIBLE_ITEMS = 15;
 
 
     private final String placeholderText;
@@ -33,9 +33,6 @@ public class ItemSearchMultiSelect extends JPanel {
     private final Supplier<Set<Integer>> selectedItemsGetter;
     private List<ItemIdName> currentSearchResults = new ArrayList<>();
 
-    /**
-     * Builds the standard "Items filter..." search field used by the flips dialog tabs.
-     */
     public static ItemSearchMultiSelect itemsFilter(Component parent,
                                                     ItemController itemController,
                                                     Supplier<Set<Integer>> selectedItemsGetter,
@@ -68,7 +65,6 @@ public class ItemSearchMultiSelect extends JPanel {
 
         setLayout(new BorderLayout());
 
-        // Create main display field with placeholder
         displayField = new JTextField(placeholderText);
         displayField.setPreferredSize(new Dimension(200, displayField.getPreferredSize().height));
         displayField.setForeground(Color.GRAY);
@@ -76,15 +72,12 @@ public class ItemSearchMultiSelect extends JPanel {
         displayField.setEditable(true);
 
 
-        // Remove focus border
         displayField.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(ColorScheme.DARK_GRAY_COLOR), BorderFactory.createEmptyBorder(5, 5, 5, 5)));
 
-        // Setup display field panel without border
         JPanel dropdownPanel = new JPanel(new BorderLayout());
         dropdownPanel.add(displayField, BorderLayout.CENTER);
         dropdownPanel.setBackground(displayField.getBackground());
 
-        // Add the dropdown panel directly without label
         add(dropdownPanel, BorderLayout.CENTER);
         setOpaque(true);
         setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -93,16 +86,13 @@ public class ItemSearchMultiSelect extends JPanel {
         dropdownWindow.setAlwaysOnTop(RuneLite.getInjector().getInstance(RuneLiteConfig.class).gameAlwaysOnTop());
         dropdownWindow.setFocusableWindowState(true);
 
-        // Create action buttons panel (Select All / Unselect All)
         actionButtonsPanel = createActionButtonsPanel();
 
-        // Use virtual scroll panel instead of regular panel
         virtualScrollPanel = new VirtualScrollPanel();
         scrollPane = new JScrollPane(virtualScrollPanel);
         scrollPane.setPreferredSize(new Dimension(300, ITEM_HEIGHT * VISIBLE_ITEMS));
         scrollPane.getVerticalScrollBar().setUnitIncrement(ITEM_HEIGHT);
 
-        // Create dropdown content panel
         JPanel dropdownContent = new JPanel(new BorderLayout());
         dropdownContent.add(actionButtonsPanel, BorderLayout.NORTH);
         dropdownContent.add(scrollPane, BorderLayout.CENTER);
@@ -113,12 +103,12 @@ public class ItemSearchMultiSelect extends JPanel {
     }
 
     private JPanel createActionButtonsPanel() {
-        JPanel panel = new JPanel(new GridLayout(1, 2, 0, 0)); // Use GridLayout for equal width buttons
+        JPanel panel = new JPanel(new GridLayout(1, 2, 0, 0));
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setBorder(null);
 
         JButton selectAllButton = new JButton("Select All");
-        selectAllButton.setPreferredSize(new Dimension(0, ITEM_HEIGHT+5)); // Use ITEM_HEIGHT for button height
+        selectAllButton.setPreferredSize(new Dimension(0, ITEM_HEIGHT+5));
         selectAllButton.setFont(selectAllButton.getFont().deriveFont(Font.PLAIN, 14f));
         selectAllButton.setBackground(ColorScheme.DARK_GRAY_COLOR);
         selectAllButton.setForeground(Color.WHITE);
@@ -126,7 +116,7 @@ public class ItemSearchMultiSelect extends JPanel {
         selectAllButton.setFocusPainted(false);
 
         JButton unselectAllButton = new JButton("Unselect All");
-        unselectAllButton.setPreferredSize(new Dimension(0, ITEM_HEIGHT+5)); // Use ITEM_HEIGHT for button height
+        unselectAllButton.setPreferredSize(new Dimension(0, ITEM_HEIGHT+5));
         unselectAllButton.setFont(unselectAllButton.getFont().deriveFont(Font.PLAIN, 14f));
         unselectAllButton.setBackground(ColorScheme.DARK_GRAY_COLOR);
         unselectAllButton.setForeground(Color.WHITE);
@@ -167,18 +157,15 @@ public class ItemSearchMultiSelect extends JPanel {
         SwingUtilities.invokeLater(() -> {
             log.debug("there are {} search results", currentSearchResults.size());
 
-            // Update virtual scroll panel with new results
             virtualScrollPanel.setItems(currentSearchResults);
 
-            // Calculate dimensions
             Point location = getLocationOnScreen();
             int actionButtonsHeight = actionButtonsPanel.getPreferredSize().height;
             int scrollBarHeight = scrollPane.getHorizontalScrollBar().getPreferredSize().height;
             int contentHeight = Math.min(currentSearchResults.size() * ITEM_HEIGHT, ITEM_HEIGHT * VISIBLE_ITEMS);
 
-            int totalHeight = contentHeight + actionButtonsHeight + scrollBarHeight + 12; // 12 for border and padding
+            int totalHeight = contentHeight + actionButtonsHeight + scrollBarHeight + 12;
 
-            // Update window
             dropdownWindow.setLocation(location.x, location.y + getHeight());
             dropdownWindow.setSize(getWidth(), totalHeight);
             dropdownWindow.setVisible(true);
@@ -222,7 +209,6 @@ public class ItemSearchMultiSelect extends JPanel {
                     updateDropdown(displayField.getText());
                     e.consume();
                 } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
-                    // Allow escape key to close dropdown and remove focus
                     dropdownWindow.setVisible(false);
                     displayField.transferFocus();
                     e.consume();
@@ -241,9 +227,6 @@ public class ItemSearchMultiSelect extends JPanel {
         });
     }
 
-    /**
-     * Virtual scrolling panel that only renders visible items
-     */
     private class VirtualScrollPanel extends JPanel implements Scrollable {
         private List<ItemIdName> items = new ArrayList<>();
         private final Map<Integer, JPanel> panelCache = new HashMap<>();
@@ -251,10 +234,9 @@ public class ItemSearchMultiSelect extends JPanel {
         private int lastVisibleIndex = 0;
 
         public VirtualScrollPanel() {
-            setLayout(null); // Use absolute positioning
+            setLayout(null);
             setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-            // Add viewport change listener to handle scrolling
             addComponentListener(new ComponentAdapter() {
                 @Override
                 public void componentResized(ComponentEvent e) {
@@ -265,9 +247,8 @@ public class ItemSearchMultiSelect extends JPanel {
 
         public void setItems(List<ItemIdName> items) {
             this.items = items;
-            panelCache.clear(); // Clear cache when items change
+            panelCache.clear();
 
-            // Set preferred size based on total items
             setPreferredSize(new Dimension(getWidth(), items.size() * ITEM_HEIGHT));
 
             updateVisibleItems();
@@ -276,7 +257,7 @@ public class ItemSearchMultiSelect extends JPanel {
         }
 
         public void refreshItems() {
-            panelCache.clear(); // Clear cache to force recreation of panels with updated icons
+            panelCache.clear();
             updateVisibleItems();
         }
 
@@ -291,7 +272,6 @@ public class ItemSearchMultiSelect extends JPanel {
             lastVisibleIndex = Math.min(items.size() - 1,
                     (viewRect.y + viewRect.height) / ITEM_HEIGHT + 1);
 
-            // Remove all components and add only visible ones
             removeAll();
 
             Set<Integer> selectedItems = selectedItemsGetter.get();
@@ -322,11 +302,9 @@ public class ItemSearchMultiSelect extends JPanel {
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
 
-            // Update visible items when painting
             updateVisibleItems();
         }
 
-        // Scrollable interface methods
         @Override
         public Dimension getPreferredScrollableViewportSize() {
             return new Dimension(getWidth(), ITEM_HEIGHT * VISIBLE_ITEMS);
@@ -369,7 +347,6 @@ public class ItemSearchMultiSelect extends JPanel {
         checkBox.setBackground(ColorScheme.DARK_GRAY_COLOR);
         checkBox.setPreferredSize(new Dimension(20, 16));
 
-        // Scale down the checkbox icon
         checkBox.setFont(checkBox.getFont().deriveFont(10f));
         checkBox.setMargin(new Insets(0, 0, 0, 0));
 
@@ -390,7 +367,6 @@ public class ItemSearchMultiSelect extends JPanel {
 
         panel.add(checkBox, BorderLayout.EAST);
 
-        // Add hover effect - clicking anywhere on panel toggles checkbox
         panel.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent ee) {

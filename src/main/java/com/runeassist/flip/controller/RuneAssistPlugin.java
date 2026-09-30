@@ -34,7 +34,6 @@ import java.awt.image.BufferedImage;
 import java.util.concurrent.*;
 
 @Slf4j
-// Self-wiring flipping plugin. Suggestions come from RuneAssistSuggestionSource
 @PluginDescriptor(
 		name = "RuneAssist Flipping",
 		description = "Grand Exchange flipping that fits how you play: what to buy, what to list at, when to sell and when to cut a loss, sized to your coins and slots, with held-cost tracking. Free, with an optional web dashboard and Discord.",
@@ -42,11 +41,8 @@ import java.util.concurrent.*;
 		internalName = "runeassist-flipping",
 		legacyDataDirectory = "runeassist-flip"
 )
-// No @PluginDependency(BankTagsPlugin): sideloaded installs refuse to load with it.
-// Bank Tags is resolved at runtime via BankTagsLookup when the portfolio tab is enabled.
 public class RuneAssistPlugin extends Plugin {
 
-	/** Resolved first so every manager below can rely on Persistance.dataDir(). */
 	@Inject @Named("runeAssistDataDir")
 	private net.runelite.client.util.Filepath dataDir;
 	@Inject
@@ -135,11 +131,9 @@ public class RuneAssistPlugin extends Plugin {
 	private com.runeassist.flip.HeldCostTracker heldCostTracker;
 	@Inject
 	private FlipHistorySyncService flipHistorySyncService;
-	/** Constructed so Guice registers dump-alert stream listeners. */
 	@Inject
 	private DumpsStreamController dumpsStreamController;
 
-	// We use our own ThreadPool since the default ScheduledExecutorService only has a single thread and we don't want to block it
 	@Provides
 	@Singleton
 	@Named("runeAssistExecutor")
@@ -155,16 +149,9 @@ public class RuneAssistPlugin extends Plugin {
 
 	@Provides @Singleton @Named("runeAssistSuggestionExecutor")
 	public com.runeassist.flip.SuggestionTaskExecutor provideSuggestionExecutor() {
-		// Optional graph/history/portfolio work cannot occupy the compose worker.
 		return new com.runeassist.flip.SuggestionTaskExecutor();
 	}
 
-	/**
-	 * RuneLite's sandboxed data directory (.runelite/plugin-data/runeassist-flipping). The
-	 * legacy .runelite/runeassist-flip folder is moved there the first time this runs, so
-	 * existing players keep their history. The Plugin Hub requires all file access to go
-	 * through this Filepath.
-	 */
 	@Provides @Singleton @Named("runeAssistDataDir")
 	public net.runelite.client.util.Filepath provideDataDir() throws java.io.IOException {
 		net.runelite.client.util.Filepath dir = getPluginDirectory();
@@ -188,7 +175,6 @@ public class RuneAssistPlugin extends Plugin {
 		portfolioBankTagController.startUp();
 		highlightController.activate();
 		Persistance.setUp(gson);
-		// seems we need to delay instantiating the UI till here as otherwise the panels look different
 		mainPanel = injector.getInstance(MainPanel.class);
 		final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/runeassist-flip.png");
 		navButton = NavigationButton.builder()
@@ -204,7 +190,6 @@ public class RuneAssistPlugin extends Plugin {
 		grandExchangeCollectHandler.setSuggestionPanel(mainPanel.runeAssistPanel.suggestionPanel);
 		statsPanel = mainPanel.runeAssistPanel.statsPanel;
 
-		// On the client thread, as every other refresh site already is: the status strip reads
 		clientThread.invokeLater(mainPanel::refresh);
 		SwingUtilities.invokeLater(() -> patchNotesController.maybeShowOnStartup(mainPanel, hadExistingInstallation));
 
@@ -257,11 +242,9 @@ public class RuneAssistPlugin extends Plugin {
 		return configManager.getConfig(RuneAssistConfig.class);
 	}
 
-	//---------------------------- Event Handlers ----------------------------//
 	@Subscribe
 	public void onGrandExchangeOfferChanged(GrandExchangeOfferChanged event) {
 		offerEventHandler.onGrandExchangeOfferChanged(event);
-		// RuneAssist: track cost basis of held stock so we can suggest profitable sells.
 		net.runelite.api.GrandExchangeOffer o = event.getOffer();
 		if (o != null) {
 			net.runelite.api.Player p = client.getLocalPlayer();
@@ -278,9 +261,6 @@ public class RuneAssistPlugin extends Plugin {
 	static boolean shouldObserveHeldOffer(String name, GameState gameState, GrandExchangeOfferState offerState,
 			boolean validLogin, boolean loginBurst) {
 		if (name == null || name.trim().isEmpty() || offerState == null) return false;
-		// Client teardown/login clears are not actual collections. Keep cumulative
-		// counters so the next login snapshot cannot count the old fills twice.
-		// Non-empty login observations still recover legitimate offline fill deltas.
 		return offerState != GrandExchangeOfferState.EMPTY
 				|| gameState == GameState.LOGGED_IN && validLogin && !loginBurst;
 	}
@@ -311,7 +291,6 @@ public class RuneAssistPlugin extends Plugin {
 		return bank != null && !bank.isHidden();
 	}
 
-	/** Wire session clock + flip stats to the logged-in OSRS account. */
 	private void bindOsrsSession(String name) {
 		if (name == null || name.isEmpty()) {
 			flipManager.setIntervalAccount(null);
@@ -367,7 +346,6 @@ public class RuneAssistPlugin extends Plugin {
 
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event) {
-		// "Add to portfolio" tracks locally via HeldCostTracker.
 		menuHandler.injectInventoryPortfolioMenuEntry(event);
 		menuHandler.injectPriceGraphMenuEntry(event);
 		menuHandler.injectConfirmMenuEntry(event);
@@ -422,7 +400,6 @@ public class RuneAssistPlugin extends Plugin {
 				osrsLoginRS.set(osrsLoginRS.get().nextState(client));
 				break;
 			case LOGGED_IN:
-				// Display name is not available immediately; defer session bind.
 				clientThread.invokeLater(() -> {
 					if (client.getGameState() != GameState.LOGGED_IN) {
 						return true;

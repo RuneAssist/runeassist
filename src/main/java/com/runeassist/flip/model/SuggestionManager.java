@@ -53,8 +53,6 @@ public class SuggestionManager {
     }
 
     boolean suggestionOutOfDate(Instant now) {
-        // Faster routine refresh; failures retain a longer cooldown. Explicit offer
-        // events still use suggestionNeeded and the controller's single-flight guard.
         return (suggestionReceivedAt == null || !suggestionReceivedAt.plusSeconds(5).isAfter(now))
                 && (lastFailureAt == null || !lastFailureAt.plusSeconds(10).isAfter(now));
     }
@@ -72,7 +70,6 @@ public class SuggestionManager {
         submittedFillSeconds = suggestion.offerFillSeconds();
     }
 
-    /** Expected fill time of the card behind a just-placed offer; 0 when none matches or none was given. */
     public synchronized long matchingSubmittedFillSeconds(int itemId, OfferStatus status, int tick) {
         return matchingSubmittedSuggestion(itemId, status, tick) == null ? 0L : submittedFillSeconds;
     }

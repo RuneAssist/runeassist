@@ -5,10 +5,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Request-scoped physical proof, restricted to tracked item IDs: what is in the
- * inventory now, and (separately) what the client last saw in the bank.
- */
 public final class InventoryAvailabilitySnapshot
 {
     private final boolean inventorySnapshotKnown;
@@ -25,22 +21,12 @@ public final class InventoryAvailabilitySnapshot
         availableBank = Collections.unmodifiableList(bankItems);
     }
 
-    /**
-     * The caller must normalize noted IDs and validate the current account before
-     * setting known. Do not supply cached bank stock, GE offers or limbo estimates.
-     * Missing inventory is unknown; an observed empty inventory is known empty.
-     */
     public static InventoryAvailabilitySnapshot from(Map<Integer, long[]> trackedHeld,
             Map<Integer, Long> physicalInventory, boolean known)
     {
         return from(trackedHeld, physicalInventory, known, null, false);
     }
 
-    /**
-     * Bank contents are the client's last look at the bank (null until it has been
-     * opened this session), so they are carried as a separate, weaker proof: enough
-     * to say "withdraw this first", never enough to say it is in hand.
-     */
     public static InventoryAvailabilitySnapshot from(Map<Integer, long[]> trackedHeld,
             Map<Integer, Long> physicalInventory, boolean known,
             Map<Integer, Long> bankInventory, boolean bankKnown)
