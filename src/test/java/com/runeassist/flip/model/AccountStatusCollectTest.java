@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * WAIT with a full GE board and a finished box must prompt Collect so a slot
- * frees for selling held stock. Reserved-slots=0 used to skip that prompt.
+ * WAIT with a finished box must prompt Collect: on a full board so a slot frees
+ * for selling held stock, and otherwise because there is nothing else to point at.
  */
 public class AccountStatusCollectTest {
 
@@ -35,13 +35,16 @@ public class AccountStatusCollectTest {
     }
 
     @Test
-    public void waitWithEmptySlotDoesNotAskCollectForFinishedOffer() {
+    public void waitWithEmptySlotsStillAsksCollectForAFinishedOffer() {
+        // Nothing else to do, so point at the coins or items waiting in the slot,
+        // as after a cancel by hand.
         AccountStatus status = memberStatus();
         StatusOfferList offers = status.getOffers();
         offers.set(0, finishedSell(0, 2199));
         // remaining slots stay EMPTY from the constructor
 
-        assertFalse(status.isCollectNeeded(waitSuggestion(), false));
+        assertTrue(status.isCollectNeeded(waitSuggestion(), false));
+        assertFalse(status.isCollectNeeded(waitSuggestion(), true), "not while an offer is being set up");
     }
 
     private static AccountStatus memberStatus() {
