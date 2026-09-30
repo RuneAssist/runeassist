@@ -10,6 +10,12 @@ name: Hub review status
 on:
   issue_comment:
     types: [created, edited]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number whose latest review comment should set the status
+        required: true
+        type: string
 
 permissions:
   statuses: write
@@ -18,17 +24,26 @@ permissions:
 jobs:
   status:
     if: >
-      github.event.issue.pull_request
-      && github.event.comment.author_association == 'OWNER'
-      && startsWith(github.event.comment.body, '**Plugin Hub review: ')
+      github.event_name == 'workflow_dispatch'
+      || (github.event.issue.pull_request
+          && github.event.comment.author_association == 'OWNER'
+          && startsWith(github.event.comment.body, '**Plugin Hub review: '))
     runs-on: ubuntu-latest
     steps:
       - name: Set hub-review on the head commit from the verdict
         env:
           GH_TOKEN: ${{ github.token }}
           BODY: ${{ github.event.comment.body }}
-          PR: ${{ github.event.issue.number }}
+          PR: ${{ github.event.issue.number || inputs.pr }}
+          COMMENT_URL: ${{ github.event.comment.html_url }}
         run: |
+          if [ -z "$BODY" ]; then
+            # Manual run: the newest review comment by the owner on that pull request.
+            BODY=$(gh api "repos/${{ github.repository }}/issues/$PR/comments?per_page=100" \
+              --jq '[.[] | select(.author_association=="OWNER" and (.body | startswith("**Plugin Hub review: ")))] | last | .body // ""')
+            COMMENT_URL=$(gh api "repos/${{ github.repository }}/issues/$PR/comments?per_page=100" \
+              --jq '[.[] | select(.author_association=="OWNER" and (.body | startswith("**Plugin Hub review: ")))] | last | .html_url // ""')
+          fi
           first=$(printf '%s' "$BODY" | head -n1 | tr -d '*' | tr -d '\r')
           case "$first" in
             "Plugin Hub review: PASS"*) state=success ;;
@@ -38,5 +53,5 @@ jobs:
           sha=$(gh api "repos/${{ github.repository }}/pulls/$PR" --jq .head.sha)
           gh api -X POST "repos/${{ github.repository }}/statuses/$sha" \
             -f state="$state" -f context=hub-review -f description="${first:0:140}" \
-            -f target_url="${{ github.event.comment.html_url }}" >/dev/null
+            -f target_url="$COMMENT_URL" >/dev/null
           echo "hub-review=$state on $sha"
