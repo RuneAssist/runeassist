@@ -29,6 +29,16 @@ public class StatusOfferList extends ArrayList<Offer> {
                 && !emptySlotExists(isMember);
     }
 
+    /** A finished or cancelled offer still sitting in a slot: items or coins waiting to be collected. */
+    boolean anyCollectable() {
+        for (Offer offer : this) {
+            if (offer.getStatus() != OfferStatus.EMPTY && !offer.isActive()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     boolean emptySlotExists(boolean isMember) {
         return findEmptySlot(isMember) != -1;
     }
