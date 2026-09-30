@@ -37,11 +37,13 @@ EXEMPT="${SIZE_EXEMPT:-0}"
 # Generated or vendored paths never count.
 EXCLUDE=(':!*.lock' ':!*lock.json' ':!gradlew' ':!gradlew.bat' ':!gradle/wrapper/*' ':!*.png' ':!*.jar')
 
-range="$BASE...$HEAD"
-raw=$(git diff --numstat "$range" -- . "${EXCLUDE[@]}" | awk '$1!="-"{a+=$1; d+=$2} END{print a+0, d+0}')
-real=$(git diff --numstat --ignore-all-space --ignore-blank-lines --ignore-cr-at-eol "$range" -- . "${EXCLUDE[@]}" | awk '$1!="-"{a+=$1; d+=$2} END{print a+0, d+0}')
-files=$(git diff --name-only "$range" -- . "${EXCLUDE[@]}" | wc -l | tr -d ' ')
-words=$(git diff --word-diff=porcelain --ignore-all-space --ignore-cr-at-eol "$range" -- . "${EXCLUDE[@]}" \
+# The Hub's published commit may share no ancestor with HEAD (the history was re-pushed
+# on 2026-09-30); a direct two-commit diff measures the same change either way.
+if [[ -n "${HUB_COMMIT:-}" ]]; then range="$BASE $HEAD"; else range="$BASE...$HEAD"; fi
+raw=$(git diff --numstat $range -- . "${EXCLUDE[@]}" | awk '$1!="-"{a+=$1; d+=$2} END{print a+0, d+0}')
+real=$(git diff --numstat --ignore-all-space --ignore-blank-lines --ignore-cr-at-eol $range -- . "${EXCLUDE[@]}" | awk '$1!="-"{a+=$1; d+=$2} END{print a+0, d+0}')
+files=$(git diff --name-only $range -- . "${EXCLUDE[@]}" | wc -l | tr -d ' ')
+words=$(git diff --word-diff=porcelain --ignore-all-space --ignore-cr-at-eol $range -- . "${EXCLUDE[@]}" \
   | grep -E '^[+-][^+-]' | wc -w | tr -d ' ')
 
 read -r raw_add raw_del <<<"$raw"
@@ -55,10 +57,10 @@ churn=()
 while IFS=$'\t' read -r a d f; do
   [[ "$a" == "-" ]] && continue
   rt=$((a + d)); [[ $rt -lt 40 ]] && continue
-  rr=$(git diff --numstat --ignore-all-space --ignore-blank-lines --ignore-cr-at-eol "$range" -- "$f" | awk '{print ($1=="-"?0:$1+$2)}')
+  rr=$(git diff --numstat --ignore-all-space --ignore-blank-lines --ignore-cr-at-eol $range -- "$f" | awk '{print ($1=="-"?0:$1+$2)}')
   rr=${rr:-0}
   if [[ $rr -le $((rt / 10)) ]]; then churn+=("$f (raw $rt, real $rr)"); fi
-done < <(git diff --numstat "$range" -- . "${EXCLUDE[@]}")
+done < <(git diff --numstat $range -- . "${EXCLUDE[@]}")
 
 status="ok"
 [[ $real_total -gt $WARN_LINES ]] && status="warn"
