@@ -121,8 +121,6 @@ public class RuneAssistPlugin extends Plugin {
 	@Inject
 	private PortfolioBankTabBadgeOverlay portfolioBankTabBadgeOverlay;
 	@Inject
-	private com.runeassist.flip.ui.OfferAgeOverlay offerAgeOverlay;
-	@Inject
 	private BankStateRS bankStateRS;
 
 	@Inject
@@ -184,7 +182,6 @@ public class RuneAssistPlugin extends Plugin {
 		overlayManager.add(inventorySlotTooltipOverlay);
 		overlayManager.add(inventoryPortfolioBadgeOverlay);
 		overlayManager.add(portfolioBankTabBadgeOverlay);
-		overlayManager.add(offerAgeOverlay);
 		portfolioBankTagController.startUp();
 		highlightController.activate();
 		Persistance.setUp(gson);
@@ -237,7 +234,6 @@ public class RuneAssistPlugin extends Plugin {
 		overlayManager.remove(inventorySlotTooltipOverlay);
 		overlayManager.remove(inventoryPortfolioBadgeOverlay);
 		overlayManager.remove(portfolioBankTabBadgeOverlay);
-		overlayManager.remove(offerAgeOverlay);
 		portfolioBankTagController.shutDown();
 		offerManager.saveAll();
 		highlightController.deactivateAndRemoveAll();
