@@ -13,6 +13,11 @@ import net.runelite.client.plugins.PluginManager;
 public final class HubPluginConflict
 {
     public static final String WAIT_MESSAGE = "Turn off Plugin Hub Flipping Copilot";
+    /**
+     * JVM property that lets both plugins run at once, for side-by-side research on a
+     * developer launch. It cannot be set from the Plugin Hub build, so players keep the guard.
+     */
+    public static final String ALLOW_PROPERTY = "runeassist.allowCopilot";
 
     private HubPluginConflict()
     {
@@ -39,6 +44,10 @@ public final class HubPluginConflict
 
     public static boolean isEnabled(PluginManager pluginManager)
     {
+        if (Boolean.getBoolean(ALLOW_PROPERTY))
+        {
+            return false;
+        }
         if (pluginManager == null)
         {
             return false;
