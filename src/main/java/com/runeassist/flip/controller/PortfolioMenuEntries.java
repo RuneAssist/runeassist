@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
+import net.runelite.api.ItemID;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.Player;
 import net.runelite.api.events.MenuEntryAdded;
@@ -287,6 +288,9 @@ public class PortfolioMenuEntries {
             return null;
         }
         int unnotedItemId = itemController.toUnnotedItemId(itemWidget.getItemId());
+        if (unnotedItemId == ItemID.COINS_995 || unnotedItemId == ItemID.PLATINUM_TOKEN) {
+            return null; // cash is counted already; it is never stock
+        }
         String menuTarget = resolveMenuTarget(event.getTarget(), unnotedItemId);
         return new InventoryMenuItem(unnotedItemId, menuTarget, location);
     }
