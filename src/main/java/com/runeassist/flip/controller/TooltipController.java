@@ -1,11 +1,14 @@
 package com.runeassist.flip.controller;
 
+import com.runeassist.flip.config.RuneAssistConfig;
+import com.runeassist.flip.ui.OfferAge;
 import com.runeassist.flip.ui.UIUtilities;
 import com.runeassist.flip.util.ProfitCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.FontTypeFace;
+import net.runelite.api.Point;
 import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
@@ -13,6 +16,7 @@ import net.runelite.api.widgets.Widget;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+import java.awt.Rectangle;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -21,12 +25,16 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class TooltipController {
     private static final int SCRIPT_TOOLTIP_GE = 526;
-    private static final int TOOLTIP_HEIGHT_WITH_PROFIT = 45;
+    private static final int LINE_HEIGHT = 15;
+    private static final int GE_SLOT_COUNT = 8;
+    private static final int FIRST_SLOT_CHILD_ID = 7;
 
     private static final int WIDTH_PADDING = 4;
 
     private final Client client;
     private final ProfitCalculator profitCalculator;
+    private final OfferAge offerAge;
+    private final RuneAssistConfig config;
 
     public void tooltip(ScriptPostFired e) {
         if(e.getScriptId() != SCRIPT_TOOLTIP_GE) {
@@ -45,31 +53,52 @@ public class TooltipController {
 
         if (text != null && background != null && border != null) {
 
-            if (text.getText().contains("Profit:")) {
-                // If the tooltip already contains profit information, we don't need to process it again
+            if (text.getText().contains("Profit:") || text.getText().contains("Listed ")) {
+                // Already carries our lines; the script re-fires while the mouse rests on the slot.
                 return;
             }
 
-            if(!isItemSelling(text.getText())) {
-                return;
-            }
-
+            int added = 0;
             String name = getItemNameFromTooltipText(text.getText());
-
-            if(name != null) {
+            if (name != null && isItemSelling(text.getText())) {
                 long profit = profitCalculator.getProfitByItemName(name);
                 text.setText(text.getText()  + "<br>Profit: " + UIUtilities.quantityToRSDecimalStack(profit, false) + " gp");
-                tooltip.setOriginalHeight(TOOLTIP_HEIGHT_WITH_PROFIT);
+                added++;
+            }
+            String age = name != null && config.slotOfferAge() ? offerAge.tooltipLine(hoveredSlot(), System.currentTimeMillis()) : null;
+            if (age != null) {
+                text.setText(text.getText() + "<br>" + age);
+                added++;
+            }
+            if (added == 0) {
+                return;
+            }
+            tooltip.setOriginalHeight(tooltip.getOriginalHeight() + LINE_HEIGHT * added);
 
-                int width = calculateTooltipWidth(text.getFont(), text.getText());
-                tooltip.setOriginalWidth(width);
+            int width = calculateTooltipWidth(text.getFont(), text.getText());
+            tooltip.setOriginalWidth(width);
 
-                tooltip.revalidate();
-                border.revalidate();
-                background.revalidate();
-                text.revalidate();
+            tooltip.revalidate();
+            border.revalidate();
+            background.revalidate();
+            text.revalidate();
+        }
+    }
+
+    /** The slot under the mouse, which is the one the game built the tooltip for; -1 if none. */
+    private int hoveredSlot() {
+        Point mouse = client.getMouseCanvasPosition();
+        if (mouse == null) {
+            return -1;
+        }
+        for (int slot = 0; slot < GE_SLOT_COUNT; slot++) {
+            Widget widget = client.getWidget(InterfaceID.GE_OFFERS, FIRST_SLOT_CHILD_ID + slot);
+            Rectangle bounds = widget == null || widget.isHidden() ? null : widget.getBounds();
+            if (bounds != null && bounds.contains(mouse.getX(), mouse.getY())) {
+                return slot;
             }
         }
+        return -1;
     }
 
     public boolean isItemSelling(String text) {

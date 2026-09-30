@@ -303,7 +303,7 @@ public interface RuneAssistConfig extends Config
     @ConfigItem(
             keyName = "slotOfferAge",
             name = "Show offer age",
-            description = "Show how long each offer has been listed in the corner of its GE slot, against the time its card expected: 12m / 50m",
+            description = "Add how long each offer has been listed, and how long its card expected, to the slot's hover tooltip",
             section = slotPriceColorSection,
             position = 4
     )
