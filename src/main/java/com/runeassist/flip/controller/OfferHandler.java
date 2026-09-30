@@ -131,20 +131,24 @@ public class OfferHandler {
     public boolean isSettingQuantity() {
         var chatboxTitleWidget = getChatboxTitleWidget();
         if (chatboxTitleWidget == null) return false;
-        String chatInputText = chatboxTitleWidget.getText();
-        return chatInputText.equals("How many do you wish to buy?") || chatInputText.equals("How many do you wish to sell?");
+        String chatInputText = plainText(chatboxTitleWidget.getText());
+        return chatInputText.startsWith("How many do you wish to");
     }
 
     public boolean isSettingPrice() {
         var chatboxTitleWidget = getChatboxTitleWidget();
         if (chatboxTitleWidget == null) return false;
-        String chatInputText = chatboxTitleWidget.getText();
-
-        // The setup title used to be matched word for word ("Buy offer" / "Sell offer"); since
-        // the 30 Sep 2026 GE update it carries a payment icon, so only the prompt is matched
-        // and the offer setup screen has to be showing.
+        // The prompt's wording and markup moved with the 30 Sep 2026 GE update, so it is
+        // matched on the one word that only the price prompt has, tags removed.
+        String chatInputText = plainText(chatboxTitleWidget.getText());
         var offerContainerWidget = client.getWidget(ComponentID.GRAND_EXCHANGE_OFFER_CONTAINER);
-        return chatInputText.equals("Set a price for each item:") && offerContainerWidget != null && !offerContainerWidget.isHidden();
+        boolean setup = offerContainerWidget != null && !offerContainerWidget.isHidden();
+        log.debug("chatbox prompt '{}' setup={}", chatInputText, setup);
+        return setup && chatInputText.toLowerCase().contains("price");
+    }
+
+    static String plainText(String text) {
+        return text == null ? "" : text.replaceAll("<[^>]*>", " ").replaceAll("\\s+", " ").trim();
     }
 
 
