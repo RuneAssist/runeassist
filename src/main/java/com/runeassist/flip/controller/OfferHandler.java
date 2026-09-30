@@ -26,7 +26,6 @@ import static net.runelite.api.VarPlayer.CURRENT_GE_ITEM;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class OfferHandler {
 
-    private static final int GE_OFFER_INIT_STATE_CHILD_ID = 20;
 
     // dependencies
     private final Client client;
@@ -141,10 +140,11 @@ public class OfferHandler {
         if (chatboxTitleWidget == null) return false;
         String chatInputText = chatboxTitleWidget.getText();
 
-        var offerTextWidget = getOfferTextWidget();
-        if (offerTextWidget == null) return false;
-        String offerText = offerTextWidget.getText();
-        return chatInputText.equals("Set a price for each item:") && (offerText.equals("Buy offer") || offerText.equals("Sell offer"));
+        // The setup title used to be matched word for word ("Buy offer" / "Sell offer"); since
+        // the 30 Sep 2026 GE update it carries a payment icon, so only the prompt is matched
+        // and the offer setup screen has to be showing.
+        var offerContainerWidget = client.getWidget(ComponentID.GRAND_EXCHANGE_OFFER_CONTAINER);
+        return chatInputText.equals("Set a price for each item:") && offerContainerWidget != null && !offerContainerWidget.isHidden();
     }
 
 
@@ -152,11 +152,6 @@ public class OfferHandler {
         return client.getWidget(ComponentID.CHATBOX_TITLE);
     }
 
-    private Widget getOfferTextWidget() {
-        var offerContainerWidget = client.getWidget(ComponentID.GRAND_EXCHANGE_OFFER_CONTAINER);
-        if (offerContainerWidget == null) return null;
-        return offerContainerWidget.getChild(GE_OFFER_INIT_STATE_CHILD_ID);
-    }
 
     public boolean isSelling() {
         return client.getVarbitValue(Varbits.GE_OFFER_CREATION_TYPE) == 1;
