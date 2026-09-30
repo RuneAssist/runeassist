@@ -73,7 +73,7 @@ public class OfferAge {
         }
         long minutes = ageMs / 60_000L;
         if (minutes < 1) {
-            return "<1m";
+            return "under 1m";
         }
         if (minutes < 60) {
             return minutes + "m";
