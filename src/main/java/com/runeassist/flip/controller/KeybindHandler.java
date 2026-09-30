@@ -4,7 +4,7 @@ import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.SuggestionManager;
 import com.runeassist.flip.ui.flipsdialog.FlipsDialogController;
 import net.runelite.api.Client;
-import net.runelite.api.VarClientInt;
+
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.Keybind;
@@ -84,11 +84,9 @@ public class KeybindHandler {
             private void handleKeybind(boolean quickSetPressed, boolean skipSuggestionPressed, boolean openGraphPressed) {
                 var suggestion = suggestionManager.getSuggestion();
 
-                var inputType = client.getVarcIntValue(VarClientInt.INPUT_TYPE);
-
-                var isPriceOrQuantityBoxOpen = client.getWidget(ComponentID.CHATBOX_TITLE) != null
-                        && inputType == 7
-                        && client.getWidget(ComponentID.GRAND_EXCHANGE_OFFER_CONTAINER) != null
+                // Price and quantity prompts are told apart by their text, not the input mode
+                // (the price prompt got a mode of its own with the 30 Sep 2026 GE update).
+                var isPriceOrQuantityBoxOpen = (offerHandler.isSettingPrice() || offerHandler.isSettingQuantity())
                         && grandExchange.isSlotOpen();
 
                 if (quickSetPressed && isPriceOrQuantityBoxOpen) {
