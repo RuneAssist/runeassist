@@ -59,16 +59,11 @@ public class GameUiChangesHandler {
         }
 
         // The item search used to be chat input mode 14; the 30 Sep 2026 GE update renumbered
-        // the modes, so the prompt text is what identifies it now.
+        // the modes and builds the search layer after the mode changes, so the prompt text is
+        // checked on the next tick. The search-build script (onScriptPostFired) is the other way in.
         if (event.getIndex() == VarClientID.MESLAYERMODE
-                && client.getVarcIntValue(VarClientID.MESLAYERMODE) != 0
-                && client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS) != null) {
-            clientThread.invokeLater(() -> {
-                if (!itemSearchChatboxOpen && isItemSearchPrompt()) {
-                    itemSearchChatboxOpen = true;
-                    gePreviousSearch.showSuggestedItemInSearch();
-                }
-            });
+                && client.getVarcIntValue(VarClientID.MESLAYERMODE) != 0) {
+            clientThread.invokeLater(this::showCardItemInSearchIfOpen);
         }
 
         if (quantityOrPriceChatboxOpen
@@ -131,6 +126,19 @@ public class GameUiChangesHandler {
     private boolean isItemSearchPrompt() {
         Widget title = client.getWidget(ComponentID.CHATBOX_TITLE);
         return title != null && OfferHandler.plainText(title.getText()).startsWith("What would you like to");
+    }
+
+    /** Client thread. Puts the card's item at the top of the search the first time the search is seen open. */
+    private void showCardItemInSearchIfOpen() {
+        if (itemSearchChatboxOpen) {
+            return;
+        }
+        Widget results = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
+        if (results == null || results.isHidden() || !isItemSearchPrompt()) {
+            return;
+        }
+        itemSearchChatboxOpen = true;
+        gePreviousSearch.showSuggestedItemInSearch();
     }
 
     public void onVarClientStrChanged(VarClientStrChanged event) {
@@ -261,6 +269,9 @@ public class GameUiChangesHandler {
     public void onScriptPostFired(ScriptPostFired event) {
         if (event.getScriptId() == SCRIPT_GE_COLLECT || event.getScriptId() == SCRIPT_GE_SLOT_REDRAW) {
             clientThread.invokeLater(slotProfitColorizer::updateAllSlots);
+        }
+        if (event.getScriptId() == ScriptID.GE_ITEM_SEARCH) {
+            showCardItemInSearchIfOpen();
         }
         if (event.getScriptId() == ScriptID.BANKMAIN_FINISHBUILDING) {
             requestBankRebuildHighlightRedraw();
