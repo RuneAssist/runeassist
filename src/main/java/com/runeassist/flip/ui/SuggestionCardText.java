@@ -61,6 +61,7 @@ final class SuggestionCardText {
         if (text.contains("buy limit") || text.contains("buy-limit")) return "Waiting for buy limits";
         if (text.contains("paused")) return "Suggestions paused";
         if (text.contains("blocked every") || text.contains("skipped every")) return "No unblocked flips";
+        if (text.startsWith("withdraw ") || text.contains("not in your inventory")) return message;
         return "Waiting for a suitable flip";
     }
 

@@ -449,6 +449,7 @@ public class SuggestionPanel extends JPanel {
         cardHeader.setVisible(false);
         setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH, STATUS_PANEL_HEIGHT));
         revalidate();
+        repaint(); // the action icons otherwise stay unpainted until the mouse passes over them
     }
 
     private boolean shouldSellFromBank(Suggestion suggestion) {

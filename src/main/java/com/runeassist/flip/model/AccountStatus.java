@@ -54,6 +54,12 @@ public class AccountStatus {
             log.debug("collected needed isEmptySlotNeeded");
             return true;
         }
+        // Nothing to do but something to collect, as after a cancel by hand: point at it.
+        if (!suggestion.isDumpAlert() && !setUpOfferOpen
+                && SuggestionType.WAIT.equals(suggestion.getType()) && offers.anyCollectable()) {
+            log.debug("collected needed anyCollectable");
+            return true;
+        }
         if (suggestion.isModifySuggestion() || suggestion.isAbortSuggestion()) {
             return false;
         }

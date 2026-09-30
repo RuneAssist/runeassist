@@ -382,9 +382,12 @@ public class SuggestionController {
             return;
         }
         if (!isSellAvailableNow(newSuggestion)) {
+            // The server wants this sold but it is not in the inventory: say so, with the
+            // item, instead of a generic wait that looks like an empty market.
             Suggestion wait = new Suggestion();
             wait.setType(SuggestionType.WAIT);
-            wait.setMessage("Waiting for inventory update");
+            wait.setMessage(unseenHoldingMessage(newSuggestion));
+            wait.setWhy(newSuggestion.getWhy());
             suggestionManager.setSuggestion(wait);
             suggestionManager.setSuggestionRequestInProgress(false);
             suggestionManager.setGraphDataReadingInProgress(false);
@@ -564,6 +567,16 @@ public class SuggestionController {
     }
 
     /** Direct sales need current physical stock, not only historical purchases. */
+    /** "Withdraw Dragon hunter wand to sell it" or, when the bank did not show it either, what to do about that. */
+    static String unseenHoldingMessage(Suggestion sell) {
+        String name = sell.getName() == null || sell.getName().isEmpty() ? "the item" : sell.getName();
+        String why = sell.getWhy() == null ? "" : sell.getWhy().toLowerCase(java.util.Locale.ROOT);
+        if (why.contains("in your bank")) {
+            return "Withdraw " + name + " to sell it";
+        }
+        return name + " is not in your inventory or bank. Withdraw it, or remove it from the portfolio if it is gone";
+    }
+
     public boolean isSellAvailableNow(Suggestion suggestion) {
         if (suggestion == null || !suggestion.isSellSuggestion()) return true;
         if (suggestion.getType() == SuggestionType.MODIFY_SELL) {
