@@ -58,11 +58,17 @@ public class GameUiChangesHandler {
             requestBankRebuildHighlightRedraw();
         }
 
+        // The item search used to be chat input mode 14; the 30 Sep 2026 GE update renumbered
+        // the modes, so the prompt text is what identifies it now.
         if (event.getIndex() == VarClientID.MESLAYERMODE
-                && client.getVarcIntValue(VarClientID.MESLAYERMODE) == 14
+                && client.getVarcIntValue(VarClientID.MESLAYERMODE) != 0
                 && client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS) != null) {
-            itemSearchChatboxOpen = true;
-            clientThread.invokeLater(gePreviousSearch::showSuggestedItemInSearch);
+            clientThread.invokeLater(() -> {
+                if (!itemSearchChatboxOpen && isItemSearchPrompt()) {
+                    itemSearchChatboxOpen = true;
+                    gePreviousSearch.showSuggestedItemInSearch();
+                }
+            });
         }
 
         if (quantityOrPriceChatboxOpen
@@ -82,13 +88,17 @@ public class GameUiChangesHandler {
             return;
         }
 
+        if (itemSearchChatboxOpen) {
+            return;
+        }
+
         // Check that it was a chat input that got enabled while the offer setup is showing.
         // The quantity prompt is input mode 7; since the 30 Sep 2026 GE update the price
         // prompt takes figures beyond max cash and arrives in a mode of its own, so the
         // prompt text decides rather than the mode number.
         int mode = client.getVarcIntValue(VarClientID.MESLAYERMODE);
         if (event.getIndex() != VarClientID.MESLAYERMODE
-                || mode == 0 || mode == 14
+                || mode == 0
                 || client.getWidget(ComponentID.CHATBOX_TITLE) == null
                 || client.getWidget(ComponentID.GRAND_EXCHANGE_OFFER_CONTAINER) == null) {
             return;
@@ -115,6 +125,12 @@ public class GameUiChangesHandler {
                 flippingWidget.showSuggestion(suggestion);
             }
         });
+    }
+
+    /** "What would you like to buy?" or "... sell?" in the chatbox title. */
+    private boolean isItemSearchPrompt() {
+        Widget title = client.getWidget(ComponentID.CHATBOX_TITLE);
+        return title != null && OfferHandler.plainText(title.getText()).startsWith("What would you like to");
     }
 
     public void onVarClientStrChanged(VarClientStrChanged event) {
