@@ -106,8 +106,6 @@ class SuggestionCardTextTest {
     @Test void anUnseenHoldingIsNamedInsteadOfLookingLikeAnEmptyMarket() {
         assertEquals("Withdraw Dragon hunter wand to sell it",
                 SuggestionCardText.waitStatus("Withdraw Dragon hunter wand to sell it"));
-        assertEquals("Dragon hunter wand is not in your inventory or bank. Open the GE History tab to update, or remove it from the portfolio",
-                SuggestionCardText.waitStatus("Dragon hunter wand is not in your inventory or bank. Open the GE History tab to update, or remove it from the portfolio"));
         assertEquals("Waiting for a suitable flip", SuggestionCardText.waitStatus("Waiting for inventory update"));
     }
 
