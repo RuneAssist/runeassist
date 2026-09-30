@@ -25,6 +25,13 @@ public class SavedOffer
 	private transient String offerInstanceId;
 	private transient String observationSessionId;
 	private transient boolean loginObservation;
+	// Set on the first event of an offer that replaces one the player had listed.
+	private transient String adjustKind;
+	private transient String adjustedFromInstanceId;
+	private transient long adjustedFromPrice;
+	private transient int adjustedFromQuantity;
+	// Set on a cancel: "card" when a RuneAssist card asked for it, "manual" otherwise.
+	private transient String cancelReason;
 
 	public static SavedOffer fromGrandExchangeOffer(GrandExchangeOffer offer) {
 		SavedOffer o =  new SavedOffer();

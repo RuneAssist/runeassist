@@ -385,6 +385,13 @@ public class FlipHistorySyncService {
         body.addProperty("spent", offer.getSpent());
         body.addProperty("origin", runeAssist ? "runeassist" : "external");
         if (runeAssist) body.addProperty("suggestionId", suggestionId);
+        if (offer.getAdjustKind() != null) {
+            body.addProperty("adjustKind", offer.getAdjustKind());
+            body.addProperty("adjustedFromInstanceId", offer.getAdjustedFromInstanceId());
+            body.addProperty("adjustedFromPrice", offer.getAdjustedFromPrice());
+            body.addProperty("adjustedFromQuantity", offer.getAdjustedFromQuantity());
+        }
+        if (offer.getCancelReason() != null) body.addProperty("cancelReason", offer.getCancelReason());
         return body;
     }
 
