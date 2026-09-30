@@ -7,7 +7,6 @@ import com.google.gson.JsonObject;
 import com.runeassist.flip.model.ComposeSuggestionMapper;
 import com.runeassist.flip.model.ComposeSuggestionRequest;
 import com.runeassist.flip.model.ComposeSuggestionResponse;
-import com.runeassist.flip.model.RiskLevel;
 import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.controller.history.AccountHttp;
 import lombok.extern.slf4j.Slf4j;
@@ -22,11 +21,9 @@ import javax.inject.Singleton;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -36,9 +33,7 @@ public class AresMarketClient
 {
     private static final String UA = Version.USER_AGENT;
     private static final String BASE = "https://runeassist.com";
-    private static final String ARES_FLIPS = BASE + "/v1/flips";
     private static final String ARES_SUGGESTION = BASE + "/v1/suggestion";
-    private static final String ARES_HEALTH = BASE + "/v1/market/health";
     private static final String ARES_LIMITS = BASE + "/v1/market/limits";
     private static final String ARES_QUOTE = BASE + "/v1/market/quote";
     private static final long LIMITS_TTL = 6 * 60 * 60 * 1000L;
@@ -107,38 +102,6 @@ public class AresMarketClient
         return suggestion;
     }
 
-    public List<Map<String, Object>> topFlips(long capital, int timeframeMinutes, RiskLevel riskLevel,
-                                              boolean membersItemsAllowed, int remainingSlots,
-                                              Map<Integer, Integer> remainingBuyLimit,
-                                              Map<Integer, Integer> usedBuyLimit,
-                                              Set<Integer> blockedIds, Set<Integer> skippedIds,
-                                              long minPredictedProfit)
-    {
-        List<Map<String, Object>> remote = fetchFromAres(capital, timeframeMinutes, riskLevel,
-            membersItemsAllowed, remainingSlots, remainingBuyLimit, usedBuyLimit,
-            blockedIds, skippedIds, minPredictedProfit);
-        if (remote != null && !remote.isEmpty())
-        {
-            lastFromAres = true;
-            return remote;
-        }
-        lastFromAres = remote != null;
-        if (remote != null) log.info("Ares /v1/flips returned 0 candidates");
-        return new ArrayList<>();
-    }
-
-    public Map<String, Object> sellQuote(int itemId)
-    {
-        Map<String, Object> q = quote(itemId);
-        if (q == null || !(q.get("sell_at") instanceof Number)) return null;
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("name", q.get("name"));
-        out.put("sell_at", q.get("sell_at"));
-        out.put("ge_limit", q.get("ge_limit"));
-        out.put("tax_at_sell", q.get("tax_at_sell"));
-        return out;
-    }
-
     public Map<String, Object> quote(int itemId)
     {
         return quotes(Arrays.asList(itemId)).get(itemId);
@@ -180,68 +143,10 @@ public class AresMarketClient
         }
     }
 
-    public Map<Integer, Map<String, Object>> evaluateItems(Collection<Integer> itemIds,
-                                                           int timeframeMinutes, RiskLevel riskLevel,
-                                                           boolean membersItemsAllowed)
-    {
-        String ids = joinIds(itemIds);
-        if (ids == null) return new LinkedHashMap<>();
-        String url = ARES_HEALTH + "?ids=" + ids
-            + "&timeframe=" + Math.max(1, timeframeMinutes)
-            + "&risk=" + (riskLevel != null ? riskLevel.toApiValue() : "medium")
-            + "&membersItemsAllowed=" + membersItemsAllowed;
-        return itemsById(getJson(url, "market/health"), "items");
-    }
-
-    private List<Map<String, Object>> fetchFromAres(long capital, int timeframeMinutes, RiskLevel riskLevel,
-                                                    boolean membersItemsAllowed, int remainingSlots,
-                                                    Map<Integer, Integer> remainingBuyLimit,
-                                                    Map<Integer, Integer> usedBuyLimit,
-                                                    Set<Integer> blockedIds, Set<Integer> skippedIds,
-                                                    long minPredictedProfit)
-    {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("capital", capital);
-        body.put("timeframeMinutes", Math.max(1, timeframeMinutes));
-        body.put("risk", riskLevel != null ? riskLevel.toApiValue() : "medium");
-        body.put("membersItemsAllowed", membersItemsAllowed);
-        body.put("f2pOnly", !membersItemsAllowed);
-        body.put("remainingSlots", Math.max(1, remainingSlots));
-        if (minPredictedProfit > 0) body.put("minPredictedProfit", minPredictedProfit);
-        if (remainingBuyLimit != null && !remainingBuyLimit.isEmpty())
-            body.put("remainingBuyLimit", stringifyKeys(remainingBuyLimit));
-        if (usedBuyLimit != null && !usedBuyLimit.isEmpty())
-            body.put("usedBuyLimit", stringifyKeys(usedBuyLimit));
-        if (blockedIds != null && !blockedIds.isEmpty()) body.put("blockedIds", new ArrayList<>(blockedIds));
-        if (skippedIds != null && !skippedIds.isEmpty()) body.put("skippedIds", new ArrayList<>(skippedIds));
-
-        JsonObject root = postJson(ARES_FLIPS, gson.toJson(body), "flips");
-        if (root == null || !root.has("candidates"))
-        {
-            lastAresUnreachable = true;
-            return null;
-        }
-        List<Map<String, Object>> rows = rowsOf(root.get("candidates"));
-        if (rows == null)
-        {
-            lastAresUnreachable = true;
-            return null;
-        }
-        lastAresUnreachable = false;
-        log.debug("Ares /v1/flips returned {} candidates ({})", rows.size(),
-            root.has("source") ? root.get("source").getAsString() : "unknown");
-        return excludeIds(rows, blockedIds, skippedIds);
-    }
-
     private JsonObject getJson(String url, String label)
     {
         return execute(new Request.Builder().url(url).header("User-Agent", UA).get().build(),
             httpClient, label);
-    }
-
-    private JsonObject postJson(String url, String body, String label)
-    {
-        return postJson(url, body, label, false);
     }
 
     public int cachedGeLimit(int itemId)
@@ -313,37 +218,6 @@ public class AresMarketClient
             ids.append(id.intValue());
         }
         return ids.length() == 0 ? null : ids.toString();
-    }
-
-    private static Map<String, Integer> stringifyKeys(Map<Integer, Integer> in)
-    {
-        Map<String, Integer> out = new LinkedHashMap<>();
-        for (Map.Entry<Integer, Integer> e : in.entrySet())
-        {
-            if (e.getKey() == null || e.getValue() == null) continue;
-            out.put(String.valueOf(e.getKey()), e.getValue());
-        }
-        return out;
-    }
-
-    private static List<Map<String, Object>> excludeIds(List<Map<String, Object>> rows,
-                                                        Set<Integer> blockedIds, Set<Integer> skippedIds)
-    {
-        if (rows == null) return null;
-        Set<Integer> exclude = new HashSet<>();
-        if (blockedIds != null) exclude.addAll(blockedIds);
-        if (skippedIds != null) exclude.addAll(skippedIds);
-        if (exclude.isEmpty()) return rows;
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (Map<String, Object> row : rows)
-        {
-            if (row == null) continue;
-            Object idObj = row.get("id");
-            int id = idObj instanceof Number ? ((Number) idObj).intValue() : 0;
-            if (id > 0 && exclude.contains(id)) continue;
-            out.add(row);
-        }
-        return out;
     }
 
     @SuppressWarnings("unchecked")
