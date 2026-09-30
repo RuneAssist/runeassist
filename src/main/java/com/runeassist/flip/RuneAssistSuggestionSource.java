@@ -20,6 +20,7 @@ import net.runelite.api.Client;
 import net.runelite.api.GrandExchangeOffer;
 import net.runelite.api.GrandExchangeOfferState;
 import net.runelite.api.InventoryID;
+import net.runelite.api.ItemID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.client.callback.ClientThread;
@@ -38,6 +39,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static com.runeassist.flip.util.Constants.PLATINUM_TOKEN_VALUE;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -709,12 +712,17 @@ public class RuneAssistSuggestionSource
         return n;
     }
 
+    /** Coins plus platinum tokens: since 30 Sep 2026 the Grand Exchange spends both. */
     private long inventoryCoins()
     {
         ItemContainer inv = client.getItemContainer(InventoryID.INVENTORY);
         if (inv == null) return 0;
+        long gp = 0;
         for (Item item : inv.getItems())
-            if (item.getId() == 995) return item.getQuantity();
-        return 0;
+        {
+            if (item.getId() == ItemID.COINS_995) gp += item.getQuantity();
+            else if (item.getId() == ItemID.PLATINUM_TOKEN) gp += (long) item.getQuantity() * PLATINUM_TOKEN_VALUE;
+        }
+        return gp;
     }
 }
