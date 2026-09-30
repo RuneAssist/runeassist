@@ -1,5 +1,6 @@
 package com.runeassist.flip;
 
+import com.runeassist.flip.util.Version;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -34,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 @Singleton
 public class AresMarketClient
 {
-    private static final String UA = "RuneAssist-flip/1.0 (github.com/RuneAssist/runeassist)";
+    private static final String UA = Version.USER_AGENT;
     private static final String BASE = "https://runeassist.com";
     private static final String ARES_FLIPS = BASE + "/v1/flips";
     private static final String ARES_SUGGESTION = BASE + "/v1/suggestion";

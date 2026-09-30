@@ -27,6 +27,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check Plugin Hub rules
         run: python3 scripts/hub_rules.py
+      - name: Check the version is written the same everywhere
+        run: scripts/version-check.sh
 
   build:
     runs-on: ubuntu-latest
