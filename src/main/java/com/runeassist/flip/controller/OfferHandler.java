@@ -44,6 +44,10 @@ public class OfferHandler {
     public void fetchSlotItemPrice(boolean isViewingSlot, Supplier<OfferEditor> offerEditorSupplier) {
         if (isViewingSlot) {
             var currentItemId = client.getVarpValue(CURRENT_GE_ITEM);
+            if (currentItemId != offerManager.getViewedSlotItemId()) {
+                // A new item: the last item's price must not be offered for this one.
+                offerManager.setViewedSlotItemPrice(-1);
+            }
             offerManager.setViewedSlotItemId(currentItemId);
             if (currentItemId == -1 || currentItemId == 0) return;
 
