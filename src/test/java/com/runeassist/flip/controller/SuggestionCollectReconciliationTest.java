@@ -33,7 +33,7 @@ class SuggestionCollectReconciliationTest {
                     }
                 });
         OsrsLoginManager login = new OsrsLoginManager(client);
-        GrandExchange ge = new GrandExchange(client, new GeSearchResults(client)) {
+        GrandExchange ge = new GrandExchange(client) {
             @Override boolean isHomeScreenOpen() { return homeOpen; }
             @Override boolean isCollectButtonVisible() { return collectVisible; }
         };
