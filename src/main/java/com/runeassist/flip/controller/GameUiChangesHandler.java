@@ -23,6 +23,7 @@ import net.runelite.api.gameval.InterfaceID;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class GameUiChangesHandler {
     private static final int SCRIPT_GE_COLLECT = 782;
+    private static final int MESLAYER_MODE_ITEM_SEARCH = 14;
     /** Extra search logging in a development client (the launcher sets this flag). */
     private static final boolean DEV = Boolean.getBoolean(com.runeassist.flip.HubPluginConflict.ALLOW_PROPERTY);
     private static final int SCRIPT_GE_SLOT_REDRAW = 804;
@@ -60,11 +61,13 @@ public class GameUiChangesHandler {
             requestBankRebuildHighlightRedraw();
         }
 
-        // The item search used to be chat input mode 14; the 30 Sep 2026 GE update renumbered
-        // the modes and builds the search layer after the mode changes, so the prompt text is
-        // checked on the next tick. The search-build script (onScriptPostFired) is the other way in.
+        // The item search is chat input mode 14 (still, after the 30 Sep 2026 GE update; the
+        // chatbox title widget keeps the previous prompt's text, so it cannot identify it).
+        // The results list is built by the game after the mode changes, wiping anything
+        // placed early, so the placing happens when its build script fires (onScriptPostFired).
         if (event.getIndex() == VarClientID.MESLAYERMODE
-                && client.getVarcIntValue(VarClientID.MESLAYERMODE) != 0) {
+                && client.getVarcIntValue(VarClientID.MESLAYERMODE) == MESLAYER_MODE_ITEM_SEARCH) {
+            itemSearchChatboxOpen = true;
             clientThread.invokeLater(this::showCardItemInSearchIfOpen);
         }
 
@@ -124,31 +127,25 @@ public class GameUiChangesHandler {
         });
     }
 
-    /** "What would you like to buy?" or "... sell?" in the chatbox title. */
-    private boolean isItemSearchPrompt() {
-        Widget title = client.getWidget(ComponentID.CHATBOX_TITLE);
-        return title != null && OfferHandler.plainText(title.getText()).startsWith("What would you like to");
-    }
-
-    /** Client thread. Puts the card's item at the top of the search the first time the search is seen open. */
+    /**
+     * Client thread. Puts the card's item at the top of the item search while it is open
+     * with nothing typed yet. Safe to call again: an existing row is updated, not doubled.
+     */
     private void showCardItemInSearchIfOpen() {
         Widget results = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
-        Widget title = client.getWidget(ComponentID.CHATBOX_TITLE);
+        int mode = client.getVarcIntValue(VarClientID.MESLAYERMODE);
+        String typed = client.getVarcStrValue(VarClientStr.INPUT_TEXT);
         if (DEV) {
             Widget[] kids = results == null ? null : results.getDynamicChildren();
-            log.info("search check: mode={} open={} results={} title='{}' lastSearched={} card={}",
-                    client.getVarcIntValue(VarClientID.MESLAYERMODE), itemSearchChatboxOpen,
+            log.info("search check: mode={} results={} typed='{}' lastSearched={} card={}", mode,
                     results == null ? "null" : (results.isHidden() ? "hidden" : "kids=" + (kids == null ? -1 : kids.length)),
-                    title == null ? null : title.getText(), client.getVarpValue(VarPlayerID.GE_LAST_SEARCHED),
+                    typed, client.getVarpValue(VarPlayerID.GE_LAST_SEARCHED),
                     suggestionManager.getSuggestion() == null ? null : suggestionManager.getSuggestion().getType());
         }
-        if (itemSearchChatboxOpen) {
+        if (mode != MESLAYER_MODE_ITEM_SEARCH || results == null || results.isHidden()
+                || (typed != null && !typed.isEmpty())) {
             return;
         }
-        if (results == null || results.isHidden() || !isItemSearchPrompt()) {
-            return;
-        }
-        itemSearchChatboxOpen = true;
         try {
             gePreviousSearch.showSuggestedItemInSearch();
         } catch (RuntimeException e) {
