@@ -22,7 +22,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.runeassist.flip.util.DateUtil.formatEpoch;
 
-/** Lean FC TransactionsPanel: browse GE fills + delete/orphan via existing APIs. */
 @Slf4j
 public class TransactionsPanel extends JPanel {
 

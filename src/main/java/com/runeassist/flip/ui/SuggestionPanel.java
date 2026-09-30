@@ -69,7 +69,6 @@ public class SuggestionPanel extends JPanel {
     private final JPanel suggestedActionPanel;
     private final JPanel cardHeader;
     private static final String COLLECT_MESSAGE = "Collect items";
-    // Read by the client thread; a hidden Swing child can still report isVisible().
     private final AtomicReference<String> displayedMessage = new AtomicReference<>();
     private final CardLayout bodyLayout = new CardLayout();
     private final JPanel bodyCards = new JPanel(bodyLayout);
@@ -184,7 +183,6 @@ public class SuggestionPanel extends JPanel {
         flagsRow.setBackground(RuneAssistColors.CARD);
         flagsRow.setAlignmentX(LEFT_ALIGNMENT);
         flagsRow.setBorder(BorderFactory.createEmptyBorder(0, 0, 2, 0));
-        // Pin height so BoxLayout doesn't collapse chips to border-only slivers.
         Dimension flagsSize = new Dimension(MainPanel.CONTENT_WIDTH - 20, FLAGS_ROW_HEIGHT);
         flagsRow.setMinimumSize(flagsSize);
         flagsRow.setPreferredSize(flagsSize);
@@ -449,7 +447,7 @@ public class SuggestionPanel extends JPanel {
         cardHeader.setVisible(false);
         setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH, STATUS_PANEL_HEIGHT));
         revalidate();
-        repaint(); // the action icons otherwise stay unpainted until the mouse passes over them
+        repaint();
     }
 
     private boolean shouldSellFromBank(Suggestion suggestion) {
@@ -517,11 +515,9 @@ public class SuggestionPanel extends JPanel {
     }
 
     public void clearCollectSuggestion() {
-        // Consume the mismatch immediately, even if fetching is delayed or the EDT is busy.
         String message = displayedMessage.get();
         if (COLLECT_MESSAGE.equals(message) && displayedMessage.compareAndSet(message, null)) {
             SwingUtilities.invokeLater(() -> {
-                // Do not overwrite a newer message or a structured/loading card.
                 if (displayedMessage.get() == null && suggestionTextContainer.isVisible()) {
                     showFetchingWait();
                 }
@@ -656,9 +652,6 @@ public class SuggestionPanel extends JPanel {
         }
 
         if(suggestionManager.isSuggestionRequestInProgress() || suggestionManager.isSuggestionRefreshPending()) {
-            // Routine polling must not blank an already displayed WAIT card.
-            // Only retain that exact result on the same account; startup, state
-            // changes and actionable trades still use the normal loading path.
             if (!waitRefreshState.canKeepWhileRefreshing(suggestionManager.getSuggestion(),
                     osrsLoginManager.getAccountHash())) {
                 showLoading();
@@ -744,7 +737,6 @@ public class SuggestionPanel extends JPanel {
             return "<br>limit unknown";
         }
         if (!suggestion.isLimitKnown() || left < 0) {
-            // Wiki cap known; live remaining not tracked yet.
             return "<br>limit " + UIUtilities.quantityToRSDecimalStack(ge, false);
         }
         return "<br>limit " + UIUtilities.quantityToRSDecimalStack(left, false)

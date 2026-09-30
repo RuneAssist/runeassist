@@ -117,7 +117,6 @@ public class VisualizeFlipPanel extends JPanel {
         loadAggregateOverlay(flip, onSuccess, onFailure);
     }
 
-    /** Post-diet fallback: graph + FlipV2 buy/sell aggregates (no local lot ledger). */
     private void loadAggregateOverlay(FlipV2 flip,
                                       Consumer<VisualizeFlipResponse> onSuccess,
                                       Consumer<String> onFailure) {

@@ -162,7 +162,6 @@ public class StatsPanelV2 extends JPanel {
         }
     }
 
-    /** Puts "RuneAssist \u00b7 Today: 12 flips, +728.5K gp \u00b7 best: ..." on the clipboard. */
     private void copyShareSummary() {
         String text = ShareSummary.format(String.valueOf(intervalDropdown.getSelectedItem()),
                 flipManager.getRealizedIntervalStats(), flipManager.bestClosedFlipInInterval());

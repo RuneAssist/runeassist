@@ -7,12 +7,10 @@ import java.awt.*;
 import java.util.Objects;
 import java.util.function.Predicate;
 
-/** Shared Preferences chrome builders (section headers, action rows, option combos). */
 final class PrefsUi {
     private PrefsUi() {
     }
 
-    /** Left inset that clears the floating settings gear (6px offset, 20px wide) inside the 10px panel border. */
     static final int GEAR_CLEARANCE = 22;
 
     static JLabel sectionTitle(String text) {
