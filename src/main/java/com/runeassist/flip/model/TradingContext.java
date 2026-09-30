@@ -2,7 +2,6 @@ package com.runeassist.flip.model;
 
 import java.util.Objects;
 
-/** Local-only suggestion session. This state is never included in network requests. */
 public final class TradingContext {
     private Long accountHash;
     private boolean validLogin;

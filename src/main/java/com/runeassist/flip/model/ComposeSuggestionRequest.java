@@ -8,89 +8,52 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-    /** Body for Ares {@code POST /v1/suggestion}: live GE / held / preference snapshot so the */
 @Getter
 @Setter
 public class ComposeSuggestionRequest
 {
-    /** Available coins (same meaning as {@code /v1/flips} {@code capital}). */
     private long capital;
     private int timeframeMinutes = 5;
-    /** {@code low}/{@code medium}/{@code high} — see {@link RiskLevel#toApiValue()}. */
     private String risk = "medium";
     private boolean membersItemsAllowed = true;
     private boolean f2pOnly = false;
-    /** Max GE slots the plugin may use (after reserved slots). */
     private int maxSlots = 8;
-    /** Free slots after counting live offers against {@link #maxSlots}. */
     private int remainingSlots = 8;
     private long minPredictedProfit;
 
-    /** itemId string -> remaining 4h buy-limit. Missing = unknown. */
     private Map<String, Integer> remainingBuyLimit = new LinkedHashMap<>();
-    /** itemId string -> units already counting against the 4h limit. */
     private Map<String, Integer> usedBuyLimit = new LinkedHashMap<>();
 
     private List<Integer> blockedIds = new ArrayList<>();
     private List<Integer> skippedIds = new ArrayList<>();
-    /** User-skipped live offers: do not ABORT/MODIFY these. */
     private List<Integer> skipOfferItemIds = new ArrayList<>();
-    /** itemId string -> epoch ms when its MODIFY editor most recently closed. */
     private Map<String, Long> modifyDismissedMs = new LinkedHashMap<>();
-    /** Recently suggested / listed items: protect from ABORT for ~10 min. */
     private List<Integer> protectAbortItemIds = new ArrayList<>();
 
-    /**
-     * Live GE board. Empty slot = omit, or include with {@code filling=false} and
-     * {@code itemId=0}. Slot index is 0-based (RuneLite offer slot).
-     */
     private List<OfferSnapshot> offers = new ArrayList<>();
 
-    /** Held stock with FIFO avg buy (gp). */
     private List<HeldSnapshot> held = new ArrayList<>();
 
-    /** Current physical inventory proof, limited to already tracked held item IDs. */
     private boolean inventorySnapshotKnown;
     private List<InventoryAvailabilitySnapshot.ItemQuantity> availableInventory = new ArrayList<>();
 
-    /** Tracked held items as last seen in the bank; unknown until the bank has been opened. */
     private boolean bankSnapshotKnown;
     private List<InventoryAvailabilitySnapshot.ItemQuantity> availableBank = new ArrayList<>();
 
-    /** In-progress GE modify (cancel-then-relist); null if none. */
     private OwnedModifySnapshot ownedModify;
 
-    /**
-     * When true (default), Ares may bundle a {@code /v1/graph}-shaped {@code graph}
-     * object on the compose response for the picked item (FC suggestion+graph parity).
-     * Set false for low-data mode.
-     */
     private boolean includeGraph = true;
 
-    /**
-     * Stable device/account id for anti-grouping top-K jitter on the server.
-     * Prefer the cloud pairing device token; fall back to account hash string.
-     */
     private String clientDeviceId = "";
 
-    /**
-     * Opt-in time-based abort/modify when a live offer ages past
-     * {@link #timeBasedAbortMinutes} and the market has moved away. Default false.
-     */
     private boolean timeBasedAbortEnabled = false;
 
-    /** Minutes threshold for {@link #timeBasedAbortEnabled} (default 15). */
     private int timeBasedAbortMinutes = 15;
 
-    /**
-     * Client clock ms. Optional — server normally uses its own clock; tests may pin this.
-     */
     private long nowMs;
 
-    /** Opt-in only: allow Ares to retain the minimized suggestion/offer lifecycle. */
     private boolean contributeTrainingData;
 
-    /** Linked RuneAssist account UUID. Sent only when contribution is enabled. */
     private String osrsAccountId = "";
 
     @Getter
@@ -99,22 +62,15 @@ public class ComposeSuggestionRequest
     {
         private int slot;
         private int itemId;
-        /** True = buy offer. */
         private boolean buy;
         private long price;
         private int sold;
         private int total;
-        /** True when the offer is actively filling (not empty / cancelled). */
         private boolean filling;
-        /** Epoch ms of last fill progress; 0 if unknown. */
         private long lastProgressMs;
-        /** Epoch ms when this listing was placed; 0 if unknown. */
         private long listedMs;
-        /** Epoch ms when this offer price last changed; resets the reprice cooldown. */
         private long lastPriceChangeMs;
-        /** Server suggestion UUID when this offer came from RuneAssist. */
         private String suggestionId = "";
-        /** {@code runeassist} for attributed offers, otherwise {@code external}. */
         private String origin = "external";
     }
 

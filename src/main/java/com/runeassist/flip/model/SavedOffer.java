@@ -17,20 +17,16 @@ public class SavedOffer
 	private GrandExchangeOfferState state;
 	private boolean runeAssistSuggestion;
 	private String suggestionId;
-	/** Expected fill time from the card that placed this offer, in seconds; 0 when unknown. */
 	private long expectedSeconds;
-	// Observation metadata is session-local; never restore it as placement proof.
 	private transient long observedAt;
 	private transient long placedAt;
 	private transient String offerInstanceId;
 	private transient String observationSessionId;
 	private transient boolean loginObservation;
-	// Set on the first event of an offer that replaces one the player had listed.
 	private transient String adjustKind;
 	private transient String adjustedFromInstanceId;
 	private transient long adjustedFromPrice;
 	private transient int adjustedFromQuantity;
-	// Set on a cancel: "card" when a RuneAssist card asked for it, "manual" otherwise.
 	private transient String cancelReason;
 
 	public static SavedOffer fromGrandExchangeOffer(GrandExchangeOffer offer) {

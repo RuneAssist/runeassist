@@ -29,7 +29,6 @@ public class StatusOfferList extends ArrayList<Offer> {
                 && !emptySlotExists(isMember);
     }
 
-    /** A finished or cancelled offer still sitting in a slot: items or coins waiting to be collected. */
     boolean anyCollectable() {
         for (Offer offer : this) {
             if (offer.getStatus() != OfferStatus.EMPTY && !offer.isActive()) {
@@ -57,9 +56,6 @@ public class StatusOfferList extends ArrayList<Offer> {
             if (SuggestionType.BUY == type || SuggestionType.SELL == type) {
                 requiredSlots += 1;
             } else if (SuggestionType.WAIT == type) {
-                // WAIT cannot list held stock without a free slot. A finished
-                // BOUGHT/SOLD box is collectable — prompt Collect even when
-                // reserved-slots is 0 (otherwise 8/8 + holds looks stuck).
                 requiredSlots = Math.max(requiredSlots, 1);
             }
         }

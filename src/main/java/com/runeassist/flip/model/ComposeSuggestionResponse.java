@@ -7,32 +7,17 @@ import lombok.Setter;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Successful body from Ares {@code POST /v1/suggestion}. {@link #suggestion} is required when
- * {@link #ok} is true; clients map it onto the local {@link Suggestion} model.
- * Optional {@link #graph} matches {@code GET /v1/graph} when the server bundles it.
- */
 @Getter
 @Setter
 public class ComposeSuggestionResponse
 {
     private boolean ok;
-    /** Ranker / compose provenance, e.g. {@code ares}. */
     private String source = "";
-    /** Server-issued lifecycle UUID when opted-in persistence was accepted. */
     private String suggestionId = "";
     private SuggestionDto suggestion;
-    /**
-     * Optional price-history payload (same shape as {@code GET /v1/graph}), bundled when
-     * the client requested {@code includeGraph} and the pick has a concrete item.
-     */
     private Data graph;
     private String error;
 
-    /**
-     * Wire form of {@link Suggestion} for compose. Types are lowercase
-     * ({@link SuggestionType#apiValue()}): buy, sell, abort, modify_buy, modify_sell, wait, decant.
-     */
     @Getter
     @Setter
     public static class SuggestionDto
@@ -51,12 +36,9 @@ public class ComposeSuggestionResponse
         private Long targetSellPrice;
         private Long targetSellTaxGp;
         private String profitModelVersion;
-        /** Expected fill duration in <em>seconds</em> (same as local {@link Suggestion}). */
         private Double expectedDuration;
-        /** Expected time for the buy offer alone, in hours; absent on older servers and on sells. */
         private Double estimatedBuyHours;
         private int geLimit;
-        /** Remaining 4h buy-limit; {@code -1} if unknown. */
         private int remainingLimit = -1;
         private boolean limitKnown;
         private List<String> flags = new ArrayList<>();

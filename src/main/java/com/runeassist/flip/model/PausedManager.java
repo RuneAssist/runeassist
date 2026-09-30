@@ -23,11 +23,9 @@ public class PausedManager {
 
     private static final String PAUSED_FILE_TEMPLATE = "acc_%d_paused.json";
 
-    // dependencies
     private final OsrsLoginManager osrsLoginManager;
     private final ScheduledExecutorService executorService;
 
-    // state
     private final Map<Long, Boolean> cachedPaused = new HashMap<>();
     private final Map<Long, Filepath> accountHashToFile = new HashMap<>();
 
