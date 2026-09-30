@@ -3,7 +3,6 @@ package com.runeassist.flip.ui;
 import com.runeassist.flip.model.FlipV2;
 import com.runeassist.flip.model.Stats;
 
-/** One line a player can paste into Discord #wins. */
 public final class ShareSummary {
     private ShareSummary() {
     }

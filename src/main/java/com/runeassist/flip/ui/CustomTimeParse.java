@@ -4,7 +4,6 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Parses ControlPanel custom timeframe text (90m, 1h 30m, 1:30). */
 final class CustomTimeParse {
     private static final Pattern TOKEN = Pattern.compile(
             "(\\d+(?:\\.\\d+)?)\\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)?",

@@ -12,7 +12,6 @@ import javax.swing.JPopupMenu;
 import javax.swing.JTextField;
 import java.awt.Component;
 
-/** Shared right-click repair actions for Recent Flips / missed flips. */
 public final class FlipRepairMenus {
 
     private FlipRepairMenus() {}

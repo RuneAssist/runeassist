@@ -13,7 +13,6 @@ import java.util.function.Consumer;
 
 import static com.runeassist.flip.ui.UIUtilities.BUTTON_HOVER_LUMINANCE;
 
-/** Stats panel chrome: toolbar icons, metric cells, empty-state prompts. */
 final class StatsUi {
     private StatsUi() {
     }

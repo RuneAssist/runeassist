@@ -15,10 +15,8 @@ public class AccountDropdown extends JComboBox<String> {
 
     public static final String ALL_ACCOUNTS_DROPDOWN_OPTION = "All accounts";
 
-    // dependencies
     private final Supplier<Map<String, Integer>> accountsGetter;
 
-    // state
     private Map<String, Integer> cachedAccounts;
     private volatile boolean refreshInProgress = false;
 

@@ -11,7 +11,7 @@ import java.awt.*;
 public class GpDropOverlay extends Overlay {
     private final OverlayManager overlayManager;
     private final long startTime;
-    private final Point startPosition = new Point(); // Starting position of the text
+    private final Point startPosition = new Point();
     final TextComponent textComponent = new TextComponent();
 
     public GpDropOverlay(OverlayManager overlayManager, Client client, long profit, int slot) {
@@ -44,15 +44,13 @@ public class GpDropOverlay extends Overlay {
     @Override
     public Dimension render(Graphics2D graphics) {
         long elapsed = System.currentTimeMillis() - startTime;
-        if (elapsed > 3000) { // Display for 5 seconds
+        if (elapsed > 3000) {
             overlayManager.remove(this);
             return null;
         }
 
-        // Calculate the upward movement. Adjust the divisor to control the speed.
-        int yOffset = (int) (elapsed / 50); // Moves up 1 pixel every 50ms
+        int yOffset = (int) (elapsed / 50);
 
-        // Ensure the text moves upwards by subtracting yOffset from the starting Y position
         Point currentPosition = new Point(startPosition.x, startPosition.y - yOffset);
         textComponent.setPosition(currentPosition);
         textComponent.render(graphics);

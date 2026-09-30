@@ -11,31 +11,15 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Insets;
 
-/**
- * Sidecar / flips-dialog identity. "Ledger" direction: brass on RuneLite dark, paired with
- * the gate-chevron coin mark — not orange, not the earlier teal.
- */
 public final class RuneAssistColors {
-    /** Primary accent. #D1A537 */
     public static final Color ACCENT = new Color(0xD1A537);
-    /** Hover / selected fill. #B08A2E */
     public static final Color ACCENT_HOVER = new Color(0xB08A2E);
-    /** Selected-tab and table-selection background. #4A3A1C */
     public static final Color ACCENT_MUTED = new Color(0x4A3A1C);
-    /** Text/icons sitting on a filled accent chip. */
     public static final Color ON_ACCENT = new Color(0x1A1408);
     public static final Color CARD = ColorScheme.DARKER_GRAY_COLOR;
     public static final Color SHELL = ColorScheme.DARK_GRAY_COLOR;
     public static final Color TEXT = ColorScheme.LIGHT_GRAY_COLOR;
-    // Not MEDIUM_GRAY: against CARD that is about 2.3:1, well under the 4.5:1 body text needs,
-    // and the why-line and limit text were hard to read. This clears 4.5:1 while staying visibly
-    // secondary to TEXT.
     public static final Color MUTED = new Color(0x8E8E8E);
-    /**
-     * Unselected-chip text (Volume Window / Risk toggle buttons). MUTED (rgb 77,77,77) on
-     * CARD (rgb 30,30,30) measures ~1.9:1 contrast -- well under the WCAG AA minimum of
-     * 4.5:1 for normal text, and was reported hard to read. This measures ~5.5:1.
-     */
     public static final Color CHIP_TEXT_UNSELECTED = new Color(150, 150, 150);
     public static final Color HAIRLINE = new Color(0x3A3A3A);
     public static final Color RISK_LOW = ColorScheme.GRAND_EXCHANGE_PRICE;

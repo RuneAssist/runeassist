@@ -72,7 +72,6 @@ public class ControlPanel extends JPanel {
         timeframePanel.add(ControlUi.headerRow(settingsLabel));
         UIUtilities.addVerticalGap(timeframePanel, 4);
 
-        // FlowLayout keeps preferred combo widths so values aren't clipped in a narrow side panel.
         JPanel strip = ControlUi.leftStrip(28);
         strip.setToolTipText(VOLUME_TOOLTIP);
 

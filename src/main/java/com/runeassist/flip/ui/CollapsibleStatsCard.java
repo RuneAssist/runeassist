@@ -4,7 +4,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.function.Consumer;
 
-/** The summary remains visible while detailed statistics are folded away. */
 final class CollapsibleStatsCard extends JPanel {
     private final JButton toggle = new JButton();
     private final JComponent details;

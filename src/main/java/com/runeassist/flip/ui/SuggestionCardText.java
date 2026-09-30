@@ -12,7 +12,6 @@ import java.text.NumberFormat;
 import net.runelite.client.ui.FontManager;
 import com.runeassist.flip.model.Suggestion;
 
-/** Presentation only: never changes eligibility, telemetry or trading decisions. */
 final class SuggestionCardText {
     private SuggestionCardText() { }
 
@@ -29,7 +28,6 @@ final class SuggestionCardText {
                 + escape(name) + quote + "</center></body></html>";
     }
 
-    /** Shared production layout also rendered by the visual regression harness. */
     static JPanel tradeBody(JLabel icon, JLabel instruction, JLabel profit) {
         JPanel body = new JPanel(new BorderLayout());
         body.setOpaque(false);

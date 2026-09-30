@@ -34,8 +34,6 @@ public class InventoryPortfolioBadgeOverlay extends WidgetItemOverlay {
     private final PlayerLocationController playerLocationController;
 
     {
-        // WidgetItemOverlay renders on manual widget hooks, so interfaces drawn later
-        // (such as the world map) naturally cover these badges.
         showOnInterfaces(INVENTORY_WIDGET_GROUP, GE_INVENTORY_WIDGET_GROUP, BANK_INVENTORY_WIDGET_GROUP);
         showOnBank();
         setPriority(PRIORITY_LOW);

@@ -45,7 +45,6 @@ public class UIUtilities {
 
         long power = (long) Math.log10(quantity);
 
-        // Output thousandths for values above a million
         NumberFormat format = precise && power >= 6
                 ? PRECISE_DECIMAL_FORMATTER
                 : DECIMAL_FORMATTER;
@@ -183,10 +182,6 @@ public class UIUtilities {
         });
     }
 
-    /**
-     * Returns true when the caller may proceed on the current (EDT) thread. Otherwise the task has
-     * been scheduled via invokeLater and the caller must return immediately.
-     */
     public static boolean ensureEdt(Runnable task) {
         if (SwingUtilities.isEventDispatchThread()) {
             return true;
