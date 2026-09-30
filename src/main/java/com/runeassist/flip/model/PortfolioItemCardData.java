@@ -14,7 +14,7 @@ public class PortfolioItemCardData {
     long unitBuyPrice;
     Long unrealizedUnitProfit;
     int heldMinutes;
-    int portfolioQuantity; // quantity with portfolio_id 0 (COFLIP_PORTFOLIO) or 1 (PERSONAL_PORTFOLIO)
+    int portfolioQuantity;
 
     public boolean isInPortfolio() {
         return portfolioQuantity > 0;

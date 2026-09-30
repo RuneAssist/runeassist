@@ -42,7 +42,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-/** Server-owned flip history: unacked GE outbox, pairing, delta, portfolio/flip mutations. */
 @Slf4j
 @Singleton
 public class FlipHistorySyncService {
@@ -73,7 +72,6 @@ public class FlipHistorySyncService {
     private volatile boolean registering;
     private volatile String lastError;
     @Inject private com.runeassist.flip.rs.AccountLoginRS accountLoginRS;
-    // Cursors must have the same lifetime as FlipManager's in-memory history.
     private final Map<String, String> historyCursors = new ConcurrentHashMap<>();
     private final Map<String, String> linkedAccounts = new ConcurrentHashMap<>();
     private String historyUserId;
@@ -315,7 +313,6 @@ public class FlipHistorySyncService {
         async("enqueue flush", () -> flushDisplay(displayName));
     }
 
-    /** Queue a terminal suggestion action and retry it during the regular sync cycle. */
     public void reportSuggestionOutcome(Suggestion suggestion, String outcome) {
         if (!config.contributeTrainingData() || suggestion == null
                 || suggestion.getServerSuggestionId() == null
@@ -348,7 +345,6 @@ public class FlipHistorySyncService {
         }
     }
 
-    /** The GE History tab as read: the server recovers any trade the plugin missed. */
     public void sendGeHistory(List<GeHistoryReader.Row> rows) {
         String displayName = osrsLoginManager.getPlayerDisplayName();
         String osrsAccountId = linkedOsrsAccountId(displayName);
@@ -376,7 +372,6 @@ public class FlipHistorySyncService {
         });
     }
 
-    /** Report an exact GE state transition; periodic board snapshots remain the fallback. */
     public void reportOfferEvent(int slot, SavedOffer offer, SavedOffer previous) {
         if (!config.contributeTrainingData() || offer == null) return;
         String displayName = osrsLoginManager.getPlayerDisplayName();
@@ -463,9 +458,6 @@ public class FlipHistorySyncService {
         }
         JsonObject req = new JsonObject();
         req.addProperty("code", code.trim().toUpperCase());
-        // The old device token goes with the code so the server can fold this
-        // device's anonymous login into the website login instead of leaving a
-        // duplicate character behind.
         JsonObject body = api.postWithTokenIfAny("/v1/account/pair/redeem", req);
         if (body == null || !body.has("deviceToken")) {
             throw new IllegalStateException("pairing redeem failed");
@@ -1013,7 +1005,6 @@ public class FlipHistorySyncService {
                 try {
                     acked.add(UUID.fromString(el.getAsString()));
                 } catch (Exception ignored) {
-                    // skip
                 }
             }
         } else {
@@ -1069,7 +1060,6 @@ public class FlipHistorySyncService {
             try {
                 SwingUtilities.invokeLater(listener);
             } catch (Exception ignored) {
-                // UI gone
             }
         }
     }

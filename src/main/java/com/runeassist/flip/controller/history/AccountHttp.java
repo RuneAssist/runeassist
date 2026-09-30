@@ -17,7 +17,6 @@ import javax.inject.Singleton;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
-/** Shared JSON HTTP + device-token helpers for account APIs. */
 @Slf4j
 @Singleton
 public class AccountHttp {
@@ -67,7 +66,6 @@ public class AccountHttp {
         return auth(b, authed) ? execute(b.build()) : null;
     }
 
-    /** Like post(authed) but proceeds without a token when the device has none yet. */
     public JsonObject postWithTokenIfAny(String path, JsonObject json) {
         Request.Builder b = new Request.Builder()
                 .url(origin() + path)

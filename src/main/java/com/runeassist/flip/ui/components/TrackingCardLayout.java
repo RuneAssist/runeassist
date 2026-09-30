@@ -22,7 +22,7 @@ public class TrackingCardLayout extends CardLayout {
 
     public void showPrevious(Container parent) {
         if (cardHistory.size() > 1) {
-            cardHistory.removeFirst(); // Remove current card
+            cardHistory.removeFirst();
             String previousCard = cardHistory.getFirst();
             super.show(parent, previousCard);
         }

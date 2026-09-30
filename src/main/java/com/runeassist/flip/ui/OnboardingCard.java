@@ -5,14 +5,8 @@ import net.runelite.client.util.LinkBrowser;
 import javax.swing.*;
 import java.awt.*;
 
-/**
- * One-time card above the first suggestion: what the check-in interval means, how
- * cards work, where help lives. "Got it" hides it for good (config onboardingSeen).
- */
 public class OnboardingCard extends JPanel {
-    // Swing only wraps HTML text when it is given a width (in points, about 4/3 px).
     private static final int TEXT_WIDTH_PT = (MainPanel.CONTENT_WIDTH - 24) * 3 / 4;
-    // The settings gear is drawn over the top left corner of the panel: the heading starts after it.
     private static final int TITLE_INDENT_PT = PrefsUi.GEAR_CLEARANCE * 3 / 4;
     private static final String TEXT = "<html><div style='width:" + TEXT_WIDTH_PT + "pt'>"
             + "<div style='margin-left:" + TITLE_INDENT_PT + "pt'><b>Welcome to RuneAssist</b></div>"
@@ -29,7 +23,6 @@ public class OnboardingCard extends JPanel {
         setBackground(RuneAssistColors.CARD);
         setBorder(BorderFactory.createCompoundBorder(RuneAssistColors.cardBorder(),
                 BorderFactory.createEmptyBorder(8, 10, 8, 10)));
-        // The panels below it are centre-aligned; a left-aligned sibling is pushed sideways.
         setAlignmentX(CENTER_ALIGNMENT);
 
         JLabel text = new JLabel(TEXT);
@@ -40,8 +33,6 @@ public class OnboardingCard extends JPanel {
         add(text);
         add(Box.createRigidArea(new Dimension(0, 8)));
 
-        // Ghost buttons are 190px wide by default and three do not fit side by side:
-        // two links share a row, "Got it" takes the row below.
         JPanel buttons = new JPanel(new GridLayout(1, 2, 6, 0));
         buttons.setOpaque(false);
         buttons.setAlignmentX(LEFT_ALIGNMENT);

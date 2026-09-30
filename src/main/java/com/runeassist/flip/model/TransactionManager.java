@@ -8,10 +8,6 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.List;
 
-/**
- * Session GE-fill intake. Queues fills through {@link FlipHistorySyncService}
- * (unacked JSONL → server ackedIds). Flip history is server-owned after device/OSRS link.
- */
 @Slf4j
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)

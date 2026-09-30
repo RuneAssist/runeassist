@@ -18,7 +18,6 @@ import javax.inject.Inject;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class GrandExchangeCollectHandler {
 
-    // dependencies
     private final OsrsLoginManager osrsLoginManager;
     private final GrandExchangeUncollectedManager geUncollected;
     private final SuggestionManager suggestionManager;

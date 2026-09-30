@@ -21,7 +21,6 @@ import static com.runeassist.flip.model.OsrsLoginManager.GE_LOGIN_BURST_WINDOW;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class GrandExchangeOfferEventHandler {
 
-    // dependencies
     private final Client client;
     private final OfferManager offerPersistence;
     private final GrandExchange grandExchange;
@@ -33,7 +32,6 @@ public class GrandExchangeOfferEventHandler {
     private final AccountStatusManager accountStatusManager;
     private final FlipHistorySyncService flipHistorySyncService;
 
-    // state
     private final Queue<Transaction> transactionsToProcess = new ConcurrentLinkedQueue<>();
     private final OfferObservationTracker observationTracker = new OfferObservationTracker();
 
@@ -53,7 +51,6 @@ public class GrandExchangeOfferEventHandler {
         Long accountHash = client.getAccountHash();
 
         if (offer.getState() == GrandExchangeOfferState.EMPTY && client.getGameState() != GameState.LOGGED_IN) {
-            // Trades are cleared by the client during LOGIN_SCREEN/HOPPING/LOGGING_IN, ignore those
             return;
         }
         if (osrsLoginManager.isUnsupportedWorldType()) {
@@ -75,7 +72,6 @@ public class GrandExchangeOfferEventHandler {
                 Instant.now().toEpochMilli());
 
         if(Objects.equals(o, prev)) {
-            // Persisted equality does not mean this session observed the placement.
             if (firstObservation) flipHistorySyncService.reportOfferEvent(slot, o, prev);
             log.debug("skipping duplicate offer event {}", o);
             return;
@@ -109,8 +105,6 @@ public class GrandExchangeOfferEventHandler {
         updateUncollected(accountHash, slot, o, prev, consistent);
         offerPersistence.saveOffer(accountHash, slot, o);
 
-        // Own a freshly listed or modified offer for ~10 min (leftover qty after
-        // cancel-relist looks like sold==0 and must not abort the same tick).
         if (!loginBurst && isNewOffer(prev, o)) {
             GrandExchangeOfferState st = o.getState();
             if ((st == GrandExchangeOfferState.BUYING || st == GrandExchangeOfferState.SELLING)
@@ -125,8 +119,6 @@ public class GrandExchangeOfferEventHandler {
         }
         accountStatusManager.releaseStaleOwnedModify(client.getGrandExchangeOffers(), editorOpen);
 
-        // Always fetch suggestion to ensure fast response for better UX — except while
-        // a MODIFY is in progress: cancel-then-relist empties the slot and would emit BUY.
         if (!accountStatusManager.isOwnedModifyActive() || !editorOpen) {
             suggestionManager.setSuggestionNeeded(true);
         }
@@ -155,8 +147,6 @@ public class GrandExchangeOfferEventHandler {
                 uncollectedItems = o.getTotalQuantity() - o.getQuantitySold();
                 break;
             case EMPTY:
-                // if the slot is empty we want to ensure that the un collected manager doesn't think there is something to collect
-                // this can happen due to race conditions between the collection and offer fills timing
                 grandExchangeUncollectedManager.ensureSlotClear(accountHash, slot);
                 if (!accountStatusManager.isOwnedModifyActive() || !grandExchange.isSlotOpen()) {
                     suggestionManager.setSuggestionNeeded(true);
@@ -176,8 +166,6 @@ public class GrandExchangeOfferEventHandler {
             Transaction transaction;
             while ((transaction = transactionsToProcess.poll()) != null) {
                 long profit = transactionManager.addTransaction(transaction, displayName);
-                // Only a sale realises profit or loss. A buy that adds to an open position
-                // used to be valued as if it had closed it, flashing a red "-x gp" on fills.
                 if (grandExchange.isHomeScreenOpen() && profit != 0
                         && transaction.getType() == OfferStatus.SELL) {
                     new GpDropOverlay(overlayManager, client, profit, transaction.getBoxId());
@@ -191,7 +179,6 @@ public class GrandExchangeOfferEventHandler {
         return inferFill(slot, offer, prev, consistent, login);
     }
 
-    /** Infer a fill from consecutive offer snapshots; fall back to price*qty when spent lags. */
     static Transaction inferFill(int slot, SavedOffer offer, SavedOffer prev, boolean consistent, boolean login) {
         boolean newOffer = isNewOffer(prev, offer);
         int prevSold = (newOffer || prev == null) ? 0 : prev.getQuantitySold();
@@ -239,7 +226,6 @@ public class GrandExchangeOfferEventHandler {
                 || prev.getTotalQuantity() == updated.getTotalQuantity();
     }
 
-    /** "card" when the card on show asked the player to cancel or re-price this item. */
     static String cancelReason(com.runeassist.flip.model.Suggestion shown, int itemId) {
         if (shown == null || shown.getType() == null || shown.getItemId() != itemId) {
             return "manual";

@@ -3,19 +3,12 @@ package com.runeassist.flip.model;
 import java.util.ArrayList;
 import java.util.Locale;
 
-/**
- * Maps Ares compose JSON onto the local {@link Suggestion} used by GE UI / overlays.
- */
 public final class ComposeSuggestionMapper
 {
     private ComposeSuggestionMapper()
     {
     }
 
-    /**
-     * @return mapped suggestion, or null if the response is missing / has an unknown type.
-     * Copies an optional bundled {@code graph} onto {@link Suggestion#setGraphData}.
-     */
     public static Suggestion toSuggestion(ComposeSuggestionResponse response)
     {
         if (response == null || !response.isOk() || response.getSuggestion() == null)

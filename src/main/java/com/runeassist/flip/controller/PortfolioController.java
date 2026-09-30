@@ -11,7 +11,6 @@ import java.util.Set;
 @Slf4j
 @Singleton
 public class PortfolioController {
-    // dependencies
     private final Client client;
     private final ItemController itemController;
 

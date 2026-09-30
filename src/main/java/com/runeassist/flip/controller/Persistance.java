@@ -19,10 +19,6 @@ public class Persistance {
     public static Gson gson;
     public static final String LOGIN_RESPONSE_JSON_FILE = "login-response.json";
     public static final String UNACKED_TRANSACTIONS_FILE_TEMPLATE = "%s_unacked.jsonl";
-    /**
-     * The plugin's data directory as handed out by RuneLite (Plugin.getPluginDirectory()), which
-     * the Plugin Hub requires for all file access. Set once by the plugin's Guice provider.
-     */
     private static volatile Filepath dataDir;
 
     public static void setDataDir(Filepath dir) {
@@ -37,7 +33,6 @@ public class Persistance {
         return dir;
     }
 
-    /** A file directly inside the data directory; a name with separators or dots-only is rejected. */
     public static Filepath file(String name) {
         return dataDir().joinSegment(name);
     }
@@ -74,7 +69,6 @@ public class Persistance {
         }
     }
 
-    /** Read a whole UTF-8 text file. */
     public static String readString(Filepath file) throws IOException {
         try (InputStream in = file.openInputStream()) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
@@ -129,7 +123,6 @@ public class Persistance {
         if(displayName == null) {
             return "null";
         }
-        // we hash the display name just to ensure that it's a valid file name
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-1");
             byte[] hashBytes = digest.digest(displayName.getBytes(StandardCharsets.UTF_8));

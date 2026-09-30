@@ -44,8 +44,6 @@ public class Offer {
         if (status == OfferStatus.SELL) {
             return (long) (amountTotal - amountTraded) * price;
         } else if (status == OfferStatus.BUY){
-            // for a buy just take the full amount even if they have collected
-            // we assume they won't start selling any collected items until their buy offer is finished
             return (long) amountTotal * price;
         } else {
             return 0;

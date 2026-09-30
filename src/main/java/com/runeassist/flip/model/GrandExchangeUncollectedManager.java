@@ -15,15 +15,12 @@ import java.util.*;
 @RequiredArgsConstructor(onConstructor_ = @javax.inject.Inject)
 public class GrandExchangeUncollectedManager {
 
-    // dependencies
     private final Client client;
 
-    // stated
     private int lastUncollectedAddedTick = -1;
     private int lastClearedTick = -1;
     private final Map<Integer, Long> lastClearedUncollected = new HashMap<>();
     private final List<Integer> lastClearedSlots = new ArrayList<>();
-    // accountId -> [slot -> [itemID -> quantity]]
     private final Map<Long, Map<Integer, Map<Integer, Long>>> uncollected = new HashMap<>();
 
     public synchronized boolean HasUncollected(Long accountHash) {
@@ -57,7 +54,6 @@ public class GrandExchangeUncollectedManager {
         Map<Integer, Map<Integer, Long>> slotToUncollected = this.uncollected.computeIfAbsent(accountHash, (k) -> new HashMap<>());
         Map<Integer, Long> itemIdToQuantity = slotToUncollected.computeIfAbsent(slot, (k) -> new HashMap<>());
         if (!itemIdToQuantity.containsKey(itemId)) {
-           // must be a new offer
            itemIdToQuantity.clear();
         }
         if(quantity > 0) {

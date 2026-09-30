@@ -21,14 +21,12 @@ import java.awt.*;
 @Slf4j
 public class PriceGraphPanel extends JPanel {
 
-    // Dependencies
     private final ItemController itemController;
     private final ApiRequestHandler apiRequestHandler;
     private final OsrsLoginManager osrsLoginManager;
     private final PriceGraphConfigManager priceGraphConfigManager;
     private final SuggestionManager suggestionManager;
 
-    // UI Components
     public final ItemSearchBox searchBox;
     private final JPanel contentPanel;
     private final JLabel errorLabel = new JLabel();
@@ -37,12 +35,10 @@ public class PriceGraphPanel extends JPanel {
     private final TrackingCardLayout contentCardLayout = new TrackingCardLayout();
     private final JButton showSuggestionButton;
 
-    // State
     private volatile int currentItemId;
     public volatile PriceLine offerPriceLine;
 
 
-    // when isShowingSuggestionPriceData, the graph will auto update with the latest suggestion
     public volatile boolean isShowingSuggestionPriceData;
     public volatile Data suggestionPriceData;
     public volatile PriceLine suggestedPriceLine;
@@ -83,7 +79,6 @@ public class PriceGraphPanel extends JPanel {
 
         topPanel.add(searchPanel, BorderLayout.WEST);
 
-        // Add the suggestion button to the right side
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         rightPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
@@ -153,7 +148,6 @@ public class PriceGraphPanel extends JPanel {
         currentItemId = itemId;
         log.debug("Loading price graph for item: {}", itemId);
         contentCardLayout.show(contentPanel, Cards.LOADING_CARD.name());
-        // Load the graph from the RuneAssist Ares backend.
         final PriceLine priceLine = offerPriceLine;
         apiRequestHandler.asyncGetRuneAssistGraph(itemId,
             (Data d) -> SwingUtilities.invokeLater(() -> {

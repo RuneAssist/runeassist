@@ -48,7 +48,6 @@ public class DataManager {
     public Datapoint findClosestPoint(Point mousePos, int hoverRadius, Rectangle pa, Bounds bounds) {
         if (mousePos == null) return null;
 
-        // prioritize hovering on the flip transaction datapoints, which get double the hover radius
         Datapoint closest = closestWithin(mousePos, hoverRadius * 2, pa, bounds,
                 Arrays.asList(flipEntryDatapoints, flipCloseDatapoints));
         if (closest != null) {
@@ -93,10 +92,6 @@ public class DataManager {
         return b;
     }
 
-    /**
-     * Bounds for the last spanSeconds of real prices, plus up to horizonSeconds of predictions on top.
-     * A horizon of 0 means the full prediction horizon, i.e. everything we have.
-     */
     public Bounds calculateSpanBounds(int spanSeconds, int horizonSeconds) {
         int latest = Math.max(lastLowTime, lastHighTime);
         int end = horizonSeconds == 0 ? maxBounds.xMax : Math.min(maxBounds.xMax, latest + horizonSeconds);
@@ -130,11 +125,9 @@ public class DataManager {
                     b.xMin = Math.min(b.xMin, d.time);
                     b.xMax = Math.max(b.xMax, d.time);
 
-                    // Update price bounds
                     b.yMin = Math.min(b.yMin, d.price);
                     b.yMax = Math.max(b.yMax, d.price);
 
-                    // Check IQR bounds for prediction points
                     if (d.type == Datapoint.Type.PREDICTION) {
                         if (d.iqrLower != null) {
                             b.yMin = Math.min(b.yMin, d.iqrLower);
@@ -230,9 +223,6 @@ public class DataManager {
         flipEntryDatapoints.clear();
         flipCloseDatapoints.clear();
         
-        // here we combine the hour / 5min / latest wiki price data points into a continuous dataset where hour points 
-        // transition into the 5min points that transition into the latest points. So we get increasingly finer granularity.
-        // We truncate the points correctly at the boundaries to ensure no overlap.
 
         addPriceDatapoints(lowDatapoints, ints(data.lowLatestTimes), longs(data.lowLatestPrices),
                 ints(data.low5mTimes), longs(data.low5mPrices), ints(data.low1hTimes), longs(data.low1hPrices), true);

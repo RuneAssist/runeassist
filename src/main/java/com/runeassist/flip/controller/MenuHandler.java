@@ -80,7 +80,6 @@ public class MenuHandler {
         }
     }
 
-    /** Near-GE inventory/bank Examine menus: Add/Remove (+ X qty prompts). */
     public void injectInventoryPortfolioMenuEntry(MenuEntryAdded event) {
         if (!playerLocationController.isNearGE()) {
             return;
@@ -194,7 +193,6 @@ public class MenuHandler {
         return false;
     }
 
-    /** Modify opens Set up offer without search, so TRADINGPOST_SEARCH is often -1. */
     private int editorItemId() {
         int current = grandExchange.getCurrentItemId();
         if (current > 0) {

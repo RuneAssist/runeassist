@@ -48,7 +48,7 @@ public class RuneAssistPanel extends JPanel {
             card[0] = new OnboardingCard(() -> {
                 configManager.setConfiguration("runeassistflip", "onboardingSeen", true);
                 topPanel.remove(card[0]);
-                topPanel.remove(0); // the spacer under it
+                topPanel.remove(0);
                 topPanel.revalidate();
                 topPanel.repaint();
             }, this::openSettings);
@@ -113,7 +113,6 @@ public class RuneAssistPanel extends JPanel {
         setSettingsOpen(!settingsOpen);
     }
 
-    /** Open Preferences (account / pairing). Used from the top-bar identity control. */
     public void openSettings() {
         setSettingsOpen(true);
     }

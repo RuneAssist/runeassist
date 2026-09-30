@@ -11,7 +11,6 @@ import javax.swing.SwingUtilities;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 
-/** Opt-in bug reports. Device token attributes {@code /v1/account/feedback} after dialog confirm. */
 @Slf4j
 @Singleton
 public class BugReportClient {
@@ -34,7 +33,6 @@ public class BugReportClient {
         return DEFAULT_ORIGIN;
     }
 
-    /** Submit after consent dialog. Registers a device token if needed. */
     public void reportBug(String displayName, String message, byte[] screenshotPng, Consumer<Boolean> callback) {
         executor.execute(() -> {
             boolean ok;

@@ -18,7 +18,6 @@ public final class PatchNotesPopup {
     private PatchNotesPopup() {
     }
 
-    // When shipping new patch notes: bump LATEST_VERSION and update writeNotes below.
     public static final int LATEST_VERSION = 1;
 
     public static void show(Component parent) {

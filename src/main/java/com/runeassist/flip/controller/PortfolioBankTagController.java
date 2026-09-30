@@ -28,12 +28,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntUnaryOperator;
 
-/**
- * Local Bank Tags portfolio tab — FC parity without a server portfolio-tags endpoint.
- * <p>
- * Bank Tags is resolved at runtime (see {@link BankTagsLookup}) so this plugin can sideload
- * without {@code @PluginDependency(BankTagsPlugin.class)}.
- */
 @Singleton
 @Slf4j
 public class PortfolioBankTagController {
@@ -99,7 +93,6 @@ public class PortfolioBankTagController {
         requestSync();
     }
 
-    /** Re-evaluate when Bank Tags itself is toggled on/off. */
     public void onBankTagsPluginChanged() {
         requestSync();
     }
@@ -109,8 +102,6 @@ public class PortfolioBankTagController {
             return;
         }
 
-        // Plugin start-up runs on the AWT event thread when toggled from the plugin
-        // panel. ItemManager.canonicalize(), used by sync(), requires the client thread.
         clientThread.invokeLater(() -> {
             syncQueued.set(false);
             if (active.get()) {
@@ -199,10 +190,6 @@ public class PortfolioBankTagController {
         setBankedPortfolioItemIds(itemIds, bankTagsPlugin);
     }
 
-    /**
-     * Portfolio items that both have banked portfolio quantity and are present in the
-     * observed bank. Pure for unit tests; canonicalize is injected so ItemManager is optional.
-     */
     static Set<Integer> selectBankedPortfolioItemIds(PortfolioState portfolioState,
                                                      BankState bankState,
                                                      IntUnaryOperator canonicalize) {

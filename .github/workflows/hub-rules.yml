@@ -4,7 +4,9 @@ name: Plugin Hub rules
 # review never bounces us for something we could have caught here:
 #   rules  - reviewer rules (no thread interrupts, no reflection, Filepath for
 #            file i/o, ...) and the packager's manifest/icon/licence checks.
-#            See docs/hub-rules.md and scripts/hub_rules.py.
+#            See docs/hub-rules.md and scripts/hub_rules.py. Also keeps the
+#            source under the Hub AI review's 200k token limit
+#            (scripts/token-budget.sh).
 #   build  - compile and test against the exact RuneLite version pinned in
 #            runelite/plugin-hub, on Java 11 like the Hub packager. Catches API
 #            changes (e.g. 1.13.0 made GE offer prices long) before review.
@@ -29,6 +31,8 @@ jobs:
         run: python3 scripts/hub_rules.py
       - name: Check the version is written the same everywhere
         run: scripts/version-check.sh
+      - name: Check the source fits the Hub review token limit
+        run: scripts/token-budget.sh
 
   build:
     runs-on: ubuntu-latest

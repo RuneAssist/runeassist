@@ -9,11 +9,9 @@ import java.util.List;
 
 public class DatapointTooltip {
 
-    // Padding inside tooltip
     private static final int PADDING = 8;
 
     public static void draw(Graphics2D g2, Config config, Rectangle pa, Bounds paBounds, Datapoint point) {
-        // Prepare tooltip text
         NumberFormat format = new DecimalFormat("#,###", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
         String priceStr = format.format(point.getPrice());
 
@@ -45,25 +43,22 @@ public class DatapointTooltip {
                 throw new IllegalArgumentException("invalid point type: "+ point.type);
         }
 
-        // Calculate tooltip dimensions
         g2.setFont(g2.getFont().deriveFont(Config.FONT_SIZE));
         FontMetrics fm = g2.getFontMetrics();
         int typeTextWidth = fm.stringWidth(typeText);
         int timeTextWidth = fm.stringWidth(timeText);
         int priceStrWidth = fm.stringWidth(priceStr);
         int textWidth = Math.max(Math.max(typeTextWidth, timeTextWidth), priceStrWidth);
-        int textHeight = fm.getHeight() * 3; // Three lines of text
+        int textHeight = fm.getHeight() * 3;
 
         int tooltipWidth = textWidth + PADDING * 2;
         int tooltipHeight = textHeight + PADDING * 2;
 
         Point hoverPosition = point.getHoverPosition(pa, paBounds);
 
-        // Position tooltip near point but ensure it stays within panel bounds
         int tooltipX = hoverPosition.x + 15;
         int tooltipY = hoverPosition.y - tooltipHeight - 5;
 
-        // Adjust if tooltip would go off screen
         if (tooltipX + tooltipWidth > pa.width) {
             tooltipX = hoverPosition.x - tooltipWidth - 5;
         }
@@ -71,28 +66,22 @@ public class DatapointTooltip {
             tooltipY = hoverPosition.y + 15;
         }
 
-        // Draw tooltip background
         g2.setColor(Config.TOOLTIP_BACKGROUND);
         g2.fillRoundRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight, 8, 8);
 
-        // Draw tooltip border
         g2.setColor(Config.TOOLTIP_BORDER);
         g2.drawRoundRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight, 8, 8);
 
-        // Draw tooltip text - first line (type text)
         g2.setColor(config.textColor);
         int yPos = tooltipY + PADDING + fm.getAscent();
         g2.drawString(typeText, tooltipX + PADDING, yPos);
 
-        // Draw tooltip text - second line (time)
         yPos += fm.getHeight();
         g2.drawString(timeText, tooltipX + PADDING, yPos);
 
-        // Draw tooltip text - third line (price)
         yPos += fm.getHeight();
         g2.drawString(priceStr, tooltipX + PADDING, yPos);
 
-        // Highlight the hovered point
         if (point.type != Datapoint.Type.FLIP_TRANSACTION) {
             if (point.isLow()) {
                 g2.setColor(config.lowColor);
@@ -100,7 +89,6 @@ public class DatapointTooltip {
                 g2.setColor(config.highColor);
             }
 
-            // Draw larger point to highlight hover
             int highlightSize = 8;
             g2.fillOval(hoverPosition.x - highlightSize / 2,
                     hoverPosition.y - highlightSize / 2,

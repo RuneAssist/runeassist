@@ -253,10 +253,6 @@ public class HighlightController {
             }
             return true;
         }
-        // Only a real buy card lights the buy button. The inherited "scanning for
-        // dumps" highlight during a WAIT made sense when the client searched the GE
-        // itself; RuneAssist's dump alerts arrive from the server, so a lit button
-        // with nothing to buy just looks like a bug.
         if (suggestion.isBuySuggestion()) {
             highlightCreateBuyOfferButton(accountStatus, blueHighlight);
             return true;
