@@ -567,14 +567,17 @@ public class SuggestionController {
     }
 
     /** Direct sales need current physical stock, not only historical purchases. */
-    /** "Withdraw Dragon hunter wand to sell it" or, when the bank did not show it either, what to do about that. */
+    /**
+     * "Withdraw Dragon hunter wand to sell it" when the bank showed it. Stock seen nowhere is
+     * the server's business (it moves to the missed bucket), so that case stays a plain wait.
+     */
     static String unseenHoldingMessage(Suggestion sell) {
         String name = sell.getName() == null || sell.getName().isEmpty() ? "the item" : sell.getName();
         String why = sell.getWhy() == null ? "" : sell.getWhy().toLowerCase(java.util.Locale.ROOT);
         if (why.contains("in your bank")) {
             return "Withdraw " + name + " to sell it";
         }
-        return name + " is not in your inventory or bank. Open the GE History tab to update, or remove it from the portfolio";
+        return "Waiting for inventory update";
     }
 
     public boolean isSellAvailableNow(Suggestion suggestion) {
