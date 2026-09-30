@@ -24,6 +24,8 @@ import static net.runelite.api.Varbits.GE_OFFER_CREATION_TYPE;
 public class GrandExchange {
     /** Price box inside the offer setup container (GE_OFFERS child 26); see SlotProfitColorizer. */
     static final int OFFER_SETUP_PRICE_TEXT_CHILD = 41;
+    /** The typed offer price since the 30 Sep 2026 max cash update: a 64-bit varp, unnamed in RuneLite 1.13.1. */
+    public static final int OFFER_SETUP_PRICE_VARP = 5753;
     private final Client client;
 
     boolean isHomeScreenOpen() {
@@ -144,10 +146,19 @@ public class GrandExchange {
 
     /**
      * The price typed into the offer setup screen. The game stopped keeping it in a
-     * varbit when prices went beyond max cash (30 Sep 2026), so it is read from the
-     * price box, which shows the full figure with thousands separators.
+     * varbit when prices went beyond max cash (30 Sep 2026): it lives in a 64-bit varp
+     * now, with the price box (full figure, thousands separators) as the fallback should
+     * that id ever move.
      */
     long getOfferPrice() {
+        try {
+            long typed = client.getVarpLongValue(OFFER_SETUP_PRICE_VARP);
+            if (typed > 0) {
+                return typed;
+            }
+        } catch (RuntimeException ignored) {
+            // fall through to the price box
+        }
         Widget offerContainer = getOfferContainerWidget();
         Widget priceBox = offerContainer == null ? null : offerContainer.getChild(OFFER_SETUP_PRICE_TEXT_CHILD);
         return priceBox == null ? 0L : parseGp(priceBox.getText());

@@ -195,6 +195,7 @@ public class GameUiChangesHandler {
         if (event.getVarpId() == 375
                 || event.getVarpId() == VarPlayerID.TRADINGPOST_SEARCH
                 || event.getVarbitId() == VarbitID.GE_NEWOFFER_QUANTITY
+                || event.getVarpId() == GrandExchange.OFFER_SETUP_PRICE_VARP
                 || event.getVarbitId() == VarbitID.GE_SELECTEDSLOT) {
             clientThread.invokeLater(highlightController::redraw);
         }
