@@ -22,9 +22,9 @@ import static net.runelite.api.Varbits.GE_OFFER_CREATION_TYPE;
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class GrandExchange {
-    /** Price box inside the offer setup container (GE_OFFERS child 26); see SlotProfitColorizer. */
+    /** Price box inside the offer setup container (GE_OFFERS child 26). */
     static final int OFFER_SETUP_PRICE_TEXT_CHILD = 41;
-    /** The typed offer price since the 30 Sep 2026 max cash update: a 64-bit varp, unnamed in RuneLite 1.13.1. */
+    /** The typed offer price: a 64-bit varp since the 30 Sep 2026 max cash update, unnamed in RuneLite 1.13.1. */
     public static final int OFFER_SETUP_PRICE_VARP = 5753;
     private final Client client;
     private final GeSearchResults geSearchResults;
@@ -145,12 +145,7 @@ public class GrandExchange {
         return client.getVarbitValue(VarbitID.GE_NEWOFFER_QUANTITY);
     }
 
-    /**
-     * The price typed into the offer setup screen. The game stopped keeping it in a
-     * varbit when prices went beyond max cash (30 Sep 2026): it lives in a 64-bit varp
-     * now, with the price box (full figure, thousands separators) as the fallback should
-     * that id ever move.
-     */
+    /** The typed offer price: the 64-bit varp, or the price box text should that id move. */
     long getOfferPrice() {
         try {
             long typed = client.getVarpLongValue(OFFER_SETUP_PRICE_VARP);
@@ -158,14 +153,14 @@ public class GrandExchange {
                 return typed;
             }
         } catch (RuntimeException ignored) {
-            // fall through to the price box
+            // the price box below
         }
         Widget offerContainer = getOfferContainerWidget();
         Widget priceBox = offerContainer == null ? null : offerContainer.getChild(OFFER_SETUP_PRICE_TEXT_CHILD);
         return priceBox == null ? 0L : parseGp(priceBox.getText());
     }
 
-    /** "2,815,745 coins" to 2815745; anything abbreviated or empty is unknown, so 0. */
+    /** "2,815,745 coins" to 2815745; abbreviated or empty is unknown, so 0. */
     static long parseGp(String text) {
         if (text == null) {
             return 0L;

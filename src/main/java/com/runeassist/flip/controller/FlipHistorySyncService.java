@@ -358,10 +358,10 @@ public class FlipHistorySyncService {
         JsonArray list = new JsonArray();
         for (GeHistoryReader.Row r : rows) {
             JsonObject o = new JsonObject();
-            o.addProperty("itemId", r.itemId);
-            o.addProperty("quantity", r.quantity);
-            o.addProperty("price", r.price);
-            o.addProperty("side", r.buy ? "buy" : "sell");
+            o.addProperty("itemId", r.getItemId());
+            o.addProperty("quantity", r.getQuantity());
+            o.addProperty("price", r.getPrice());
+            o.addProperty("side", r.isBuy() ? "buy" : "sell");
             list.add(o);
         }
         body.add("rows", list);

@@ -12,11 +12,7 @@ import net.runelite.api.Player;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
-/**
- * How long a live offer has been listed against the time its card expected, as a line for
- * the slot's hover tooltip: "Listed 12m ago, expected 50m", or just "Listed 12m ago" when
- * the offer did not come from a card.
- */
+/** Tooltip line for a live offer: "Listed 12m ago, expected 50m", or without the estimate when it did not come from a card. */
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class OfferAge {
@@ -25,7 +21,7 @@ public class OfferAge {
     private final HeldCostTracker heldCostTracker;
     private final OfferManager offerManager;
 
-    /** The tooltip line for a slot, or null when it holds no live offer or its listing time is unknown. */
+    /** The line for a slot, or null with no live offer or no listing time. */
     public String tooltipLine(int slot, long nowMs) {
         Player player = client.getLocalPlayer();
         GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
@@ -49,7 +45,7 @@ public class OfferAge {
         }
     }
 
-    /** "Listed 12m ago, expected 50m"; "Listed 12m ago" without an estimate; null when the age is unknown. */
+    /** Null when the age is unknown. */
     static String line(String age, long expectedSeconds) {
         if (age == null) {
             return null;
@@ -58,7 +54,7 @@ public class OfferAge {
         return "Listed " + age + " ago" + (expected == null ? "" : ", expected " + expected);
     }
 
-    /** "50m" when the card gave an estimate, null otherwise. */
+    /** Null without an estimate. */
     static String formatExpected(long expectedSeconds) {
         if (expectedSeconds <= 0) {
             return null;

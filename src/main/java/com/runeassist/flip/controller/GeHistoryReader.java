@@ -2,6 +2,7 @@ package com.runeassist.flip.controller;
 
 import com.runeassist.flip.model.OsrsLoginManager;
 import lombok.RequiredArgsConstructor;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.gameval.InterfaceID;
@@ -17,10 +18,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Reads the Grand Exchange History tab when the player opens it: one row per finished
- * offer with item, side, quantity and price, newest first, no clock. The rows go to the
- * server, which fills in any trade the plugin missed while it was off, so an item the
- * player already sold stops appearing as stock.
+ * Reads the GE History tab when it is open (one row per finished offer: item, side,
+ * quantity, price; no clock) and sends it to the server, which fills in trades the
+ * plugin missed while it was off.
  */
 @Slf4j
 @Singleton
@@ -38,18 +38,12 @@ public class GeHistoryReader {
     private String lastSent = "";
 
     /** One row of the tab. */
-    public static final class Row {
-        public final int itemId;
-        public final int quantity;
-        public final long price;
-        public final boolean buy;
-
-        Row(int itemId, int quantity, long price, boolean buy) {
-            this.itemId = itemId;
-            this.quantity = quantity;
-            this.price = price;
-            this.buy = buy;
-        }
+    @Value
+    public static class Row {
+        int itemId;
+        int quantity;
+        long price;
+        boolean buy;
     }
 
     public void onGameTick() {
@@ -65,7 +59,7 @@ public class GeHistoryReader {
         if (rows.isEmpty()) {
             return;
         }
-        String fingerprint = fingerprint(rows);
+        String fingerprint = rows.toString();
         if (fingerprint.equals(lastSent)) {
             return;
         }
@@ -73,15 +67,7 @@ public class GeHistoryReader {
         flipHistorySyncService.sendGeHistory(rows);
     }
 
-    static String fingerprint(List<Row> rows) {
-        StringBuilder sb = new StringBuilder();
-        for (Row r : rows) {
-            sb.append(r.itemId).append(r.buy ? 'b' : 's').append(r.quantity).append('@').append(r.price).append(';');
-        }
-        return sb.toString();
-    }
-
-    /** Completed rows, newest first; rows that cannot be read are skipped. */
+    /** Rows newest first; unreadable rows are skipped. */
     static List<Row> parseRows(Widget container) {
         Widget[] children = container.getDynamicChildren();
         if (children == null || children.length < WIDGETS_PER_ROW) {
@@ -111,7 +97,7 @@ public class GeHistoryReader {
         return rows;
     }
 
-    /** Price per item from the tab's price text: "= 1,234 each", "1,234 coins" or a struck-out total. */
+    /** Per-item price from "= 1,234 each", "1,234 coins" or a struck-out total. */
     static long parsePrice(String text, int quantity) {
         if (text == null) {
             return 0L;
