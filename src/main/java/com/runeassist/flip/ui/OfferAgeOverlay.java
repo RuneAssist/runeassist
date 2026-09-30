@@ -26,9 +26,9 @@ import java.awt.Graphics2D;
 import java.awt.Rectangle;
 
 /**
- * How long each live offer has been listed, drawn in the corner of its Grand Exchange slot,
- * with the time its card expected on a second line when one is known: "12m" over "~50m".
- * Two short lines stay clear of the slot title, which one long line would run into.
+ * How long each live offer has been listed, drawn in the corner of its Grand Exchange slot
+ * against the time its card expected when one is known: "12m / 50m". It sits on the row
+ * under the slot title, which a line that long would otherwise run into.
  */
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
@@ -39,7 +39,6 @@ public class OfferAgeOverlay extends Overlay {
     private static final int MARGIN = 5;
     private static final long REFRESH_MS = 1000L;
     private static final Color TEXT_COLOR = new Color(0xC8C8C8);
-    private static final Color EXPECTED_COLOR = new Color(0x969696);
 
     private final Client client;
     private final RuneAssistConfig config;
@@ -48,7 +47,6 @@ public class OfferAgeOverlay extends Overlay {
     private final OfferManager offerManager;
 
     private final String[] labels = new String[GE_SLOT_COUNT];
-    private final String[] expectedLabels = new String[GE_SLOT_COUNT];
     private long refreshedAtMs;
 
     {
@@ -75,12 +73,8 @@ public class OfferAgeOverlay extends Overlay {
             if (bounds == null || bounds.width <= 0) {
                 continue;
             }
-            int y = bounds.y + MARGIN + graphics.getFontMetrics().getAscent();
+            int y = bounds.y + MARGIN + graphics.getFontMetrics().getAscent() + graphics.getFontMetrics().getHeight();
             drawRightAligned(graphics, bounds, y, label, TEXT_COLOR);
-            if (expectedLabels[slot] != null) {
-                drawRightAligned(graphics, bounds, y + graphics.getFontMetrics().getHeight(),
-                    expectedLabels[slot], EXPECTED_COLOR);
-            }
         }
         return null;
     }
@@ -100,7 +94,6 @@ public class OfferAgeOverlay extends Overlay {
         GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
         for (int slot = 0; slot < GE_SLOT_COUNT; slot++) {
             labels[slot] = null;
-            expectedLabels[slot] = null;
             if (displayName == null || offers == null || slot >= offers.length || offers[slot] == null) {
                 continue;
             }
@@ -109,10 +102,17 @@ public class OfferAgeOverlay extends Overlay {
                 continue;
             }
             long listedMs = heldCostTracker.listedMs(displayName, slot, offers[slot].getItemId());
-            labels[slot] = formatAge(nowMs - listedMs, listedMs);
-            expectedLabels[slot] = labels[slot] == null ? null
-                : formatExpected(expectedSeconds(slot, offers[slot].getItemId()));
+            labels[slot] = label(formatAge(nowMs - listedMs, listedMs), expectedSeconds(slot, offers[slot].getItemId()));
         }
+    }
+
+    /** "12m / 50m" against the card's estimate, "12m" alone without one, null when the age is unknown. */
+    static String label(String age, long expectedSeconds) {
+        if (age == null) {
+            return null;
+        }
+        String expected = formatExpected(expectedSeconds);
+        return expected == null ? age : age + " / " + expected;
     }
 
     private long expectedSeconds(int slot, int itemId) {
@@ -124,15 +124,15 @@ public class OfferAgeOverlay extends Overlay {
         }
     }
 
-    /** "~50m" when the card gave an estimate, null otherwise. */
+    /** "50m" when the card gave an estimate, null otherwise. */
     static String formatExpected(long expectedSeconds) {
         if (expectedSeconds <= 0) {
             return null;
         }
-        return "~" + formatAge(Math.max(60_000L, expectedSeconds * 1000L), 1L);
+        return formatAge(Math.max(60_000L, expectedSeconds * 1000L), 1L);
     }
 
-    /** "under 1m", "12m", "1h 05m", "2d 3h"; null when the listing time is unknown. */
+    /** "under 1m", "12m", "1h05m", "2d3h"; null when the listing time is unknown. */
     static String formatAge(long ageMs, long listedMs) {
         if (listedMs <= 0 || ageMs < 0) {
             return null;
@@ -146,8 +146,8 @@ public class OfferAgeOverlay extends Overlay {
         }
         long hours = minutes / 60;
         if (hours < 24) {
-            return String.format("%dh %02dm", hours, minutes % 60);
+            return String.format("%dh%02dm", hours, minutes % 60);
         }
-        return String.format("%dd %dh", hours / 24, hours % 24);
+        return String.format("%dd%dh", hours / 24, hours % 24);
     }
 }
