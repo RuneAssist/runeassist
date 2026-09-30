@@ -10,11 +10,6 @@ import net.runelite.api.widgets.WidgetType;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
-/**
- * The layer holding the item search results. Its chatbox index moved with the
- * 30 Sep 2026 update, so it is found by shape: a wide visible layer whose parent
- * is a layer in the message-layer scroll area.
- */
 @Slf4j
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
@@ -27,7 +22,6 @@ public class GeSearchResults {
     private final Client client;
     private int foundChild = -1;
 
-    /** The results layer, or null when the search is not showing. */
     public Widget layer() {
         if (foundChild >= 0) {
             Widget w = client.getWidget(CHATBOX_GROUP, foundChild);
@@ -54,7 +48,6 @@ public class GeSearchResults {
         return best;
     }
 
-    /** A wide visible layer whose parent is a layer inside the scroll area: the contents, not the bar. */
     private static boolean isResultsLayer(Widget w) {
         if (w == null || w.isHidden() || w.getType() != WidgetType.LAYER || w.getWidth() < MIN_WIDTH) {
             return false;

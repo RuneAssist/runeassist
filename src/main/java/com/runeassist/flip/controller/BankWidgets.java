@@ -10,7 +10,6 @@ import net.runelite.client.util.Text;
 
 import java.awt.Rectangle;
 
-/** Shared bank / GE widget lookups for highlights and portfolio menus. */
 public final class BankWidgets {
     static final int BANK_WIDGET_GROUP = 12;
     static final int[] BANK_ITEM_CONTAINER_CHILDREN = {12, 13, 89};
@@ -46,7 +45,6 @@ public final class BankWidgets {
         return children != null && children.length > 0 ? children[0] : null;
     }
 
-    /** Prefer noted GE-side inventory match, else unnoted. */
     public static Widget geInventoryItem(Client client, int unnotedItemId) {
         Widget inventory = client.getWidget(InterfaceID.GE_OFFERS_SIDE, 0);
         if (inventory == null) {

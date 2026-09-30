@@ -20,15 +20,15 @@ import java.awt.*;
 public class SlotProfitColorizer {
 
     private static final int GE_SLOT_COUNT = 8;
-    private static final int FIRST_SLOT_CHILD_ID = 7; // Slots are children 7-14 (0-7)
-    private static final int PRICE_TEXT_WIDGET_CHILD_INDEX = 25; // Child index within each slot that contains price text
-    private static final int DETAIL_VIEW_CHILD_ID = 15; // Detail view when a slot is opened
-    private static final int DETAIL_PRICE_TEXT_CHILD_INDEX = 25; // Price text within detail view
-    private static final int OFFER_SETUP_CHILD_ID = 26; // Offer setup screen (buy/sell)
-    private static final int OFFER_SETUP_PRICE_TEXT_CHILD_INDEX = 41; // Price text within offer setup
+    private static final int FIRST_SLOT_CHILD_ID = 7;
+    private static final int PRICE_TEXT_WIDGET_CHILD_INDEX = 25;
+    private static final int DETAIL_VIEW_CHILD_ID = 15;
+    private static final int DETAIL_PRICE_TEXT_CHILD_INDEX = 25;
+    private static final int OFFER_SETUP_CHILD_ID = 26;
+    private static final int OFFER_SETUP_PRICE_TEXT_CHILD_INDEX = 41;
 
-    private static final String DEFAULT_COLOR = "ff981f"; // Game's default orange color for slot overview
-    private static final String DETAIL_AND_SETUP_DEFAULT_COLOR = "ffb83f"; // Default color for detail view and offer setup
+    private static final String DEFAULT_COLOR = "ff981f";
+    private static final String DETAIL_AND_SETUP_DEFAULT_COLOR = "ffb83f";
 
     private final Client client;
     private final RuneAssistConfig config;
@@ -131,7 +131,6 @@ public class SlotProfitColorizer {
 
     private Color determineOfferSetupColor(Color defaultColor) {
         if (!grandExchange.isOfferTypeSell()) {
-            // For buy offers, show profitable if we have a tracked price and the price matches it.
             int viewedItemId = offerManager.getViewedSlotItemId();
             long viewedItemPrice = offerManager.getViewedSlotItemPrice();
             if (viewedItemId > 0 && viewedItemPrice > 0 && grandExchange.getOfferPrice() == viewedItemPrice) {
@@ -143,14 +142,12 @@ public class SlotProfitColorizer {
 
         int itemId = client.getVarpValue(VarPlayerID.TRADINGPOST_SEARCH);
         if (itemId <= 0) {
-            // Modify (and inventory sell) never go through search.
             itemId = grandExchange.getCurrentItemId();
         }
         if (itemId <= 0) {
             return defaultColor;
         }
 
-        // For sell offers, calculate profit based on the current price
         Long profit = profitCalculator.calculateProfitPerItem(itemId, grandExchange.getOfferPrice());
 
         return determineProfitColor(profit, defaultColor);
@@ -236,13 +233,11 @@ public class SlotProfitColorizer {
 
     private boolean isBuyOffer(int slotIndex) {
         try {
-            // First try to get it from SavedOffer
             SavedOffer savedOffer = getOffer(slotIndex);
             if (savedOffer != null) {
                 return savedOffer.getOfferStatus() == OfferStatus.BUY;
             }
 
-            // Fallback to current GE offer
             GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
             if (offers != null && slotIndex < offers.length) {
                 GrandExchangeOffer currentOffer = offers[slotIndex];
@@ -257,7 +252,7 @@ public class SlotProfitColorizer {
             log.debug("Error determining offer type for slot {}", slotIndex, e);
         }
 
-        return false; // Default to sell if unknown
+        return false;
     }
 
     private boolean isOfferTracked(int slotIndex) {
@@ -273,7 +268,6 @@ public class SlotProfitColorizer {
             return "";
         }
 
-        // Remove <col=XXXXXX> and </col> tags
         return text.replaceAll("<col=[0-9a-fA-F]{6}>", "").replaceAll("</col>", "");
     }
 
