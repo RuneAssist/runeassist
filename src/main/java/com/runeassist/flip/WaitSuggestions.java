@@ -3,10 +3,6 @@ package com.runeassist.flip;
 import com.runeassist.flip.model.Suggestion;
 import com.runeassist.flip.model.SuggestionType;
 
-/**
- * Soft-fail WAIT cards when Ares compose is unreachable or the panel must yield
- * (e.g. Hub plugin conflict). Not a local composition engine.
- */
 final class WaitSuggestions
 {
     static final String WAIT_SLOTS_FULL =
@@ -22,7 +18,6 @@ final class WaitSuggestions
     {
     }
 
-    /** WAIT with reason + {@code used/max} slot status in {@code why}. */
     static Suggestion waitFallback(String message, long[][] offersBySlot, int maxSlots)
     {
         Suggestion wait = new Suggestion();

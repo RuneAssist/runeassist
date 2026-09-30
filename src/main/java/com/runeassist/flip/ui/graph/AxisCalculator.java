@@ -31,11 +31,10 @@ public class AxisCalculator {
         int[] timeTicks = new int[]{};
         if (daysStep == 1) {
             if (dayTicks.length < 5) {
-                // add 06:00, 12:00, 18:00
                 for (int d : preAppend(dayTicks, minDay)) {
-                    int tick06 = d + 6 * 60 * 60;     // 06:00
-                    int tick12 = d + 12 * 60 * 60;    // 12:00
-                    int tick18 = d + 18 * 60 * 60;    // 18:00
+                    int tick06 = d + 6 * 60 * 60;
+                    int tick12 = d + 12 * 60 * 60;
+                    int tick18 = d + 18 * 60 * 60;
 
                     if (tick06 < timeMax && tick06 > timeMin) {
                         timeTicks = append(timeTicks, tick06);
@@ -48,9 +47,8 @@ public class AxisCalculator {
                     }
                 }
             } else if (dayTicks.length < 10){
-                // add only 12:00
                 for (int d : preAppend(dayTicks, dayTicks[0] - Constants.DAY_SECONDS)) {
-                    int tick12 = d + 12 * 60 * 60;    // 12:00
+                    int tick12 = d + 12 * 60 * 60;
                     if (tick12 > timeMin && tick12 < timeMax) {
                         timeTicks = append(timeTicks, tick12);
                     }

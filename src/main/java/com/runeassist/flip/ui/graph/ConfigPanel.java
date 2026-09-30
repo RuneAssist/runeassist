@@ -47,11 +47,9 @@ public class ConfigPanel extends JPanel {
         settingsPanel.add(titleLabel, c);
         c.gridy++;
 
-        // boolean
         addBooleanSetting(settingsPanel, c, "connectPoints", configInstance.isConnectPoints());
         addBooleanSetting(settingsPanel, c, "showSuggestedPriceLines", configInstance.isShowSuggestedPriceLines());
 
-        // colours
         addColorSetting(settingsPanel, c, "lowColor", configInstance.getLowColor());
         addColorSetting(settingsPanel, c, "highColor", configInstance.getHighColor());
         addColorSetting(settingsPanel, c, "lowShadeColor", configInstance.getLowShadeColor());
@@ -62,7 +60,6 @@ public class ConfigPanel extends JPanel {
         addColorSetting(settingsPanel, c, "axisColor", configInstance.getAxisColor());
         addColorSetting(settingsPanel, c, "gridColor", configInstance.getGridColor());
 
-        // Add a filler component to push everything to the top
         GridBagConstraints fillerConstraints = new GridBagConstraints();
         fillerConstraints.gridx = 0;
         fillerConstraints.gridy = c.gridy;
@@ -170,13 +167,11 @@ public class ConfigPanel extends JPanel {
 
     private void applySettings() {
         try {
-            // boolean
             JCheckBox connectPointsBox = (JCheckBox) configComponents.get("connectPoints");
             configInstance.setConnectPoints(connectPointsBox.isSelected());
             JCheckBox showSuggestedPriceLinesBox = (JCheckBox) configComponents.get("showSuggestedPriceLines");
             configInstance.setShowSuggestedPriceLines(showSuggestedPriceLinesBox.isSelected());
 
-            // colours
             configInstance.setLowColor(extractColor("lowColor"));
             configInstance.setHighColor(extractColor("highColor"));
             configInstance.setLowShadeColor(extractColor("lowShadeColor"));

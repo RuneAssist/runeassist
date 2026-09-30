@@ -24,11 +24,9 @@ public class PriceGraphConfigManager {
 
     private final Object fileLock = new Object();
 
-    // dependencies
     private final Gson gson;
     private final ScheduledExecutorService executorService;
 
-    // state
     private Config cachedConfig;
 
     public synchronized Config getConfig() {

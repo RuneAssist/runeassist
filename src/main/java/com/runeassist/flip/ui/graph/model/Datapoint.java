@@ -12,17 +12,14 @@ public class Datapoint {
     public int time;
     public final long price;
     public final Type type;
-    public final boolean isLow; // true if buy/low point, false if sell/high point
+    public final boolean isLow;
 
-    // IQR values for prediction points
     public final Long iqrLower;
     public final Long iqrUpper;
 
-    // volume
     public long lowVolume;
     public long highVolume;
 
-    // tx
     public long qty;
 
     public Datapoint(int time, long price, boolean isLow, Type type) {

@@ -16,7 +16,7 @@ public class Config {
     public static int GRAPH_BUTTON_SIZE = 24;
     public static int GRAPH_BUTTON_MARGIN = 5;
 
-    public static int HOVER_RADIUS = 8; // Distance in pixels to detect hovering
+    public static int HOVER_RADIUS = 8;
 
     public static final Stroke THIN_STROKE = new BasicStroke(0.5f);
     public static final Stroke NORMAL_STROKE = new BasicStroke(1f);
@@ -33,12 +33,11 @@ public class Config {
 
     public static Color TOOLTIP_BACKGROUND = new Color(20, 20, 20, 220);
     public static Color TOOLTIP_BORDER = new Color(100, 100, 100);
-    public static Color SELECTION_COLOR = new Color(100, 100, 240, 80); // Color for zoom selection
+    public static Color SELECTION_COLOR = new Color(100, 100, 240, 80);
     public static Color SELECTION_BORDER_COLOR = new Color(70, 70, 220);
     public static Color GRAPH_BUTTON_COLOR = new Color(150, 150, 150, 200);
     public static Color GRAPH_BUTTON_HOVER_COLOR = new Color(100,100,100);
 
-    // configurable properties
     public boolean connectPoints = true;
     public boolean showSuggestedPriceLines = true;
     public Color lowColor = new Color(0, 153, 255);

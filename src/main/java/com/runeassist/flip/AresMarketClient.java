@@ -30,7 +30,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-/** Thin Ares HTTP client for market data and suggestion composition. */
 @Slf4j
 @Singleton
 public class AresMarketClient
@@ -64,7 +63,6 @@ public class AresMarketClient
         this.accountHttp = accountHttp;
     }
 
-    /** Test/backwards-compatible constructor; authenticated contribution is unavailable. */
     public AresMarketClient(OkHttpClient httpClient, Gson gson)
     {
         this(httpClient, gson, null);
@@ -235,20 +233,17 @@ public class AresMarketClient
         return excludeIds(rows, blockedIds, skippedIds);
     }
 
-    /** GET JSON; null on HTTP/parse failure. */
     private JsonObject getJson(String url, String label)
     {
         return execute(new Request.Builder().url(url).header("User-Agent", UA).get().build(),
             httpClient, label);
     }
 
-    /** POST JSON with compose/flips timeouts; null on HTTP/parse failure. */
     private JsonObject postJson(String url, String body, String label)
     {
         return postJson(url, body, label, false);
     }
 
-    /** Optional hint only: suggestion delivery must never wait for a cold limits download. */
     public int cachedGeLimit(int itemId)
     {
         if (System.currentTimeMillis() - limitsFetchedAt >= LIMITS_TTL) return 0;
@@ -351,7 +346,6 @@ public class AresMarketClient
         return out;
     }
 
-    /** Rows as plain maps (numbers arrive as Double) without Gson's reflection-based TypeToken. */
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> rowsOf(JsonElement element)
     {

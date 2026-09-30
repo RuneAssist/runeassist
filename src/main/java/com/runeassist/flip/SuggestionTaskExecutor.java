@@ -3,7 +3,6 @@ package com.runeassist.flip;
 import java.util.List;
 import java.util.concurrent.*;
 
-/** One bounded compose worker, recreated when the same plugin instance is re-enabled. */
 public final class SuggestionTaskExecutor extends AbstractExecutorService {
     private ExecutorService delegate;
     private final Semaphore executionPermit = new Semaphore(1, true);
@@ -22,15 +21,12 @@ public final class SuggestionTaskExecutor extends AbstractExecutorService {
 
     @Override public synchronized void execute(Runnable command) {
         delegate.execute(() -> {
-            // A canceled HTTP call may still be finishing. The permit spans pool
-            // generations, including several quick disable/re-enable cycles.
             executionPermit.acquireUninterruptibly();
             try { command.run(); }
             finally { executionPermit.release(); }
         });
     }
     @Override public synchronized void shutdown() { delegate.shutdown(); }
-    /** Orderly only: the Plugin Hub forbids thread interrupts, so an in-flight request finishes on its own. */
     @Override public synchronized List<Runnable> shutdownNow() { delegate.shutdown(); return List.of(); }
     @Override public synchronized boolean isShutdown() { return delegate.isShutdown(); }
     @Override public synchronized boolean isTerminated() { return delegate.isTerminated(); }
