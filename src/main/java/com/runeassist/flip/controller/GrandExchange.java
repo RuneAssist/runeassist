@@ -22,6 +22,8 @@ import static net.runelite.api.Varbits.GE_OFFER_CREATION_TYPE;
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class GrandExchange {
+    /** Price box inside the offer setup container (GE_OFFERS child 26); see SlotProfitColorizer. */
+    static final int OFFER_SETUP_PRICE_TEXT_CHILD = 41;
     private final Client client;
 
     boolean isHomeScreenOpen() {
@@ -140,8 +142,31 @@ public class GrandExchange {
         return client.getVarbitValue(VarbitID.GE_NEWOFFER_QUANTITY);
     }
 
-    int getOfferPrice() {
-        return client.getVarbitValue(VarbitID.GE_NEWOFFER_PRICE);
+    /**
+     * The price typed into the offer setup screen. The game stopped keeping it in a
+     * varbit when prices went beyond max cash (30 Sep 2026), so it is read from the
+     * price box, which shows the full figure with thousands separators.
+     */
+    long getOfferPrice() {
+        Widget offerContainer = getOfferContainerWidget();
+        Widget priceBox = offerContainer == null ? null : offerContainer.getChild(OFFER_SETUP_PRICE_TEXT_CHILD);
+        return priceBox == null ? 0L : parseGp(priceBox.getText());
+    }
+
+    /** "2,815,745 coins" to 2815745; anything abbreviated or empty is unknown, so 0. */
+    static long parseGp(String text) {
+        if (text == null) {
+            return 0L;
+        }
+        String s = text.replaceAll("<[^>]*>", "").trim();
+        if (s.isEmpty() || s.matches(".*\\d\\s*[KkMmBb]\\b.*")) {
+            return 0L;
+        }
+        String digits = s.replaceAll("[^0-9]", "");
+        if (digits.isEmpty() || digits.length() > 18) {
+            return 0L;
+        }
+        return Long.parseLong(digits);
     }
 
     boolean isOfferTypeSell() {
