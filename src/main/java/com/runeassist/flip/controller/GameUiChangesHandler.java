@@ -23,6 +23,8 @@ import net.runelite.api.gameval.InterfaceID;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class GameUiChangesHandler {
     private static final int SCRIPT_GE_COLLECT = 782;
+    /** Extra search logging in a development client (the launcher sets this flag). */
+    private static final boolean DEV = Boolean.getBoolean(com.runeassist.flip.HubPluginConflict.ALLOW_PROPERTY);
     private static final int SCRIPT_GE_SLOT_REDRAW = 804;
     private static final String BANK_TAG_TAB_VIEW_OPTION = "View tag tab";
     // Bank tag tab widgets exist before bank item bounds settle.
@@ -130,15 +132,28 @@ public class GameUiChangesHandler {
 
     /** Client thread. Puts the card's item at the top of the search the first time the search is seen open. */
     private void showCardItemInSearchIfOpen() {
+        Widget results = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
+        Widget title = client.getWidget(ComponentID.CHATBOX_TITLE);
+        if (DEV) {
+            Widget[] kids = results == null ? null : results.getDynamicChildren();
+            log.info("search check: mode={} open={} results={} title='{}' lastSearched={} card={}",
+                    client.getVarcIntValue(VarClientID.MESLAYERMODE), itemSearchChatboxOpen,
+                    results == null ? "null" : (results.isHidden() ? "hidden" : "kids=" + (kids == null ? -1 : kids.length)),
+                    title == null ? null : title.getText(), client.getVarpValue(VarPlayerID.GE_LAST_SEARCHED),
+                    suggestionManager.getSuggestion() == null ? null : suggestionManager.getSuggestion().getType());
+        }
         if (itemSearchChatboxOpen) {
             return;
         }
-        Widget results = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
         if (results == null || results.isHidden() || !isItemSearchPrompt()) {
             return;
         }
         itemSearchChatboxOpen = true;
-        gePreviousSearch.showSuggestedItemInSearch();
+        try {
+            gePreviousSearch.showSuggestedItemInSearch();
+        } catch (RuntimeException e) {
+            log.warn("could not place the card's item in the search", e);
+        }
     }
 
     public void onVarClientStrChanged(VarClientStrChanged event) {
