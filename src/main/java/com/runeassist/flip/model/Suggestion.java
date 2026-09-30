@@ -23,14 +23,8 @@ public class Suggestion {
     private int quantity;
     private String name;
     private int id;
-    /** Server-issued UUID used to join this suggestion to actions and fills. */
     private String serverSuggestionId = "";
     private String message = "";
-    /**
-     * One-line honest reason this pick was chosen, from the scorer and live client
-     * state (qty, price, stamped remaining limit, fill estimate, flags). Empty for
-     * WAIT — those use {@link #message}.
-     */
     private String why = "";
     private Double expectedProfit;
     private String profitEstimateBasis;
@@ -46,21 +40,9 @@ public class Suggestion {
     private List<PortfolioItem> portfolioItems;
     private Data graphData;
     private Instant timeIssued;
-    /** Wiki GE buy-limit; 0 if unknown. */
     private int geLimit;
-    /**
-     * Remaining 4h buy-limit for display/scoring.
-     * {@code -1} only when the wiki GE buy-limit itself is unknown.
-     * When no live fills are tracked yet, this is the full wiki cap.
-     */
     private int remainingLimit = -1;
-    /**
-     * True when {@link #geLimit} is known and {@link #remainingLimit} is usable
-     * (live fills, or assumed full wiki cap when no fills tracked yet).
-     * False only when the wiki GE buy-limit itself is unknown.
-     */
     private boolean limitKnown;
-    /** {@code ares} or {@code local} — which scorer produced this pick. Telemetry only. */
     private String pickSource = "";
     private List<String> flags = new ArrayList<>();
 
@@ -71,11 +53,6 @@ public class Suggestion {
     public static class PortfolioItem {
         public int itemId;
 
-        // Per-portfolio breakdowns. Only portfolio_id 0 (COFLIP_PORTFOLIO) and 1 (PERSONAL_PORTFOLIO)
-        // count as "in portfolio" (getAmount / getSellValue / getBuySpend / getHeldMinutes).
-        // Ghost (portfolio_id -1) is tracked separately and excluded from those totals; it only
-        // surfaces as a fallback when computing per-unit market prices for items the user holds
-        // client-side but has no visible portfolio/personal entry for.
         public int portfolioAmount;
         public long portfolioSellValue;
         public long portfolioBuySpend;
@@ -156,7 +133,6 @@ public class Suggestion {
         return type == SuggestionType.SELL || type == SuggestionType.MODIFY_SELL;
     }
 
-    /** Expected seconds for the offer this card asks for to fill; 0 when the server gave no estimate. */
     public long offerFillSeconds() {
         if (type == SuggestionType.BUY && estimatedBuyHours != null && estimatedBuyHours > 0) {
             return Math.round(estimatedBuyHours * 3600);
@@ -171,7 +147,6 @@ public class Suggestion {
         return type == SuggestionType.MODIFY_BUY || type == SuggestionType.MODIFY_SELL;
     }
 
-    /** RuneAssist-only: "go decant at a bank" — advisory, no GE offer/widget behind it. */
     public boolean isDecantSuggestion() {
         return type == SuggestionType.DECANT;
     }
@@ -186,11 +161,6 @@ public class Suggestion {
         return null;
     }
 
-    /**
-     * Unactioned dump must stick until Confirm or Skip. A 10s recency window let
-     * {@code shouldFetchNewSuggestion} overwrite the alert when the user clicked
-     * Back from a sell setup more than 10s after the dump arrived.
-     */
     public boolean isRecentUnActionedDumpAlert() {
         return isDumpAlert && actionedTick == -1;
     }

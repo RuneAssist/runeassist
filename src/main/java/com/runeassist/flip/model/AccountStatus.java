@@ -6,8 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.*;
 
 
-// note: we synchronize all public methods of this class as they read/modify its state and may
-// be called by multiple threads at the same time
 
 @Slf4j
 @Data
@@ -27,7 +25,7 @@ public class AccountStatus {
     private boolean buyAndHold = true;
     private boolean f2pOnlyMode = false;
     private List<Integer> blockedItems;
-    private int timeframe = 5; // Default to 5 minutes
+    private int timeframe = 5;
     private RiskLevel riskLevel = RiskLevel.MEDIUM;
     private Integer reservedSlots;
     private Long minPredictedProfit;
@@ -54,7 +52,6 @@ public class AccountStatus {
             log.debug("collected needed isEmptySlotNeeded");
             return true;
         }
-        // Nothing to do but something to collect, as after a cancel by hand: point at it.
         if (!suggestion.isDumpAlert() && !setUpOfferOpen
                 && SuggestionType.WAIT.equals(suggestion.getType()) && offers.anyCollectable()) {
             log.debug("collected needed anyCollectable");
@@ -165,10 +162,6 @@ public class AccountStatus {
     }
 
     public synchronized long currentCashStack() {
-        // the cash stack is the gp in their inventory + the value on the market
-        // todo: when a buy offer has fully finished its value will not count towards the cash stack
-        //  size until they start selling it. We should probably track items that where recently bought
-        //  and they should still count towards the cash stack size for some period of time
         return offers.getGpOnMarket() + inventory.getTotalGp();
     }
 

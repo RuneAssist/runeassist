@@ -13,7 +13,7 @@ import java.util.EnumSet;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class OsrsLoginManager {
 
-    public static final int GE_LOGIN_BURST_WINDOW = 2; // ticks
+    public static final int GE_LOGIN_BURST_WINDOW = 2;
 
     public static String LOGIN_TO_GET_SUGGESTION_MESSAGE = "Log in to the game<br>to get a flip suggestion";
     private static final WorldType[] UNSUPPORTED_WORLDS = {WorldType.BETA_WORLD,
@@ -68,7 +68,6 @@ public class OsrsLoginManager {
         return null;
     }
 
-    // todo: inline this method
     public Long getAccountHash() {
         return client.getAccountHash();
     }

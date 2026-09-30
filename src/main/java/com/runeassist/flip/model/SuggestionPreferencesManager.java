@@ -29,22 +29,18 @@ public class SuggestionPreferencesManager {
 
     private static final int DEFAULT_TIMEFRAME = 5;
     public static final long DEFAULT_DUMP_MIN_PROFIT = 100_000;
-    /** Default total projected-GP floor on BUY. Auto (off) is stored as {@code 0}. */
     public static final long DEFAULT_MIN_PREDICTED_PROFIT = 20_000L;
-    /** Default age (minutes) for opt-in time-based abort/modify when enabled. */
     public static final int DEFAULT_TIME_BASED_ABORT_MINUTES = 15;
 
     public static final String DEFAULT_PROFILE_NAME = "Default profile";
     public static final String PROFILE_SUFFIX = ".profile.json";
 
-    // dependencies
     private final Gson gson;
     private final ScheduledExecutorService executorService;
     private final AccountSuggestionPreferencesRS osrsAccountPreferences;
     private final Filepath dataDir;
     private final Filepath defaultProfile;
 
-    // state
     private ProfileSuggestionPreferences cachedPreferences;
     private Filepath selectedProfile;
     private List<Filepath> availableProfiles;
@@ -143,10 +139,6 @@ public class SuggestionPreferencesManager {
         osrsAccountPreferences.updateAndPersist(preferences);
     }
 
-    /**
-     * Total projected-GP floor for BUY. {@code null} (never set / old saves) is 20k.
-     * {@code 0} is Auto (filter off). Any other stored value is used as-is.
-     */
     public synchronized Long getMinPredictedProfit() {
         Long v = osrsAccountPreferences.get().getMinPredictedProfit();
         return v == null ? DEFAULT_MIN_PREDICTED_PROFIT : v;
@@ -270,23 +262,13 @@ public class SuggestionPreferencesManager {
             }
             changes.accept(preferences);
             String toWrite = gson.toJson(preferences);
-            // acquire <file>.lock
             try (FileChannel lockChannel = lockFile.openFileChannel(StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock l = lockChannel.lock()) {
-                // write as .tmp file then re-name
                 tmpFile.write(toWrite);
                 tmpFile.moveTo(profile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             } finally {
                 lockFile.deleteIfExists();
                 tmpFile.deleteIfExists();
             }
-            // Keep the in-memory cache consistent with what was just written, for the same
-            // profile only. Without this, blockItem()/setBlockedItems() apply their change to
-            // cachedPreferences immediately for instant feedback, but this write runs async
-            // (executorService.submit) on the same 2-thread pool as the periodic 5s
-            // loadCurrentProfile() reload -- if that reload's disk read-and-overwrite runs
-            // before this write lands, it silently reverts the just-made change (the
-            // "blocking an item doesn't work" bug: the block looked instant, then vanished a
-            // few seconds later because the reload clobbered it with the still-old file).
             if (profile.equals(selectedProfile)) {
                 cachedPreferences = preferences;
             }
@@ -308,7 +290,6 @@ public class SuggestionPreferencesManager {
     }
 
     private synchronized void loadAvailableProfiles() {
-        // A fresh install has no data folder until the first save: that is not an error.
         if (!dataDir.exists()) {
             availableProfiles = new ArrayList<>();
             availableProfiles.add(defaultProfile);
@@ -337,7 +318,6 @@ public class SuggestionPreferencesManager {
         return dataDir.joinSegment(name + PROFILE_SUFFIX);
     }
 
-    /** The lock or temp file that sits next to a profile. */
     private Filepath sibling(Filepath profile, String suffix) {
         return dataDir.joinSegment(profile.getFileName() + suffix);
     }
@@ -358,9 +338,7 @@ public class SuggestionPreferencesManager {
         Filepath lockFile = sibling(profile, ".lock");
         Filepath tmpFile = sibling(profile, ".tmp");
         String toWrite = "{}";
-        // acquire <file>.lock
         try (FileChannel lockChannel = lockFile.openFileChannel(StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock l = lockChannel.lock()) {
-            // write as .tmp file then re-name
             tmpFile.write(toWrite);
             tmpFile.moveTo(profile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } finally {

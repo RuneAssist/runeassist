@@ -23,11 +23,9 @@ public class OfferManager {
 
     private static final String OFFER_FILE_TEMPLATE = "acc_%d_%d.json";
 
-    // dependencies
     private final Gson gson;
     private final ScheduledExecutorService executorService;
 
-    // state
     @Getter
     @Setter
     private int viewedSlotItemId = -1;

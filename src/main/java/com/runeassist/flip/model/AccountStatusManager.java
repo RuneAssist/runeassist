@@ -18,7 +18,6 @@ import java.util.*;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class AccountStatusManager {
 
-    // dependencies
     private final Client client;
     private final OsrsLoginManager osrsLoginManager;
     private final GrandExchangeUncollectedManager geUncollected;
@@ -32,23 +31,15 @@ public class AccountStatusManager {
     private final ItemController itemController;
     private final SuggestionManager suggestionManager;
 
-    /** Skip lasts 45 minutes so an abort/skip does not loop the same item, then it can surface again. */
     private static final long SKIP_TTL_MS = 45L * 60L * 1000L;
-    /** After we suggest BUY/SELL, do not ABORT that item for this long (list-then-abort). */
     private static final long PROTECT_ABORT_TTL_MS = 10L * 60L * 1000L;
 
-    // state
     @Setter
     private int skipSuggestion = -1;
-    /** itemId -> expire-at epoch millis. Same skip set as the Skip button. */
     private final Map<Integer, Long> skippedItemUntil = new HashMap<>();
-    /** User Skip only: do not ABORT/MODIFY this item (leave the live offer). */
     private final Map<Integer, Long> skipOfferUntil = new HashMap<>();
-    /** itemId -> expire-at: listings we suggested, protected from immediate ABORT. */
     private final Map<Integer, Long> protectAbortUntil = new HashMap<>();
-    /** itemId -> local epoch ms when a MODIFY editor most recently closed. */
     private final Map<Integer, Long> modifyDismissedMs = new HashMap<>();
-    /** GE modify cancels the slot first; hold that listing until confirm/skip/collect/close. */
     private OwnedModify ownedModify;
 
     public synchronized AccountStatus getAccountStatus() {
@@ -157,13 +148,12 @@ public class AccountStatusManager {
         skipSuggestion = -1;
     }
 
-    /** Skip button: record item and refresh. EDT-safe — must not touch {@link Client}. */
     public synchronized boolean skipCurrentSuggestion() {
         Suggestion suggestion = suggestionManager.getSuggestion();
         if (suggestion == null) {
             return false;
         }
-        suggestion.actionedTick = 0; // past vs live tick so GE slot open does not block fetch
+        suggestion.actionedTick = 0;
         int itemId = suggestion.getItemId();
         if (itemId <= 0) {
             itemId = suggestion.getId();
@@ -182,7 +172,6 @@ public class AccountStatusManager {
         return true;
     }
 
-    /** Session-skip item until TTL (Skip button / ABORT follow-up). */
     public synchronized void skipItem(int itemId) {
         if (itemId <= 0) {
             return;
@@ -190,7 +179,6 @@ public class AccountStatusManager {
         skippedItemUntil.put(itemId, System.currentTimeMillis() + SKIP_TTL_MS);
     }
 
-    /** User Skip: also suppress ABORT/MODIFY for this item. */
     public synchronized void skipOffer(int itemId) {
         if (itemId <= 0) {
             return;
@@ -198,12 +186,10 @@ public class AccountStatusManager {
         skipOfferUntil.put(itemId, System.currentTimeMillis() + SKIP_TTL_MS);
     }
 
-    /** Own a MODIFY listing until {@link #clearOwnedModify()}. */
     public synchronized void beginOwnedModify(Suggestion s) {
         beginOwnedModify(s, -1);
     }
 
-    /** @param slotHint clicked/open GE slot (boxId can be stale after cancel-first modify). */
     public synchronized void beginOwnedModify(Suggestion s, int slotHint) {
         if (s == null || !s.isModifySuggestion() || s.getItemId() <= 0) {
             return;
@@ -270,7 +256,6 @@ public class AccountStatusManager {
         ownedModify = null;
     }
 
-    /** Drop a MODIFY lock that is no longer being acted on. */
     public synchronized boolean releaseStaleOwnedModify(GrandExchangeOffer[] offers, boolean editorOpen) {
         if (ownedModify == null || ownedModify.itemId <= 0) {
             return false;
@@ -300,7 +285,6 @@ public class AccountStatusManager {
         return false;
     }
 
-    /** Release MODIFY lock when slot emptied and editor closed. */
     public synchronized boolean releaseOwnedModifyIfSlotEmpty(int slot, boolean editorOpen) {
         if (ownedModify == null || ownedModify.itemId <= 0) {
             return false;
@@ -326,7 +310,6 @@ public class AccountStatusManager {
         return ownedModify;
     }
 
-    /** Protect a just-suggested listing from immediate ABORT (~10 min). */
     public synchronized void protectListing(int itemId) {
         if (itemId <= 0) {
             return;
