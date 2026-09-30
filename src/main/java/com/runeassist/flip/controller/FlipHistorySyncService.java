@@ -435,7 +435,10 @@ public class FlipHistorySyncService {
         }
         JsonObject req = new JsonObject();
         req.addProperty("code", code.trim().toUpperCase());
-        JsonObject body = api.post("/v1/account/pair/redeem", req, false);
+        // The old device token goes with the code so the server can fold this
+        // device's anonymous login into the website login instead of leaving a
+        // duplicate character behind.
+        JsonObject body = api.postWithTokenIfAny("/v1/account/pair/redeem", req);
         if (body == null || !body.has("deviceToken")) {
             throw new IllegalStateException("pairing redeem failed");
         }
