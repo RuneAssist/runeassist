@@ -17,11 +17,6 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Reads the GE History tab when it is open (one row per finished offer: item, side,
- * quantity, price; no clock) and sends it to the server, which fills in trades the
- * plugin missed while it was off.
- */
 @Slf4j
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
@@ -37,7 +32,6 @@ public class GeHistoryReader {
 
     private String lastSent = "";
 
-    /** One row of the tab. */
     @Value
     public static class Row {
         int itemId;
@@ -67,7 +61,6 @@ public class GeHistoryReader {
         flipHistorySyncService.sendGeHistory(rows);
     }
 
-    /** Rows newest first; unreadable rows are skipped. */
     static List<Row> parseRows(Widget container) {
         Widget[] children = container.getDynamicChildren();
         if (children == null || children.length < WIDGETS_PER_ROW) {
@@ -97,7 +90,6 @@ public class GeHistoryReader {
         return rows;
     }
 
-    /** Per-item price from "= 1,234 each", "1,234 coins" or a struck-out total. */
     static long parsePrice(String text, int quantity) {
         if (text == null) {
             return 0L;

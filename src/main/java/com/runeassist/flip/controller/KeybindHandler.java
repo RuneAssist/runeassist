@@ -63,7 +63,6 @@ public class KeybindHandler {
 
             @Override
             public void keyPressed(KeyEvent e) {
-                // Prevent enter as a keybind as that will also submit the value
                 if (e.getKeyCode() == KeyEvent.VK_ENTER) return;
 
                 boolean quickSetPressed = keybindMatches(config.quickSetKeybind(), e);
@@ -84,8 +83,6 @@ public class KeybindHandler {
             private void handleKeybind(boolean quickSetPressed, boolean skipSuggestionPressed, boolean openGraphPressed) {
                 var suggestion = suggestionManager.getSuggestion();
 
-                // Price and quantity prompts are told apart by their text, not the input mode
-                // (the price prompt got a mode of its own with the 30 Sep 2026 GE update).
                 var isPriceOrQuantityBoxOpen = (offerHandler.isSettingPrice() || offerHandler.isSettingQuantity())
                         && grandExchange.isSlotOpen();
 

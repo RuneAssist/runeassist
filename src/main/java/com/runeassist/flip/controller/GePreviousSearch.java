@@ -106,11 +106,9 @@ public class GePreviousSearch {
         widget.setOnKeyListener(754, itemId, -2147483640);
         widget.setHasListener(true);
         widget.setAction(0, "Select");
-        // set opacity to 200 when mouse is hovering
         widget.setOnMouseOverListener((JavaScriptCallback) ev -> {
             widget.setOpacity(200);
         });
-        // set opacity back to 255 when mouse is not hovering
         widget.setOnMouseLeaveListener((JavaScriptCallback) ev -> {
             widget.setOpacity(255);
         });

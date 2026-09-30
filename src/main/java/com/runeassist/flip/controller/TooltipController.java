@@ -54,7 +54,7 @@ public class TooltipController {
         if (text != null && background != null && border != null) {
 
             if (text.getText().contains("Profit:") || text.getText().contains("Listed ")) {
-                return; // already carries our lines; the script re-fires while the mouse rests
+                return;
             }
 
             int added = 0;
@@ -84,7 +84,6 @@ public class TooltipController {
         }
     }
 
-    /** The slot under the mouse, the one the tooltip is for; -1 if none. */
     private int hoveredSlot() {
         Point mouse = client.getMouseCanvasPosition();
         if (mouse == null) {
@@ -109,7 +108,7 @@ public class TooltipController {
             String action = matcher.group(1);
             return action.equals("Selling");
         } else {
-            return false; // or handle as you wish
+            return false;
         }
     }
 
@@ -121,7 +120,7 @@ public class TooltipController {
         if (matcher.find()) {
             return matcher.group(2);
         } else {
-            return null; // or handle as you wish
+            return null;
         }
     }
 

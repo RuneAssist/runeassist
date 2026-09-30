@@ -25,15 +25,13 @@ public class ItemController {
 
     public static final int COINS_ITEM_ID = 995;
     public static final int PLATINUM_TOKENS_ITEM_ID = 13204;
-    // dependencies
     private final FuzzySearchScorer fuzzySearchScorer;
     private final Client client;
     private final ItemManager itemManager;
     private final ClientThread clientThread;
 
-    // state
     private final Map<Integer, String> cachedItemNames = new ConcurrentHashMap<>();
-    private volatile List<ItemIdName> cachedItems = new ArrayList<>(); // volatile used to guarantee immediate visibility across threads on re-assignment
+    private volatile List<ItemIdName> cachedItems = new ArrayList<>();
     private final AtomicBoolean initScheduled = new AtomicBoolean(false);
 
     @Inject
@@ -48,7 +46,6 @@ public class ItemController {
         this.clientThread = clientThread;
 
         Runnable initItems = () -> {
-            // only allow one init attempt at a time
             if(initScheduled.compareAndSet(false, true)) {
                 clientThread.invokeLater(() -> {
                     List<ItemIdName> items = IntStream.range(0, client.getItemCount())
@@ -63,13 +60,11 @@ public class ItemController {
                         log.debug("initialised {} items", items.size());
                         return true;
                     }
-                    // if no items are found try again
                     return false;
                 });
             }
         };
 
-        // re-init every 5 mins just in case new items are added without restart
         executorService.scheduleAtFixedRate(initItems, 0, 5, TimeUnit.MINUTES);
     }
 

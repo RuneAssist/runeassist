@@ -23,9 +23,6 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-/**
- * Live HTTP to RuneAssist Ares for price graphs and the dump-alert stream.
- */
 @Slf4j
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
@@ -39,9 +36,6 @@ public class ApiRequestHandler {
     private final OkHttpClient client;
     private final Gson gson;
 
-    /**
-     * Fetch an item's price-history graph from RuneAssist's backend (JSON matching {@link Data}).
-     */
     public Call asyncGetRuneAssistGraph(int itemId, Consumer<Data> onData, Consumer<Throwable> onError) {
         Request request = new Request.Builder()
                 .url(ARES_ORIGIN + "/v1/graph?id=" + itemId)
@@ -75,14 +69,6 @@ public class ApiRequestHandler {
         return graphCall;
     }
 
-    /**
-     * Open a long-lived dump-alert stream ({@code POST /v1/dump-alerts}). The response is
-     * handed to {@code onSuccess} still open — frames are uvarint-length JSON
-     * {@code {suggestion}} objects (keepalive = zero-length frame), matching Flipping
-     * Copilot's dump-alert framing with JSON instead of protobuf.
-     *
-     * @param filters dumpMinPredictedProfit / f2pOnly / blockedIds / capital / remainingSlots
-     */
     public Call asyncConsumeDumpAlerts(
             Map<String, Object> filters,
             Consumer<Response> onSuccess,
@@ -120,9 +106,6 @@ public class ApiRequestHandler {
         return call;
     }
 
-    /**
-     * Decode one dump-alert JSON frame into a {@link Suggestion}, or null if unusable.
-     */
     public Suggestion decodeDumpSuggestionFrame(byte[] payload) {
         if (payload == null || payload.length == 0) {
             return null;

@@ -24,12 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Subscribes to Ares {@code POST /v1/dump-alerts} when dump prefs are on, the
- * player is logged in, and the GE is open — same gating Flipping Copilot used,
- * without a Copilot login. Frames are uvarint-length JSON suggestion DTOs
- * (keepalive = zero-length frame).
- */
 @Slf4j
 @Singleton
 public class DumpsStreamController {
@@ -86,7 +80,6 @@ public class DumpsStreamController {
         }
     }
 
-    /** Keep the optional stream bound to the same local account/trading session. */
     void onGameTick() {
         long generation = suggestionController.getTradingContext().generation();
         boolean active = Boolean.TRUE.equals(shouldSubscribe.get())
@@ -154,7 +147,6 @@ public class DumpsStreamController {
         return body;
     }
 
-    /** Each frame is a uvarint byte length followed by that many bytes of JSON; zero-length = keepalive. */
     private void consumeDumpStream(Response response, long streamGeneration) {
         try (Response resp = response) {
             BufferedSource source = resp.body().source();

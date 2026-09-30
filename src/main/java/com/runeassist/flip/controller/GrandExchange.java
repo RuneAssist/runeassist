@@ -22,9 +22,7 @@ import static net.runelite.api.Varbits.GE_OFFER_CREATION_TYPE;
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class GrandExchange {
-    /** Price box inside the offer setup container (GE_OFFERS child 26). */
     static final int OFFER_SETUP_PRICE_TEXT_CHILD = 41;
-    /** The typed offer price: a 64-bit varp since the 30 Sep 2026 max cash update, unnamed in RuneLite 1.13.1. */
     public static final int OFFER_SETUP_PRICE_VARP = 5753;
     private final Client client;
     private final GeSearchResults geSearchResults;
@@ -41,7 +39,6 @@ public class GrandExchange {
         return client.getVarbitValue(GE_OFFER_CREATION_TYPE) == 1 ? "sell" : "buy";
     }
 
-    /** Item currently in the Set up offer editor; -1 when none. */
     public int getCurrentItemId() {
         return client.getVarpValue(CURRENT_GE_ITEM);
     }
@@ -66,10 +63,6 @@ public class GrandExchange {
         return client.getWidget(InterfaceID.GE_OFFERS, 7 + slot);
     }
 
-    /**
-     * Slot to highlight / left-click-swap for a suggestion. Prefer the live filling
-     * offer whose itemId matches the card, not a stale boxId (wrong-item editor).
-     */
     int slotForSuggestion(Suggestion suggestion) {
         if (suggestion == null) {
             return -1;
@@ -145,7 +138,6 @@ public class GrandExchange {
         return client.getVarbitValue(VarbitID.GE_NEWOFFER_QUANTITY);
     }
 
-    /** The typed offer price: the 64-bit varp, or the price box text should that id move. */
     long getOfferPrice() {
         try {
             long typed = client.getVarpLongValue(OFFER_SETUP_PRICE_VARP);
@@ -153,14 +145,12 @@ public class GrandExchange {
                 return typed;
             }
         } catch (RuntimeException ignored) {
-            // the price box below
         }
         Widget offerContainer = getOfferContainerWidget();
         Widget priceBox = offerContainer == null ? null : offerContainer.getChild(OFFER_SETUP_PRICE_TEXT_CHILD);
         return priceBox == null ? 0L : parseGp(priceBox.getText());
     }
 
-    /** "2,815,745 coins" to 2815745; abbreviated or empty is unknown, so 0. */
     static long parseGp(String text) {
         if (text == null) {
             return 0L;
@@ -183,7 +173,6 @@ public class GrandExchange {
     public boolean isOpen() {
         Widget offers = client.getWidget(InterfaceID.GE_OFFERS, 7);
         Widget editor = getOfferContainerWidget();
-        // Home slot widgets can be hidden while the offer editor is visible.
         return offers != null && !offers.isHidden() || editor != null && !editor.isHidden();
     }
 

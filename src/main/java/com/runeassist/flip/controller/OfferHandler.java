@@ -27,7 +27,6 @@ import static net.runelite.api.VarPlayer.CURRENT_GE_ITEM;
 public class OfferHandler {
 
 
-    // dependencies
     private final Client client;
     private final ClientThread clientThread;
     private final SuggestionManager suggestionManager;
@@ -38,14 +37,12 @@ public class OfferHandler {
     private final com.runeassist.flip.AresMarketClient market;
     private final ExecutorService executorService;
 
-    // state
     private String viewedSlotPriceErrorText = null;
 
     public void fetchSlotItemPrice(boolean isViewingSlot, Supplier<OfferEditor> offerEditorSupplier) {
         if (isViewingSlot) {
             var currentItemId = client.getVarpValue(CURRENT_GE_ITEM);
             if (currentItemId != offerManager.getViewedSlotItemId()) {
-                // A new item: the last item's price must not be offered for this one.
                 offerManager.setViewedSlotItemPrice(-1);
             }
             offerManager.setViewedSlotItemId(currentItemId);
@@ -54,8 +51,6 @@ public class OfferHandler {
             var suggestion = suggestionManager.getSuggestion();
             if (suggestion != null && suggestion.isModifySuggestion()
                     && suggestion.getItemId() != currentItemId) {
-                // Offer editor is on a different item than the MODIFY card — do not
-                // treat it as a custom quote (that looks like a new BUY/SELL).
                 viewedSlotPriceErrorText = null;
                 highlightController.redraw();
                 return;
@@ -66,10 +61,6 @@ public class OfferHandler {
                 return;
             }
 
-            // Price an item the suggestion engine didn't propose via Ares /v1/market/quote.
-            // Blocks on HTTP, so run off the client thread and marshal the result back.
-            // Quote may include a wiki-feature hint in "message" (freshness / confidence) —
-            // same offer-editor slot FC fills from ItemPrice.message, without a closed quant.
             viewedSlotPriceErrorText = "Loading price...";
             final int itemIdForQuote = currentItemId;
             executorService.execute(() -> {
@@ -105,10 +96,6 @@ public class OfferHandler {
                     highlightController.redraw();
                     log.debug("fetched item {} price: {}", offerManager.getViewedSlotItemId(), price);
 
-                    // todo: Usage of OfferEditor is messy. It mutates a widget so we need to get the original instance
-                    //  of it which is created downstream on some other event handler path. This is why we use a supplier
-                    //  but probably it should be an injected class of some kind. We should clean this up in the future
-                    //  but for now just need it to work as currently broken.
 
                     OfferEditor flippingWidget = offerEditorSupplier.get();
                     if (flippingWidget != null) {
@@ -123,10 +110,6 @@ public class OfferHandler {
             });
 
         } else {
-            // Do not clear viewedSlotItemId/Price here. TRADINGPOST_SEARCH goes back to -1 as soon
-            // as an item is picked from search — before the quantity/price screen — so clearing
-            // would wipe the custom-item quote before the quick-set keybind can use it. The cached
-            // quote is replaced the next time isViewingSlot is true for a different item.
             viewedSlotPriceErrorText = null;
         }
         highlightController.redraw();
@@ -142,8 +125,6 @@ public class OfferHandler {
     public boolean isSettingPrice() {
         var chatboxTitleWidget = getChatboxTitleWidget();
         if (chatboxTitleWidget == null) return false;
-        // The prompt's wording and markup moved with the 30 Sep 2026 GE update, so it is
-        // matched on the one word that only the price prompt has, tags removed.
         String chatInputText = plainText(chatboxTitleWidget.getText());
         var offerContainerWidget = client.getWidget(ComponentID.GRAND_EXCHANGE_OFFER_CONTAINER);
         boolean setup = offerContainerWidget != null && !offerContainerWidget.isHidden();

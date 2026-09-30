@@ -26,11 +26,8 @@ public class GameUiChangesHandler {
     private static final int MESLAYER_MODE_ITEM_SEARCH = 14;
     private static final int SCRIPT_GE_SLOT_REDRAW = 804;
     private static final String BANK_TAG_TAB_VIEW_OPTION = "View tag tab";
-    // Bank tag tab widgets exist before bank item bounds settle.
-    // Wait one full frame before resolving the highlight target.
     private static final int BANK_REBUILD_HIGHLIGHT_REDRAW_DELAY_FRAMES = 2;
 
-    // dependencies
     private final ClientThread clientThread;
     private final Client client;
     private final GeSearchResults geSearchResults;
@@ -46,7 +43,6 @@ public class GameUiChangesHandler {
     private final AccountStatusManager accountStatusManager;
     private final net.runelite.client.plugins.PluginManager pluginManager;
     private final FlipHistorySyncService flipHistorySyncService;
-    // state
     boolean quantityOrPriceChatboxOpen;
     boolean itemSearchChatboxOpen = false;
     int bankRebuildHighlightRedrawFramesRemaining = 0;
@@ -56,12 +52,9 @@ public class GameUiChangesHandler {
 
     public void onVarClientIntChanged(VarClientIntChanged event) {
         if (event.getIndex() == VarClientID.CHAT_LASTREBUILD) {
-            // this is triggered when a bank tag tab is opened/closed
             requestBankRebuildHighlightRedraw();
         }
 
-        // Item search is chat input mode 14. The game builds the results list after the mode
-        // changes, so the placing happens when its build script fires (onScriptPostFired).
         if (event.getIndex() == VarClientID.MESLAYERMODE
                 && client.getVarcIntValue(VarClientID.MESLAYERMODE) == MESLAYER_MODE_ITEM_SEARCH) {
             itemSearchChatboxOpen = true;
@@ -89,8 +82,6 @@ public class GameUiChangesHandler {
             return;
         }
 
-        // A chat input opened over the offer setup: the prompt text decides whether it is the
-        // quantity or the price step (the price prompt has had its own input mode since 30 Sep 2026).
         int mode = client.getVarcIntValue(VarClientID.MESLAYERMODE);
         if (event.getIndex() != VarClientID.MESLAYERMODE
                 || mode == 0
@@ -105,11 +96,6 @@ public class GameUiChangesHandler {
                 return;
             }
             quantityOrPriceChatboxOpen = true;
-            // A competing Hub flipping plugin may inject its own "Press [X] to set to Y gp" text
-            // into this exact same chatbox widget -- if both plugins are enabled at once (see
-            // HubPluginConflict's own doc comment), creating ours too makes the two overlap
-            // into unreadable garbled text rather than either one working. Go fully quiet here,
-            // matching RuneAssistSuggestionSource's own suppression of its suggestion output.
             if (com.runeassist.flip.HubPluginConflict.isEnabled(pluginManager)) {
                 return;
             }
@@ -121,7 +107,6 @@ public class GameUiChangesHandler {
         });
     }
 
-    /** Client thread. Puts the card's item at the top of the open, still empty, item search. Idempotent. */
     private void showCardItemInSearchIfOpen() {
         Widget results = geSearchResults.layer();
         int mode = client.getVarcIntValue(VarClientID.MESLAYERMODE);
@@ -150,11 +135,6 @@ public class GameUiChangesHandler {
             }
             clientThread.invokeLater(slotProfitColorizer::updateAllSlots);
         }
-        // 467 (GE_OFFERS_SIDE) loads after 465. Redrawing only on the main GE
-        // window left SELL highlights looking at a null inventory widget (runes
-        // never outlined even when the suggestion was already SELL). Collect /
-        // inventory / bank-pin are the other GE-adjacent interfaces that change
-        // which widgets are targetable.
         if (event.getGroupId() == InterfaceID.GE_HISTORY
                 || event.getGroupId() == InterfaceID.GE_OFFERS
                 || event.getGroupId() == InterfaceID.GE_OFFERS_SIDE
@@ -171,10 +151,6 @@ public class GameUiChangesHandler {
     public void onWidgetClosed(WidgetClosed event) {
         if (event.getGroupId() == InterfaceID.GE_OFFERS) {
             clientThread.invokeLater(highlightController::removeAll);
-            // GE_OFFERS reloads when opening the slot editor for modify. Clearing
-            // the lock here dropped the MODIFY card (panel → "Getting the next
-            // flip…", no price highlight). releaseStaleOwnedModify on tick
-            // drops the lock when the editor is actually gone.
         }
         if (event.getGroupId() == InterfaceID.BANKMAIN) {
             clientThread.invokeLater(highlightController::redraw);
@@ -229,7 +205,6 @@ public class GameUiChangesHandler {
         }
     }
 
-    /** True when the open GE slot is this MODIFY: owned/clicked slot, editor item, */
     private boolean slotIsForModify(int open, Suggestion suggestion) {
         if (open < 0) {
             return false;
