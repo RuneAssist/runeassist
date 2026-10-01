@@ -17,17 +17,11 @@ public class SavedOffer
 	private GrandExchangeOfferState state;
 	private boolean runeAssistSuggestion;
 	private String suggestionId;
-	private long expectedSeconds;
 	private transient long observedAt;
 	private transient long placedAt;
 	private transient String offerInstanceId;
 	private transient String observationSessionId;
 	private transient boolean loginObservation;
-	private transient String adjustKind;
-	private transient String adjustedFromInstanceId;
-	private transient long adjustedFromPrice;
-	private transient int adjustedFromQuantity;
-	private transient String cancelReason;
 
 	public static SavedOffer fromGrandExchangeOffer(GrandExchangeOffer offer) {
 		SavedOffer o =  new SavedOffer();

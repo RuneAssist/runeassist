@@ -345,33 +345,6 @@ public class FlipHistorySyncService {
         }
     }
 
-    public void sendGeHistory(List<GeHistoryReader.Row> rows) {
-        String displayName = osrsLoginManager.getPlayerDisplayName();
-        String osrsAccountId = linkedOsrsAccountId(displayName);
-        if (osrsAccountId == null || rows == null || rows.isEmpty()) return;
-        JsonObject body = new JsonObject();
-        body.addProperty("osrsAccountId", osrsAccountId);
-        JsonArray list = new JsonArray();
-        for (GeHistoryReader.Row r : rows) {
-            JsonObject o = new JsonObject();
-            o.addProperty("itemId", r.getItemId());
-            o.addProperty("quantity", r.getQuantity());
-            o.addProperty("price", r.getPrice());
-            o.addProperty("side", r.isBuy() ? "buy" : "sell");
-            list.add(o);
-        }
-        body.add("rows", list);
-        async("ge history", () -> {
-            JsonObject reply = api.post("/v1/account/ge-history", body, true);
-            if (reply == null) return;
-            int recovered = reply.has("recovered") ? reply.get("recovered").getAsInt() : 0;
-            if (recovered > 0) {
-                log.info("GE history: server recovered {} trade(s) the plugin missed", recovered);
-                suggestionManager.setSuggestionNeeded(true);
-            }
-        });
-    }
-
     public void reportOfferEvent(int slot, SavedOffer offer, SavedOffer previous) {
         if (!config.contributeTrainingData() || offer == null) return;
         String displayName = osrsLoginManager.getPlayerDisplayName();
@@ -408,13 +381,6 @@ public class FlipHistorySyncService {
         body.addProperty("spent", offer.getSpent());
         body.addProperty("origin", runeAssist ? "runeassist" : "external");
         if (runeAssist) body.addProperty("suggestionId", suggestionId);
-        if (offer.getAdjustKind() != null) {
-            body.addProperty("adjustKind", offer.getAdjustKind());
-            body.addProperty("adjustedFromInstanceId", offer.getAdjustedFromInstanceId());
-            body.addProperty("adjustedFromPrice", offer.getAdjustedFromPrice());
-            body.addProperty("adjustedFromQuantity", offer.getAdjustedFromQuantity());
-        }
-        if (offer.getCancelReason() != null) body.addProperty("cancelReason", offer.getCancelReason());
         return body;
     }
 
@@ -458,7 +424,7 @@ public class FlipHistorySyncService {
         }
         JsonObject req = new JsonObject();
         req.addProperty("code", code.trim().toUpperCase());
-        JsonObject body = api.postWithTokenIfAny("/v1/account/pair/redeem", req);
+        JsonObject body = api.post("/v1/account/pair/redeem", req, false);
         if (body == null || !body.has("deviceToken")) {
             throw new IllegalStateException("pairing redeem failed");
         }

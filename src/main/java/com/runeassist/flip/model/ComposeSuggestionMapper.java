@@ -61,7 +61,6 @@ public final class ComposeSuggestionMapper
         {
             s.setExpectedDuration(dto.getExpectedDuration());
         }
-        s.setEstimatedBuyHours(dto.getEstimatedBuyHours());
         s.setGeLimit(dto.getGeLimit());
         s.setRemainingLimit(dto.getRemainingLimit());
         s.setLimitKnown(dto.isLimitKnown());

@@ -72,10 +72,6 @@ public class SuggestionController {
         clientThread.invokeLater(this::skipSuggestionOnClientThread);
     }
 
-    public void reportBlocked(Suggestion blocked) {
-        flipHistorySyncService.reportSuggestionOutcome(blocked, "blocked");
-    }
-
     private void skipSuggestionOnClientThread() {
         if (!syncTradingContext()) return;
         Suggestion current = suggestionManager.getSuggestion();

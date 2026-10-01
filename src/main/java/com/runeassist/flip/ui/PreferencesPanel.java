@@ -1,6 +1,5 @@
 package com.runeassist.flip.ui;
 
-import com.runeassist.flip.util.Version;
 import com.runeassist.flip.controller.*;
 import com.runeassist.flip.model.SuggestionPreferencesManager;
 import com.runeassist.flip.rs.AccountSuggestionPreferencesRS;
@@ -9,7 +8,6 @@ import com.runeassist.flip.ui.components.ItemSearchMultiSelect;
 import com.runeassist.flip.ui.flipsdialog.WebAnalyticsLinks;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.FontManager;
 import net.runelite.client.util.LinkBrowser;
 
 import javax.inject.Inject;
@@ -339,13 +337,6 @@ public class PreferencesPanel extends JPanel {
                 "Redeem a code from another device or the website");
         redeemBtn.addActionListener(e -> redeemPairing());
         preferencesContent.add(redeemBtn);
-        addVerticalGap(preferencesContent, 8);
-
-        JLabel versionLabel = new JLabel("RuneAssist Flipping " + Version.VERSION);
-        versionLabel.setFont(FontManager.getRunescapeSmallFont());
-        versionLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        versionLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        preferencesContent.add(versionLabel);
 
         for (Component c : preferencesContent.getComponents()) {
             if (c instanceof JComponent && !(c instanceof Box.Filler)) {

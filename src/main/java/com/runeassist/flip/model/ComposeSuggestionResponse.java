@@ -37,7 +37,6 @@ public class ComposeSuggestionResponse
         private Long targetSellTaxGp;
         private String profitModelVersion;
         private Double expectedDuration;
-        private Double estimatedBuyHours;
         private int geLimit;
         private int remainingLimit = -1;
         private boolean limitKnown;

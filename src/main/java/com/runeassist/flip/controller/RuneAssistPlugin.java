@@ -118,8 +118,6 @@ public class RuneAssistPlugin extends Plugin {
 	private PortfolioBankTabBadgeOverlay portfolioBankTabBadgeOverlay;
 	@Inject
 	private BankStateRS bankStateRS;
-	@Inject
-	private GeHistoryReader geHistoryReader;
 
 	@Inject
 	private PatchNotesController patchNotesController;
@@ -165,7 +163,6 @@ public class RuneAssistPlugin extends Plugin {
 
 	@Override
 	protected void startUp() throws Exception {
-		log.info("RuneAssist Flipping {} starting", com.runeassist.flip.util.Version.VERSION);
 		suggestionExecutor.start();
 		boolean hadExistingInstallation = Persistance.hasExistingInstallation();
 		keybindHandler.register();
@@ -317,7 +314,6 @@ public class RuneAssistPlugin extends Plugin {
 	@Subscribe
 	public void onGameTick(GameTick event) {
 		bankStateRS.onGameTick();
-		geHistoryReader.onGameTick();
 		grandExchangeOpenRS.set(grandExchange.isOpen());
 
 		suggestionController.onGameTick();

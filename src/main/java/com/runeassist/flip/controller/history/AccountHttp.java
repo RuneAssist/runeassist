@@ -1,6 +1,5 @@
 package com.runeassist.flip.controller.history;
 
-import com.runeassist.flip.util.Version;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.runeassist.flip.controller.BugReportClient;
@@ -22,7 +21,7 @@ import java.nio.charset.StandardCharsets;
 public class AccountHttp {
 
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
-    private static final String UA = Version.USER_AGENT;
+    private static final String UA = "RuneAssist-flip/1.0";
 
     private final OkHttpClient http;
     private final Gson gson;
@@ -64,19 +63,6 @@ public class AccountHttp {
     public JsonObject get(String path, boolean authed) {
         Request.Builder b = new Request.Builder().url(origin() + path).header("User-Agent", UA).get();
         return auth(b, authed) ? execute(b.build()) : null;
-    }
-
-    public JsonObject postWithTokenIfAny(String path, JsonObject json) {
-        Request.Builder b = new Request.Builder()
-                .url(origin() + path)
-                .header("User-Agent", UA)
-                .header("Content-Type", "application/json")
-                .post(RequestBody.create(JSON, gson.toJson(json)));
-        String token = deviceToken();
-        if (token != null) {
-            b.header("Authorization", "Bearer " + token);
-        }
-        return execute(b.build());
     }
 
     public JsonObject post(String path, JsonObject json, boolean authed) {

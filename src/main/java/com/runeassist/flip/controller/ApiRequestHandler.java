@@ -1,6 +1,5 @@
 package com.runeassist.flip.controller;
 
-import com.runeassist.flip.util.Version;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.inject.Singleton;
@@ -28,7 +27,7 @@ import java.util.function.Consumer;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class ApiRequestHandler {
 
-    private static final String UA = Version.USER_AGENT;
+    private static final String UA = "RuneAssist-flip/1.0";
     private static final String ARES_ORIGIN = "https://runeassist.com";
     private static final String DUMP_ALERTS = ARES_ORIGIN + "/v1/dump-alerts";
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");

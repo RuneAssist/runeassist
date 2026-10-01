@@ -65,9 +65,6 @@ public class GrandExchangeOfferEventHandler {
         SavedOffer prev = offerPersistence.loadOffer(accountHash, slot);
         boolean loginBurst = client.getGameState() != GameState.LOGGED_IN
                 || client.getTickCount() <= osrsLoginManager.getLastLoginTick() + GE_LOGIN_BURST_WINDOW;
-        if (o.getState() == GrandExchangeOfferState.CANCELLED_BUY || o.getState() == GrandExchangeOfferState.CANCELLED_SELL) {
-            o.setCancelReason(cancelReason(suggestionManager.getSuggestion(), o.getItemId()));
-        }
         boolean firstObservation = observationTracker.observe(accountHash, slot, o, loginBurst,
                 Instant.now().toEpochMilli());
 
@@ -82,12 +79,9 @@ public class GrandExchangeOfferEventHandler {
                     o.getItemId(), o.getOfferStatus(), client.getTickCount());
             o.setSuggestionId(suggestionId);
             o.setRuneAssistSuggestion(suggestionId != null);
-            o.setExpectedSeconds(suggestionManager.matchingSubmittedFillSeconds(
-                    o.getItemId(), o.getOfferStatus(), client.getTickCount()));
         } else if (prev != null) {
             o.setSuggestionId(prev.getSuggestionId());
             o.setRuneAssistSuggestion(prev.isRuneAssistSuggestion());
-            o.setExpectedSeconds(prev.getExpectedSeconds());
         }
 
         boolean consistent = isConsistent(prev, o);
@@ -224,14 +218,6 @@ public class GrandExchangeOfferEventHandler {
                 prev.getItemId() == updated.getItemId()
                 || prev.getPrice() == updated.getPrice()
                 || prev.getTotalQuantity() == updated.getTotalQuantity();
-    }
-
-    static String cancelReason(com.runeassist.flip.model.Suggestion shown, int itemId) {
-        if (shown == null || shown.getType() == null || shown.getItemId() != itemId) {
-            return "manual";
-        }
-        return shown.getType() == com.runeassist.flip.model.SuggestionType.ABORT || shown.isModifySuggestion()
-                ? "card" : "manual";
     }
 
     static boolean isNewOffer(SavedOffer prev, SavedOffer updated) {

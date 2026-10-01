@@ -300,7 +300,6 @@ public class SuggestionPanel extends JPanel {
 
         if (choice == JOptionPane.YES_OPTION) {
             suggestionPreferencesManager.blockItem(s.getItemId());
-            suggestionController.reportBlocked(s);
             log.debug("Blocked item with ID {} ({})", s.getItemId(), itemName);
             suggestionManager.setSuggestionNeeded(true);
         } else {
