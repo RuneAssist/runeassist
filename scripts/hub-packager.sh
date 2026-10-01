@@ -6,7 +6,9 @@
 #
 #   scripts/hub-packager.sh <commit> [<work-dir>]
 set -euo pipefail
-COMMIT=$(git rev-parse --verify "${1:?commit}^{commit}")
+COMMIT="${1:?commit}"
+# A full SHA is used as is: a PR checkout holds the merge commit, not the PR head.
+[[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || COMMIT=$(git rev-parse --verify "${COMMIT}^{commit}")
 WORK="${2:-$(mktemp -d)}"
 BUNDLE_URL="https://github.com/runelite/plugin-hub-tooling/releases/download/v4/bundle.tar.zst"
 BUNDLE_SHA256="627c97f0ae8b86d59dc3e9c666ab75a7c88ed58ec6320967eabc172b36c3dcd5"
