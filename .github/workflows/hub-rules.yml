@@ -13,6 +13,9 @@ name: Plugin Hub rules
 #            Also renders the panel pieces to images (artifact ui-snapshots).
 #   startup - starts a real RuneLite client with the plugin on a fresh profile
 #            and fails on any plugin error or warning (scripts/startup-smoke.sh).
+#   packager - builds the commit with the Plugin Hub's own packager and API
+#            checker (runelite/plugin-hub-tooling), exactly as a Hub PR would
+#            (scripts/hub-packager.sh).
 
 on:
   pull_request:
@@ -89,3 +92,26 @@ jobs:
         env:
           RUNELITE_VERSION: ${{ steps.hub.outputs.version }}
         run: scripts/startup-smoke.sh 45
+
+  packager:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 11
+      - name: Read the RuneLite version the Hub builds with
+        id: hub
+        run: |
+          v=$(curl -fsS -m 20 https://raw.githubusercontent.com/runelite/plugin-hub/master/runelite.version | tr -d '[:space:]')
+          [ -n "$v" ] || { echo "could not read runelite.version" >&2; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            hub-packager/api
+          key: hub-packager-v4-${{ steps.hub.outputs.version }}
+      - name: Build with the Plugin Hub packager
+        run: scripts/hub-packager.sh ${{ github.event.pull_request.head.sha || github.sha }} "$GITHUB_WORKSPACE/hub-packager"
