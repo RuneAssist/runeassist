@@ -43,7 +43,7 @@ class SuggestionLatencyTest {
             @Override public boolean isValidLoginState() { return true; }
             @Override public boolean hasJustLoggedIn() { return false; }
         };
-        GrandExchange ge = new GrandExchange(client, new GeSearchResults(client)) {
+        GrandExchange ge = new GrandExchange(client) {
             @Override public boolean isOpen() { return geOpen; }
             @Override public boolean isSlotOpen() { return false; }
             @Override boolean isHomeScreenOpen() { return false; }
@@ -54,7 +54,7 @@ class SuggestionLatencyTest {
         PausedManager paused = new PausedManager(login, null) {
             @Override public boolean isPaused() { return false; }
         };
-        HighlightController highlights = new HighlightController(null,null,null,null,null,null,null,null,null,null,null,null,null) {
+        HighlightController highlights = new HighlightController(null,null,null,null,null,null,null,null,null,null,null,null) {
             @Override public void removeAll() { }
         };
         ApiRequestHandler api = new ApiRequestHandler(null, null) {
@@ -75,10 +75,7 @@ class SuggestionLatencyTest {
             }
         };
         controller = new SuggestionController(paused,client,null,login,highlights,ge,null,null,null,thread,null,manager,
-                status,new GrandExchangeUncollectedManager(client),portfolio,dialogs,null,
-                new com.runeassist.flip.RuneAssistSuggestionSource() {
-                    @Override public boolean isSellOnlyMode() { return false; }
-                },api,null) {
+                status,new GrandExchangeUncollectedManager(client),portfolio,dialogs,null,null,api,null) {
             @Override public void getSuggestionAsync() {
                 requests++;
                 manager.setSuggestionNeeded(false);
