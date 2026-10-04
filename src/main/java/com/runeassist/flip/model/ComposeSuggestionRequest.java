@@ -17,6 +17,7 @@ public class ComposeSuggestionRequest
     private String risk = "medium";
     private boolean membersItemsAllowed = true;
     private boolean f2pOnly = false;
+    private boolean sellOnlyMode;
     private int maxSlots = 8;
     private int remainingSlots = 8;
     private long minPredictedProfit;

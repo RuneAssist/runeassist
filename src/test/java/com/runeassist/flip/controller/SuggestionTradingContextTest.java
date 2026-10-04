@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class SuggestionTradingContextTest {
     private long account = 1L;
     private boolean loggedIn = true;
+    private boolean sellOnlyMode;
     private boolean geOpen = true;
     private int clearHighlights;
     private boolean physicalStock = true;
@@ -52,6 +53,7 @@ class SuggestionTradingContextTest {
             @Override public void removeAll() { clearHighlights++; }
         };
         RuneAssistSuggestionSource source = new RuneAssistSuggestionSource() {
+            @Override public boolean isSellOnlyMode() { return sellOnlyMode; }
             @Override public boolean hasInventoryForSale(Suggestion suggestion) { return physicalStock; }
         };
         controller = new SuggestionController(paused, client, null, login, highlights, ge,
@@ -59,6 +61,51 @@ class SuggestionTradingContextTest {
                 null, null, null, source, null, null);
         controller.syncTradingContext();
         clearHighlights = 0;
+    }
+
+    @Test void sellOnlyClearsVisibleBuysEvenDuringARequestAndRejectsLateReplies() {
+        Suggestion buy = suggestion(SuggestionType.BUY);
+        suggestions.setSuggestion(buy);
+        suggestions.setSuggestionRequestInProgress(true);
+        long generation = controller.getTradingContext().generation();
+        sellOnlyMode = true;
+        controller.syncTradingContext();
+        assertTrue(suggestions.getSuggestion().isWaitSuggestion());
+        assertTrue(suggestions.getSuggestion().getMessage().contains("Sell-only mode"));
+        assertTrue(suggestions.isSuggestionRequestInProgress());
+        assertTrue(suggestions.isSuggestionNeeded());
+        assertEquals(1, clearHighlights);
+        controller.receiveForContext(generation, buy, suggestion(SuggestionType.BUY), null, false);
+        assertTrue(suggestions.getSuggestion().isWaitSuggestion());
+        assertFalse(suggestions.isSuggestionRequestInProgress());
+        assertFalse(suggestions.isSuggestionNeeded(), "Old servers must not cause a request loop");
+    }
+
+    @Test void sellOnlyRejectsDumpBuysWithoutReplacingTheCurrentSale() {
+        Suggestion sale = suggestion(SuggestionType.SELL);
+        suggestions.setSuggestion(sale);
+        sellOnlyMode = true;
+        Suggestion dump = suggestion(SuggestionType.BUY);
+        dump.isDumpAlert = true;
+        controller.handleDumpSuggestion(dump, controller.getTradingContext().generation());
+        assertSame(sale, suggestions.getSuggestion());
+        assertEquals(0, clearHighlights);
+    }
+
+    @Test void sellOnlyPreservesExistingOfferManagementAndCanBeDisabled() {
+        sellOnlyMode = true;
+        for (SuggestionType type : new SuggestionType[]{SuggestionType.SELL, SuggestionType.MODIFY_BUY,
+                SuggestionType.MODIFY_SELL, SuggestionType.ABORT}) {
+            Suggestion current = suggestion(type);
+            suggestions.setSuggestion(current);
+            controller.syncTradingContext();
+            assertSame(current, suggestions.getSuggestion());
+        }
+        sellOnlyMode = false;
+        Suggestion buy = suggestion(SuggestionType.BUY);
+        suggestions.setSuggestion(buy);
+        controller.syncTradingContext();
+        assertSame(buy, suggestions.getSuggestion());
     }
 
     @Test void leavingGeClearsActionAndPollingFlagsWithoutRepeatedUiChurn() {

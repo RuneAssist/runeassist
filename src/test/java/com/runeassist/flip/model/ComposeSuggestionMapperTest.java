@@ -15,6 +15,16 @@ public class ComposeSuggestionMapperTest
 {
     private final Gson gson = new Gson();
 
+    @Test public void sendsSellOnlyModeAsAnExplicitBoolean() {
+        ComposeSuggestionRequest request = new ComposeSuggestionRequest();
+        for (boolean enabled : new boolean[]{false, true, false}) {
+            request.setSellOnlyMode(enabled);
+            com.google.gson.JsonElement flag = gson.toJsonTree(request).getAsJsonObject().get("sellOnlyMode");
+            assertTrue(flag.isJsonPrimitive() && flag.getAsJsonPrimitive().isBoolean());
+            assertEquals(enabled, flag.getAsBoolean());
+        }
+    }
+
     @Test public void preservesForecastBasisAndOriginalExitWithoutInventingLegacyFields() {
         String json = "{\"ok\":true,\"suggestion\":{\"type\":\"buy\",\"expectedProfit\":21000,"
                 + "\"profitEstimateBasis\":\"heuristic_net\",\"potentialProfitGp\":24000,"
