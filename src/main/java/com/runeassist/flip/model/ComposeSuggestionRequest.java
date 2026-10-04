@@ -47,10 +47,6 @@ public class ComposeSuggestionRequest
 
     private String clientDeviceId = "";
 
-    private boolean timeBasedAbortEnabled = false;
-
-    private int timeBasedAbortMinutes = 15;
-
     private long nowMs;
 
     private boolean contributeTrainingData;

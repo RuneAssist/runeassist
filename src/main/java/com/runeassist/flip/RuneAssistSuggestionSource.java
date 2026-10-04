@@ -114,8 +114,6 @@ public class RuneAssistSuggestionSource
         final Set<Integer> protectAbort = new HashSet<>(accountStatusManager.getProtectAbortItemIds());
         final String deviceId = clientDeviceId();
         final String linkedAccount = config.contributeTrainingData() ? linkedOsrsAccountId(displayName) : null;
-        final boolean timeAbortEnabled = preferences.isTimeBasedAbortEnabled();
-        final int timeAbortMinutes = preferences.getTimeBasedAbortMinutes();
         final long minProfit = preferences.getMinPredictedProfit() != null
             ? preferences.getMinPredictedProfit()
             : SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT;
@@ -152,7 +150,7 @@ public class RuneAssistSuggestionSource
                 coins, timeframe, risk, f2pOnly, maxSlots, remainingSlots, minProfit,
                 remainingHint, usedLimit, blocked, skipped, skipOffers, modifyDismissedMs, protectAbort,
                 offersBySlot, savedOffers, held, ownedModifySnap, includeGraph,
-                deviceId, timeAbortEnabled, timeAbortMinutes);
+                deviceId);
             composeReq.setSellOnlyMode(sellOnlyMode);
             composeReq.setInventorySnapshotKnown(availability.isInventorySnapshotKnown());
             composeReq.setAvailableInventory(availability.getAvailableInventory());
@@ -499,7 +497,7 @@ public class RuneAssistSuggestionSource
             Set<Integer> protectAbort, long[][] offersBySlot, Map<Integer, SavedOffer> savedOffers,
             Map<Integer, long[]> held,
             OwnedModifySnapshot ownedModifySnap, boolean includeGraph,
-            String clientDeviceId, boolean timeBasedAbortEnabled, int timeBasedAbortMinutes)
+            String clientDeviceId)
     {
         ComposeSuggestionRequest req = new ComposeSuggestionRequest();
         req.setCapital(coins > 0 ? coins : 0L);
@@ -512,8 +510,6 @@ public class RuneAssistSuggestionSource
         req.setMinPredictedProfit(minProfit);
         req.setIncludeGraph(includeGraph);
         req.setClientDeviceId(clientDeviceId != null ? clientDeviceId : "");
-        req.setTimeBasedAbortEnabled(timeBasedAbortEnabled);
-        req.setTimeBasedAbortMinutes(timeBasedAbortMinutes > 0 ? timeBasedAbortMinutes : 15);
         req.setRemainingBuyLimit(stringifyKeys(remainingHint));
         req.setUsedBuyLimit(stringifyKeys(usedLimit));
         if (blocked != null) req.setBlockedIds(new ArrayList<>(blocked));

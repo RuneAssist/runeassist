@@ -13,6 +13,4 @@ public class AccountSuggestionPreferences {
     public Long minPredictedProfit = SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT;
     public Long dumpMinPredictedProfit = null;
     public String selectedProfile = null;
-    public boolean timeBasedAbortEnabled = false;
-    public int timeBasedAbortMinutes = SuggestionPreferencesManager.DEFAULT_TIME_BASED_ABORT_MINUTES;
 }
