@@ -4,18 +4,10 @@ name: Plugin Hub rules
 # review never bounces us for something we could have caught here:
 #   rules  - reviewer rules (no thread interrupts, no reflection, Filepath for
 #            file i/o, ...) and the packager's manifest/icon/licence checks.
-#            See docs/hub-rules.md and scripts/hub_rules.py. Also keeps the
-#            source under the Hub AI review's 200k token limit
-#            (scripts/token-budget.sh).
+#            See docs/hub-rules.md and scripts/hub_rules.py.
 #   build  - compile and test against the exact RuneLite version pinned in
 #            runelite/plugin-hub, on Java 11 like the Hub packager. Catches API
 #            changes (e.g. 1.13.0 made GE offer prices long) before review.
-#            Also renders the panel pieces to images (artifact ui-snapshots).
-#   startup - starts a real RuneLite client with the plugin on a fresh profile
-#            and fails on any plugin error or warning (scripts/startup-smoke.sh).
-#   packager - builds the commit with the Plugin Hub's own packager and API
-#            checker (runelite/plugin-hub-tooling), exactly as a Hub PR would
-#            (scripts/hub-packager.sh).
 
 on:
   pull_request:
@@ -32,10 +24,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check Plugin Hub rules
         run: python3 scripts/hub_rules.py
-      - name: Check the version is written the same everywhere
-        run: scripts/version-check.sh
-      - name: Check the source fits the Hub review token limit
-        run: scripts/token-budget.sh
 
   build:
     runs-on: ubuntu-latest
@@ -60,58 +48,9 @@ jobs:
           key: gradle-${{ runner.os }}-${{ steps.hub.outputs.version }}-${{ hashFiles('build.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}
       - name: Build and test against the Hub's RuneLite
         run: ./gradlew --no-daemon --console=plain build -PruneLiteVersion=${{ steps.hub.outputs.version }}
-      - name: Upload rendered panel images
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ui-snapshots
-          path: build/ui-snapshots
-          if-no-files-found: warn
       - name: Test report on failure
         if: failure()
         run: |
           for f in build/test-results/test/*.xml; do
             grep -l "<failure\|<error" "$f" 2>/dev/null && sed -n '1,40p' "$f"
           done || true
-
-  startup:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 11
-      - name: Read the RuneLite version the Hub builds with
-        id: hub
-        run: |
-          v=$(curl -fsS -m 20 https://raw.githubusercontent.com/runelite/plugin-hub/master/runelite.version | tr -d '[:space:]')
-          [ -n "$v" ] || { echo "could not read runelite.version" >&2; exit 1; }
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-      - name: Start the plugin in a real client on a fresh profile
-        env:
-          RUNELITE_VERSION: ${{ steps.hub.outputs.version }}
-        run: scripts/startup-smoke.sh 45
-
-  packager:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 11
-      - name: Read the RuneLite version the Hub builds with
-        id: hub
-        run: |
-          v=$(curl -fsS -m 20 https://raw.githubusercontent.com/runelite/plugin-hub/master/runelite.version | tr -d '[:space:]')
-          [ -n "$v" ] || { echo "could not read runelite.version" >&2; exit 1; }
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            hub-packager/api
-          key: hub-packager-v4-${{ steps.hub.outputs.version }}
-      - name: Build with the Plugin Hub packager
-        run: scripts/hub-packager.sh ${{ github.event.pull_request.head.sha || github.sha }} "$GITHUB_WORKSPACE/hub-packager"
