@@ -17,6 +17,7 @@ public class ComposeSuggestionRequest
     private String risk = "medium";
     private boolean membersItemsAllowed = true;
     private boolean f2pOnly = false;
+    private boolean sellOnlyMode;
     private int maxSlots = 8;
     private int remainingSlots = 8;
     private long minPredictedProfit;
@@ -45,10 +46,6 @@ public class ComposeSuggestionRequest
     private boolean includeGraph = true;
 
     private String clientDeviceId = "";
-
-    private boolean timeBasedAbortEnabled = false;
-
-    private int timeBasedAbortMinutes = 15;
 
     private long nowMs;
 

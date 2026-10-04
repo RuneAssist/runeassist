@@ -50,12 +50,6 @@ public class PreferencesPanel extends JPanel {
             PrefsUi.option("500K+", 500_000L), PrefsUi.option("1M+", 1_000_000L),
             PrefsUi.option("2M+", 2_000_000L), PrefsUi.option("5M+", 5_000_000L)
     };
-    private static final Option[] TIME_BASED_ABORT_MINUTES_OPTIONS = {
-            PrefsUi.option("10m", 10),
-            PrefsUi.option("15m", SuggestionPreferencesManager.DEFAULT_TIME_BASED_ABORT_MINUTES),
-            PrefsUi.option("30m", 30), PrefsUi.option("60m", 60)
-    };
-
     private final SuggestionPreferencesManager preferencesManager;
     private final AccountSuggestionPreferencesRS accountPreferences;
     private final FlipHistorySyncService flipHistorySyncService;
@@ -65,14 +59,12 @@ public class PreferencesPanel extends JPanel {
     private final PreferencesToggleButton sellOnlyModeToggleButton;
     private final PreferencesToggleButton buyAndHoldToggleButton;
     private final PreferencesToggleButton f2pOnlyModeToggleButton;
-    private final PreferencesToggleButton timeBasedAbortToggleButton;
     private final ItemSearchMultiSelect blocklistDropdownPanel;
     private final JComboBox<String> profileSelector;
     private final JButton addProfileButton;
     private final JButton deleteProfileButton;
     private final JComboBox<Option> reservedSlotsDropdown;
     private final JComboBox<Option> dumpAlertsDropdown;
-    private final JComboBox<Option> timeBasedAbortMinutesDropdown;
     private final JPanel preferencesContent;
     private final JPanel loginPromptPanel;
     private final JComboBox<Option> minPredictedProfitDropdown;
@@ -89,7 +81,6 @@ public class PreferencesPanel extends JPanel {
     private boolean suppressMinProfitEvents;
     private boolean suppressReservedSlotsEvents;
     private boolean suppressDumpAlertsEvents;
-    private boolean suppressTimeBasedAbortMinutesEvents;
 
     @Inject
     public PreferencesPanel(
@@ -230,31 +221,6 @@ public class PreferencesPanel extends JPanel {
             suggestionManager.setSuggestionNeeded(true);
         });
         PrefsUi.addRow(preferencesContent, "Dump alerts", dumpAlertsDropdown, 6);
-
-        timeBasedAbortToggleButton = new PreferencesToggleButton(
-                "Disable aged-offer reprice", "Enable aged-offer reprice");
-        PrefsUi.addRow(preferencesContent, "Aged-offer reprice", timeBasedAbortToggleButton, 3);
-        timeBasedAbortToggleButton.setToolTipText(
-                "When on, offers older than the minutes below may abort/reprice if the market moved. Default off.");
-        timeBasedAbortToggleButton.addItemListener(i -> {
-            preferencesManager.setTimeBasedAbortEnabled(timeBasedAbortToggleButton.isSelected());
-            suggestionManager.setSuggestionNeeded(true);
-        });
-
-        timeBasedAbortMinutesDropdown = combo(TIME_BASED_ABORT_MINUTES_OPTIONS);
-        timeBasedAbortMinutesDropdown.addActionListener(e -> {
-            if (suppressTimeBasedAbortMinutesEvents) {
-                return;
-            }
-            Option option = (Option) timeBasedAbortMinutesDropdown.getSelectedItem();
-            int mins = option == null || option.value == null
-                    ? SuggestionPreferencesManager.DEFAULT_TIME_BASED_ABORT_MINUTES
-                    : option.value.intValue();
-            preferencesManager.setTimeBasedAbortMinutes(mins);
-            suggestionManager.setSuggestionNeeded(true);
-        });
-        JPanel ageRow = PrefsUi.addRow(preferencesContent, "Aged-offer minutes", timeBasedAbortMinutesDropdown, 6);
-        ageRow.setToolTipText("Only used when Aged-offer reprice is enabled.");
 
         reservedSlotsDropdown = combo(RESERVED_SLOTS_OPTIONS);
         reservedSlotsDropdown.addActionListener(e -> {
@@ -557,17 +523,6 @@ public class PreferencesPanel extends JPanel {
         sellOnlyModeToggleButton.setSelected(preferencesManager.isSellOnlyMode());
         buyAndHoldToggleButton.setSelected(preferencesManager.isBuyAndHold());
         f2pOnlyModeToggleButton.setSelected(preferencesManager.isF2pOnlyMode());
-        timeBasedAbortToggleButton.setSelected(preferencesManager.isTimeBasedAbortEnabled());
-        suppressTimeBasedAbortMinutesEvents = true;
-        try {
-            timeBasedAbortMinutesDropdown.setSelectedItem(PrefsUi.findByLong(
-                    timeBasedAbortMinutesDropdown,
-                    preferencesManager.getTimeBasedAbortMinutes(),
-                    SuggestionPreferencesManager.DEFAULT_TIME_BASED_ABORT_MINUTES,
-                    1));
-        } finally {
-            suppressTimeBasedAbortMinutesEvents = false;
-        }
         syncReservedSlots(preferencesManager.getReservedSlots());
         syncDumpAlerts(preferencesManager.isReceiveDumpSuggestions(), preferencesManager.getDumpMinPredictedProfit());
         syncMinPredictedProfit(preferencesManager.getMinPredictedProfit());

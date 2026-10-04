@@ -269,7 +269,7 @@ public class SuggestionController {
     }
 
     void handleDumpSuggestion(Suggestion suggestion) {
-        if (!syncTradingContext()) return;
+        if (!syncTradingContext() || blocksNewBuy(suggestion)) return;
         AccountStatus accountStatus = accountStatusManager.getAccountStatus();
         if (accountStatus == null) {
             log.info("discarding dump suggestion as account status null");
@@ -307,7 +307,27 @@ public class SuggestionController {
             suggestionManager.setSuggestionNeeded(tradingContext.canRequest());
             if (suggestionPanel != null) suggestionPanel.refresh();
         }
+        if (blocksNewBuy(suggestionManager.getSuggestion())) {
+            showSellOnlyWait();
+            suggestionManager.setSuggestionNeeded(tradingContext.canRequest());
+        }
         return tradingContext.canRequest();
+    }
+
+    private boolean blocksNewBuy(Suggestion suggestion) {
+        return suggestion != null && suggestion.getType() == SuggestionType.BUY
+                && runeAssistSource.isSellOnlyMode();
+    }
+
+    private void showSellOnlyWait() {
+        cancelSuggestionGraph();
+        highlightController.removeAll();
+        Suggestion wait = new Suggestion();
+        wait.setType(SuggestionType.WAIT);
+        wait.setBoxId(-1);
+        wait.setMessage("Sell-only mode: waiting for a sell or offer update.");
+        suggestionManager.setSuggestion(wait);
+        if (suggestionPanel != null) suggestionPanel.refresh();
     }
 
     void onSessionEnded() {
@@ -332,6 +352,13 @@ public class SuggestionController {
                            AccountStatus accountStatus, boolean loadGraph) {
         syncTradingContext();
         if (!tradingContext.accepts(generation)) return;
+        if (blocksNewBuy(newSuggestion)) {
+            showSellOnlyWait();
+            suggestionManager.setSuggestionRequestInProgress(false);
+            suggestionManager.setGraphDataReadingInProgress(false);
+            suggestionManager.setSuggestionNeeded(false);
+            return;
+        }
         handleSuggestionReceived(oldSuggestion, newSuggestion, accountStatus, loadGraph);
     }
 

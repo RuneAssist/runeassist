@@ -75,7 +75,10 @@ class SuggestionLatencyTest {
             }
         };
         controller = new SuggestionController(paused,client,null,login,highlights,ge,null,null,null,thread,null,manager,
-                status,new GrandExchangeUncollectedManager(client),portfolio,dialogs,null,null,api,null) {
+                status,new GrandExchangeUncollectedManager(client),portfolio,dialogs,null,
+                new com.runeassist.flip.RuneAssistSuggestionSource() {
+                    @Override public boolean isSellOnlyMode() { return false; }
+                },api,null) {
             @Override public void getSuggestionAsync() {
                 requests++;
                 manager.setSuggestionNeeded(false);
