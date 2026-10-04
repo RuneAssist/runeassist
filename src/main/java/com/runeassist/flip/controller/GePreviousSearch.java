@@ -1,5 +1,6 @@
 package com.runeassist.flip.controller;
 
+import com.runeassist.flip.config.RuneAssistConfig;
 import com.runeassist.flip.model.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +17,7 @@ import javax.inject.Singleton;
 public class GePreviousSearch {
 
     private final SuggestionManager suggestionManager;
+    private final RuneAssistConfig config;
     private final SuggestionPreferencesManager suggestionPreferencesManager;
     private final AccountStatusManager accountStatusManager;
     private final GrandExchange grandExchange;
@@ -26,7 +28,7 @@ public class GePreviousSearch {
 
     public void showSuggestedItemInSearch() {
         Suggestion suggestion = suggestionManager.getSuggestion();
-        if (suggestion == null) {
+        if (suggestion == null || !config.fillGeSearch()) {
             return;
         }
 

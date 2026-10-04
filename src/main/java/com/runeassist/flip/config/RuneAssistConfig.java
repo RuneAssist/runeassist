@@ -157,6 +157,18 @@ public interface RuneAssistConfig extends Config
     }
 
     @ConfigItem(
+            keyName = "fillGeSearch",
+            name = "Put suggested item in GE search",
+            description = "When buying, show the suggested item in the Grand Exchange item search",
+            section = offerSetupSection,
+            position = 8
+    )
+    default boolean fillGeSearch()
+    {
+        return true;
+    }
+
+    @ConfigItem(
             keyName = "openGraphKeybind",
             name = "Open graph keybind",
             description = "Keybind to open the price graph for the current suggestion",
