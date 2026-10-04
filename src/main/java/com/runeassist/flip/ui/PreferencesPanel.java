@@ -174,8 +174,9 @@ public class PreferencesPanel extends JPanel {
             suggestionManager.setSuggestionNeeded(true);
         });
 
-        sellOnlyModeToggleButton = new PreferencesToggleButton("Disable sell-only mode", "Enable sell-only mode");
-        PrefsUi.addRow(preferencesContent, "Sell-only mode", sellOnlyModeToggleButton, 3);
+        String sellOnlyHelp = "Sells everything you hold at the current price, including at a loss. No new buys.";
+        sellOnlyModeToggleButton = new PreferencesToggleButton("Turn off sell-only mode", sellOnlyHelp);
+        PrefsUi.addRow(preferencesContent, "Sell-only mode", sellOnlyModeToggleButton, 3).setToolTipText(sellOnlyHelp);
         sellOnlyModeToggleButton.addItemListener(i -> {
             preferencesManager.setSellOnlyMode(sellOnlyModeToggleButton.isSelected());
             suggestionManager.setSuggestionNeeded(true);
