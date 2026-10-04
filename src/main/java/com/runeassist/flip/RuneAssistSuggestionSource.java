@@ -70,6 +70,11 @@ public class RuneAssistSuggestionSource
     private long lastPortfolioRequestAt;
     private Long lastPortfolioAccount;
 
+    public boolean isSellOnlyMode()
+    {
+        return preferences.isSellOnlyMode();
+    }
+
     public void getSuggestionAsync(Consumer<Suggestion> consumer)
     {
         getSuggestionAsync(consumer, true);
@@ -96,6 +101,7 @@ public class RuneAssistSuggestionSource
         final boolean membersWorld = osrsLoginManager.isMembersWorld();
         final boolean accountMember = osrsLoginManager.isAccountMember();
         final boolean f2pOnly = preferences.isF2pOnlyMode() || !membersWorld;
+        final boolean sellOnlyMode = isSellOnlyMode();
         final int timeframe = Math.max(1, preferences.getTimeframe());
         final RiskLevel risk = preferences.getRiskLevel() != null
             ? preferences.getRiskLevel() : RiskLevel.MEDIUM;
@@ -147,6 +153,7 @@ public class RuneAssistSuggestionSource
                 remainingHint, usedLimit, blocked, skipped, skipOffers, modifyDismissedMs, protectAbort,
                 offersBySlot, savedOffers, held, ownedModifySnap, includeGraph,
                 deviceId, timeAbortEnabled, timeAbortMinutes);
+            composeReq.setSellOnlyMode(sellOnlyMode);
             composeReq.setInventorySnapshotKnown(availability.isInventorySnapshotKnown());
             composeReq.setAvailableInventory(availability.getAvailableInventory());
             composeReq.setBankSnapshotKnown(availability.isBankSnapshotKnown());
