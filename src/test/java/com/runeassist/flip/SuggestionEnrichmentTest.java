@@ -14,31 +14,6 @@ import java.util.function.BooleanSupplier;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SuggestionEnrichmentTest {
-    @Test void coldLimitCacheNeverDownloadsAndUnknownRemainsUnknown() {
-        assertEquals(0, new AresMarketClient(null, null).cachedGeLimit(536));
-    }
-
-    @Test void finalLimitStampPreservesServerEvidenceWithoutFetchingMapping() throws Exception {
-        RuneAssistSuggestionSource source = new RuneAssistSuggestionSource();
-        int[] localRemaining = {-1};
-        set(source, "market", new AresMarketClient(null,null));
-        set(source, "heldCostTracker", new HeldCostTracker() {
-            @Override public synchronized int remainingLimitOrUnknown(String name, int id, int limit) { return localRemaining[0]; }
-        });
-        Suggestion s = new Suggestion(); s.setItemId(536); s.setGeLimit(100); s.setRemainingLimit(75); s.setLimitKnown(true);
-        Method stamp = RuneAssistSuggestionSource.class.getDeclaredMethod("stampLimitFields", String.class, Suggestion.class, long[][].class);
-        stamp.setAccessible(true);
-        stamp.invoke(source,"synthetic",s,new long[8][]);
-        assertEquals(100,s.getGeLimit()); assertEquals(75,s.getRemainingLimit()); assertTrue(s.isLimitKnown());
-        localRemaining[0] = 90;
-        stamp.invoke(source,"synthetic",s,new long[8][]);
-        assertEquals(75,s.getRemainingLimit(),"Local observations must not widen server-known remaining limits");
-        localRemaining[0] = -1;
-        s.setGeLimit(0); s.setRemainingLimit(-1); s.setLimitKnown(false);
-        stamp.invoke(source,"synthetic",s,new long[8][]);
-        assertEquals(0,s.getGeLimit()); assertEquals(-1,s.getRemainingLimit()); assertFalse(s.isLimitKnown());
-    }
-
     @Test void changedHoldingsOrOfferFillRejectsSlowValuationSnapshot() {
         Map<Integer,long[]> held = Map.of(536,new long[]{10,100});
         assertTrue(RuneAssistSuggestionSource.samePortfolioSnapshot(held,Map.of(536,new long[]{10,100}),new long[8][],new long[8][]));

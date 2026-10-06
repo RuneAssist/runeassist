@@ -12,6 +12,7 @@ import java.util.Map;
 @Setter
 public class ComposeSuggestionRequest
 {
+    private int schema = 2;
     private long capital;
     private int timeframeMinutes = 5;
     private String risk = "medium";
@@ -22,9 +23,6 @@ public class ComposeSuggestionRequest
     private int remainingSlots = 8;
     private long minPredictedProfit;
 
-    private Map<String, Integer> remainingBuyLimit = new LinkedHashMap<>();
-    private Map<String, Integer> usedBuyLimit = new LinkedHashMap<>();
-
     private List<Integer> blockedIds = new ArrayList<>();
     private List<Integer> skippedIds = new ArrayList<>();
     private List<Integer> skipOfferItemIds = new ArrayList<>();
@@ -32,8 +30,6 @@ public class ComposeSuggestionRequest
     private List<Integer> protectAbortItemIds = new ArrayList<>();
 
     private List<OfferSnapshot> offers = new ArrayList<>();
-
-    private List<HeldSnapshot> held = new ArrayList<>();
 
     private boolean inventorySnapshotKnown;
     private List<InventoryAvailabilitySnapshot.ItemQuantity> availableInventory = new ArrayList<>();
@@ -64,20 +60,8 @@ public class ComposeSuggestionRequest
         private int sold;
         private int total;
         private boolean filling;
-        private long lastProgressMs;
-        private long listedMs;
-        private long lastPriceChangeMs;
         private String suggestionId = "";
         private String origin = "external";
-    }
-
-    @Getter
-    @Setter
-    public static class HeldSnapshot
-    {
-        private int itemId;
-        private long qty;
-        private long avgBuy;
     }
 
     @Getter

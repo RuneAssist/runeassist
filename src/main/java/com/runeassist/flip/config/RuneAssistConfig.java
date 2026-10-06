@@ -329,7 +329,7 @@ public interface RuneAssistConfig extends Config
     @ConfigItem(
             keyName = "contributeTrainingData",
             name = "Contribute training data",
-            description = "Link suggestions with your GE offer and fill outcomes so RuneAssist can improve fill predictions. Enabled by default; turn this off to opt out. Does not send bank contents or chat.",
+            description = "Record your suggestions and GE offer outcomes so RuneAssist can improve fill predictions. Enabled by default; turn this off to opt out. Suggestions always use your own linked trade history and GE slots either way. Does not send bank contents or chat.",
             section = privacySection,
             position = 1
     )

@@ -24,7 +24,6 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -34,17 +33,13 @@ public class AresMarketClient
     private static final String UA = Version.USER_AGENT;
     private static final String BASE = "https://runeassist.com";
     private static final String ARES_SUGGESTION = BASE + "/v1/suggestion";
-    private static final String ARES_LIMITS = BASE + "/v1/market/limits";
     private static final String ARES_QUOTE = BASE + "/v1/market/quote";
-    private static final long LIMITS_TTL = 6 * 60 * 60 * 1000L;
     private static final MediaType JSON = MediaType.parse("application/json");
 
     private final OkHttpClient httpClient;
     private final Gson gson;
     private final AccountHttp accountHttp;
 
-    private volatile Map<Integer, Integer> geLimits = new ConcurrentHashMap<>();
-    private volatile long limitsFetchedAt = 0;
     private volatile boolean lastFromAres = false;
     private volatile boolean lastAresUnreachable = false;
     private volatile boolean lastFromCompose = false;
@@ -78,7 +73,7 @@ public class AresMarketClient
             return null;
         }
         JsonObject root = postJson(ARES_SUGGESTION, gson.toJson(request), "suggestion",
-            request.isContributeTrainingData());
+            request.isContributeTrainingData() || !request.getOsrsAccountId().isEmpty());
         if (root == null)
         {
             lastComposeUnreachable = true;
@@ -113,46 +108,10 @@ public class AresMarketClient
         return itemsById(getJson(ARES_QUOTE + "?ids=" + ids, "market/quote"), "items");
     }
 
-    public int geLimit(int itemId)
-    {
-        ensureLimits();
-        Integer limit = geLimits.get(itemId);
-        return limit != null ? limit : 0;
-    }
-
-    private void ensureLimits()
-    {
-        if (!geLimits.isEmpty() && System.currentTimeMillis() - limitsFetchedAt < LIMITS_TTL) return;
-        synchronized (this)
-        {
-            if (!geLimits.isEmpty() && System.currentTimeMillis() - limitsFetchedAt < LIMITS_TTL) return;
-            JsonObject root = getJson(ARES_LIMITS, "market/limits");
-            if (root == null || !root.has("limits")) return;
-            Map<Integer, Integer> parsed = new ConcurrentHashMap<>();
-            for (Map.Entry<String, JsonElement> e : root.getAsJsonObject("limits").entrySet())
-            {
-                try { parsed.put(Integer.parseInt(e.getKey()), e.getValue().getAsInt()); }
-                catch (Exception ignored) { }
-            }
-            if (!parsed.isEmpty())
-            {
-                geLimits = parsed;
-                limitsFetchedAt = System.currentTimeMillis();
-            }
-        }
-    }
-
     private JsonObject getJson(String url, String label)
     {
         return execute(new Request.Builder().url(url).header("User-Agent", UA).get().build(),
             httpClient, label);
-    }
-
-    public int cachedGeLimit(int itemId)
-    {
-        if (System.currentTimeMillis() - limitsFetchedAt >= LIMITS_TTL) return 0;
-        Integer limit = geLimits.get(itemId);
-        return limit != null ? limit : 0;
     }
 
     private JsonObject postJson(String url, String body, String label, boolean authed)
