@@ -71,13 +71,11 @@ public class ZoomHandler {
         long newPriceMin = interpolatePrice(bounds, y2 - pa.y, pa.height);
 
         if (newTimeMax - newTimeMin < MIN_TIME_DELTA) {
-            log.debug("zoomed time delta {}s too small", newTimeMax - newTimeMin);
             cancelSelection();
             return;
         }
 
         if (newPriceMax - newPriceMin < MIN_PRICE_DELTA) {
-            log.debug("zoomed price delta {}s too small", newPriceMax - newPriceMin);
             cancelSelection();
             return;
         }

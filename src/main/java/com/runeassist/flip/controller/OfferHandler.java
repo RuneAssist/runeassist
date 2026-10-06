@@ -94,7 +94,6 @@ public class OfferHandler {
                     offerManager.setViewedSlotItemPrice(price);
 
                     highlightController.redraw();
-                    log.debug("fetched item {} price: {}", offerManager.getViewedSlotItemId(), price);
 
 
                     OfferEditor flippingWidget = offerEditorSupplier.get();
@@ -128,7 +127,6 @@ public class OfferHandler {
         String chatInputText = plainText(chatboxTitleWidget.getText());
         var offerContainerWidget = client.getWidget(ComponentID.GRAND_EXCHANGE_OFFER_CONTAINER);
         boolean setup = offerContainerWidget != null && !offerContainerWidget.isHidden();
-        log.debug("chatbox prompt '{}' setup={}", chatInputText, setup);
         return setup && chatInputText.toLowerCase().contains("price");
     }
 

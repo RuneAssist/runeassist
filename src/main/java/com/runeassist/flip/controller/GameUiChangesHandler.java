@@ -187,7 +187,6 @@ public class GameUiChangesHandler {
 
     public void handleMenuOptionClicked(MenuOptionClicked event) {
         if (event.getMenuOption().equals("Confirm") && grandExchange.isSlotOpen()) {
-            log.debug("offer confirmed tick {}", client.getTickCount());
             accountStatusManager.clearOwnedModify();
             heldItemSyncStateRS.delayForTicks(client.getTickCount(), 3);
             offerManager.setOfferJustPlaced(true);

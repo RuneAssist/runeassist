@@ -102,7 +102,6 @@ public class PortfolioStateRS extends ReactiveStateImpl<PortfolioState> {
             if (portfolioItems != null && portfolioItemsTime != null) {
                 Instant current = portfolioItemsServerTime;
                 if (current != null && !portfolioItemsTime.isAfter(current)) {
-                    log.debug("discarding stale portfolio items update, incoming={}, current={}", portfolioItemsTime, current);
                     return true;
                 }
             }

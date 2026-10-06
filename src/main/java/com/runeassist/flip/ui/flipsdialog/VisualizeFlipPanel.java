@@ -109,7 +109,6 @@ public class VisualizeFlipPanel extends JPanel {
                 && flipHistorySyncService.isOsrsLinked(displayName)
                 && flip.getId() != null) {
             flipHistorySyncService.asyncVisualizeFlip(displayName, flip.getId(), onSuccess, (err) -> {
-                log.debug("server visualize flip failed, falling back to FlipV2 aggregates: {}", err);
                 loadAggregateOverlay(flip, onSuccess, onFailure);
             });
             return;

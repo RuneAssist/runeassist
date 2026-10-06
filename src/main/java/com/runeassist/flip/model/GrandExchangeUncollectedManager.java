@@ -29,7 +29,6 @@ public class GrandExchangeUncollectedManager {
         slotToUncollected.forEach((slot, itemToQty) -> {
             itemToQty.forEach((i, q) -> {
                 if(q > 0) {
-                    log.debug("{} slot {} item {} uncollected {}", accountHash, slot, i, q);
                     hasUncollected.setValue(true);
                 }
             });
@@ -57,11 +56,9 @@ public class GrandExchangeUncollectedManager {
            itemIdToQuantity.clear();
         }
         if(quantity > 0) {
-            log.debug("tick {} added {} of item {} to uncollected", client.getTickCount(), quantity, itemId);
             itemIdToQuantity.merge(itemId, quantity, Long::sum);
         }
         if (gp > 0) {
-            log.debug("tick {} added {} gp to uncollected", client.getTickCount(), gp);
             itemIdToQuantity.merge(ItemID.COINS_995, gp, Long::sum);
         }
     }
@@ -86,7 +83,6 @@ public class GrandExchangeUncollectedManager {
     }
 
     public synchronized void clearAllUncollected(Long accountHash) {
-        log.debug("tick {} clearAllUncollected", client.getTickCount());
         Map<Integer, Long> allUncollected = loadAllUncollected(accountHash);
         int tick = client.getTickCount();
         if(tick != lastClearedTick) {
@@ -97,7 +93,6 @@ public class GrandExchangeUncollectedManager {
         lastClearedSlots.addAll(Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7));
         allUncollected.forEach((key, value) -> {
             if(value > 0) {
-                log.debug("tick {} cleared item {}, qty {}", client.getTickCount(), key, value);
                 lastClearedUncollected.merge(key, value, Long::sum);
             }
         });

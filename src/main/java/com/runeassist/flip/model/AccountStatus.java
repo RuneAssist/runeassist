@@ -45,28 +45,23 @@ public class AccountStatus {
     public synchronized boolean isCollectNeeded(Suggestion suggestion, boolean setUpOfferOpen) {
         if (!suggestion.isDumpAlert() && !setUpOfferOpen
                 && SuggestionType.WAIT.equals(suggestion.getType()) && offers.reservedSlotNeeded(isWorldMember || isAccountMember, resolveReservedSlots(), suggestion))  {
-            log.debug("collected needed reservedSlotNeeded");
             return true;
         }
         if (offers.isEmptySlotNeeded(suggestion, isWorldMember || isAccountMember)) {
-            log.debug("collected needed isEmptySlotNeeded");
             return true;
         }
         if (!suggestion.isDumpAlert() && !setUpOfferOpen
                 && SuggestionType.WAIT.equals(suggestion.getType()) && offers.anyCollectable()) {
-            log.debug("collected needed anyCollectable");
             return true;
         }
         if (suggestion.isModifySuggestion() || suggestion.isAbortSuggestion()) {
             return false;
         }
         if (!inventory.hasSufficientGp(suggestion)) {
-            log.debug("collected needed hasSufficientGp");
             return true;
         }
         if (!hasSufficientItemsForSuggestion(suggestion)) {
             if (hasSufficientCollectibleItemsForSuggestion(suggestion)) {
-                log.debug("collected needed hasSufficientItems");
                 return true;
             }
         }

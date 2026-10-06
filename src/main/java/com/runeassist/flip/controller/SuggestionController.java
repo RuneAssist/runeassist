@@ -264,7 +264,6 @@ public class SuggestionController {
         Consumer<Suggestion> suggestionConsumer = (newSuggestion) ->
                 receiveForContext(requestGeneration, oldSuggestion, newSuggestion, accountStatus, !skipGraphData);
         suggestionPanel.refresh();
-        log.debug("tick {} getting suggestion", client.getTickCount());
         runeAssistSource.getSuggestionAsync(suggestionConsumer, false);
     }
 
@@ -432,7 +431,6 @@ public class SuggestionController {
                 () -> tradingContext.accepts(acceptedGeneration) && suggestionManager.getSuggestion() == newSuggestion
         );
         suggestionManager.setSuggestionRequestInProgress(false);
-        log.debug("Received suggestion: {}", newSuggestion.toString());
         accountStatusManager.resetSkipSuggestion();
         offerManager.setOfferJustPlaced(false);
         suggestionPanel.refresh();
@@ -506,7 +504,6 @@ public class SuggestionController {
         suggestionManager.setGraphDataReadingInProgress(true);
         final long graphGeneration = tradingContext.generation();
         final long sequence = graphRequestSequence;
-        final long startedAt = System.nanoTime();
         Consumer<Data> graphDataConsumer = d -> clientThread.invokeLater(() -> {
             if (sequence != graphRequestSequence || !tradingContext.accepts(graphGeneration)) return;
             suggestionGraphCall = null;
@@ -514,13 +511,11 @@ public class SuggestionController {
             d.itemId = itemId;
             lastSuggestionGraph = d;
             lastSuggestionGraphAt = System.currentTimeMillis();
-            log.debug("suggestion graph enrichment elapsedMs={}", (System.nanoTime() - startedAt) / 1_000_000L);
             displaySuggestionGraph(d, graphGeneration, itemId);
         });
         suggestionGraphCall = apiRequestHandler.asyncGetRuneAssistGraph(itemId,
                 graphDataConsumer,
                 (Throwable err) -> {
-                    log.debug("suggestion graph fetch failed for item {}: {}", itemId, err.toString());
                     Data d = new Data();
                     d.itemId = itemId;
                     d.loadingErrorMessage = "No graph data loaded for this item.";

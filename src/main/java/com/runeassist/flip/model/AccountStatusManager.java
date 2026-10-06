@@ -84,11 +84,9 @@ public class AccountStatusManager {
         Map<Integer, Long> inLimboItems = geUncollected.getLastClearedUncollected();
         List<Integer> clearedSlots = geUncollected.getLastClearedSlots();
         if (geUncollected.getLastClearedTick() == client.getTickCount()) {
-            log.debug("tick {} in limbo items {}, cleared slots {}", client.getTickCount(), inLimboItems, clearedSlots);
             if(inventory.missingJustCollected(inLimboItems)) {
                 inLimboItems.forEach((itemId, qty) -> {
                     if (qty > 0) {
-                        log.debug("tick {} move in limbo item {}, qty {} to inventory", client.getTickCount(), itemId, qty);
                         inventory.mergeItem(new RSItem(itemId, qty));
                     }
                 });
@@ -97,7 +95,6 @@ public class AccountStatusManager {
                 Offer o = offerList.get(slot);
                 GrandExchangeOffer geOffer = geOffers[slot];
                 if (!isActive(geOffer.getState()) && geOffer.getState() != GrandExchangeOfferState.EMPTY) {
-                    log.debug("tick {} in-activate slot {} just collected setting to EMPTY", client.getTickCount(), slot);
                     o.setStatus(OfferStatus.EMPTY);
                 }
             }
@@ -249,7 +246,6 @@ public class AccountStatusManager {
         }
         ownedModify = owned;
         protectListing(owned.itemId);
-        log.debug("owned modify item {} slot {}", owned.itemId, owned.slot);
     }
 
     public synchronized void clearOwnedModify() {

@@ -286,7 +286,6 @@ public class SuggestionPanel extends JPanel {
     private void confirmAndBlock() {
         Suggestion s = suggestionManager.getSuggestion();
         if (s == null) {
-            log.debug("No current suggestion to block.");
             return;
         }
 
@@ -301,7 +300,6 @@ public class SuggestionPanel extends JPanel {
         if (choice == JOptionPane.YES_OPTION) {
             suggestionPreferencesManager.blockItem(s.getItemId());
             suggestionController.reportBlocked(s);
-            log.debug("Blocked item with ID {} ({})", s.getItemId(), itemName);
             suggestionManager.setSuggestionNeeded(true);
         } else {
             log.debug("User canceled blocking for {}", itemName);
@@ -620,7 +618,6 @@ public class SuggestionPanel extends JPanel {
     }
 
     public void refresh() {
-        log.debug("refreshing suggestion panel {}", client.getGameState());
         if (!ensureEdt(this::refresh)) return;
         pauseButton.updateState();
         if (pausedManager.isPaused()) {

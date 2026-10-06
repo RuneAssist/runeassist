@@ -99,7 +99,6 @@ public class FlipManager {
     }
 
     public synchronized void setIntervalStartTime(int startTime) {
-        log.debug("time interval start set to: {}", Instant.ofEpochSecond(startTime));
         if (startTime == intervalStartTime) {
             return;
         }
@@ -113,7 +112,6 @@ public class FlipManager {
         } else {
             intervalStats = calculateStatsForAccount(intervalStartTime, intervalAccount);
         }
-        log.debug("interval flips updated to {}, interval profit updated to {}", intervalStats.flipsMade, intervalStats.profit);
         SwingUtilities.invokeLater(flipsChangedCallback);
     }
 

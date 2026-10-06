@@ -421,7 +421,6 @@ public class RuneAssistPlugin extends Plugin {
 
 	@Subscribe
 	public void onClientShutdown(ClientShutdown clientShutdownEvent) {
-		log.debug("client shutdown event received");
 		flipHistorySyncService.flushNow();
 		offerManager.saveAll();
 		String displayName = osrsLoginManager.getLastDisplayName();
@@ -447,7 +446,6 @@ public class RuneAssistPlugin extends Plugin {
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event) {
 		if (event.getGroup().equals("runeassistflip")) {
-			log.debug("runeassist config changed event received");
 			configRS.forceSet(config);
 			if (event.getKey().equals("profitAmountColor") || event.getKey().equals("lossAmountColor")) {
 				mainPanel.runeAssistPanel.statsPanel.refresh(true, osrsLoginManager.isValidLoginState());
