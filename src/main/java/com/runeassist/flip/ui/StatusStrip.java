@@ -1,11 +1,7 @@
 package com.runeassist.flip.ui;
 
-import com.runeassist.flip.model.AccountStatus;
 import com.runeassist.flip.model.AccountStatusManager;
 import com.runeassist.flip.model.FlipManager;
-import com.runeassist.flip.model.Offer;
-import com.runeassist.flip.model.OfferStatus;
-import com.runeassist.flip.model.StatusOfferList;
 import net.runelite.client.ui.FontManager;
 
 import javax.inject.Inject;
@@ -61,22 +57,6 @@ public class StatusStrip extends JPanel {
         setLineText(String.join(" · ", parts));
     }
 
-    private void appendSlots(List<String> parts) {
-        AccountStatus status = safeStatus();
-        if (status == null || status.getOffers() == null) {
-            return;
-        }
-        int max = status.isWorldMember() || status.isAccountMember()
-                ? StatusOfferList.NUM_SLOTS : StatusOfferList.NUM_F2P_SLOTS;
-        int used = 0;
-        for (Offer offer : status.getOffers()) {
-            if (offer != null && offer.getStatus() != OfferStatus.EMPTY) {
-                used++;
-            }
-        }
-        parts.add(used + "/" + max + " slots");
-    }
-
     private void appendAged(List<String> parts) {
         if (flipManager == null) {
             return;
@@ -85,29 +65,4 @@ public class StatusStrip extends JPanel {
         if (aged > 0) parts.add(aged + (aged == 1 ? " position > 4h" : " positions > 4h"));
     }
 
-    private void appendDeployed(List<String> parts) {
-        AccountStatus status = safeStatus();
-        if (status == null || status.getOffers() == null || status.getInventory() == null) {
-            return;
-        }
-        long cashStack = status.currentCashStack();
-        if (cashStack <= 0) {
-            return;
-        }
-        long onMarket = status.getOffers().getGpOnMarket();
-        int pct = (int) Math.round(100.0d * onMarket / (double) cashStack);
-        pct = Math.max(0, Math.min(100, pct));
-        parts.add(pct + "% deployed");
-    }
-
-    private AccountStatus safeStatus() {
-        if (accountStatusManager == null) {
-            return null;
-        }
-        try {
-            return accountStatusManager.getAccountStatus();
-        } catch (Throwable ignored) {
-            return null;
-        }
-    }
 }

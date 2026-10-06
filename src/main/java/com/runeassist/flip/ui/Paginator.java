@@ -61,11 +61,6 @@ public class Paginator extends JPanel {
 		updateStatusText();
 	}
 
-	public void setTotalPagesWithoutEffect(int totalPages) {
-		this.totalPages = totalPages;
-		updateStatusText();
-	}
-
 	public void setPageNumber(int pageNumber) {
 		this.pageNumber = pageNumber;
 		updateStatusText();
