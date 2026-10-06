@@ -37,20 +37,16 @@ public class HeldCostTrackerServerHeldTest {
     }
 
     @Test
-    public void offerPriceChangeResetsRepriceClock() throws Exception {
+    public void offerRepriceKeepsListingTime() throws Exception {
         HeldCostTracker t = new HeldCostTracker();
         t.onOffer("Bob", 0, GrandExchangeOfferState.BUYING, 4151,
             10_000, 10, 0, 0);
-        long first = t.lastPriceChangeMs("Bob", 0, 4151);
-
-        t.onOffer("Bob", 0, GrandExchangeOfferState.BUYING, 4151,
-            10_000, 10, 0, 0);
-        assertEquals(first, t.lastPriceChangeMs("Bob", 0, 4151));
+        long first = t.listedMs("Bob", 0, 4151);
+        assertTrue(first > 0);
 
         Thread.sleep(2L);
         t.onOffer("Bob", 0, GrandExchangeOfferState.BUYING, 4151,
             10_500, 10, 0, 0);
-        assertTrue(t.lastPriceChangeMs("Bob", 0, 4151) > first);
         assertEquals(first, t.listedMs("Bob", 0, 4151));
     }
 

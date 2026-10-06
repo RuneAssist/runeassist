@@ -4,7 +4,6 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 final class HeldCostLots {
@@ -28,27 +27,19 @@ final class HeldCostLots {
         int qty;
         long spent;
         long listedMs;
-        long lastProgressMs;
-        long price;
-        long lastPriceChangeMs;
 
-        Slot(int i, boolean b, int q, long s, long listed, long progress,
-             long offerPrice, long priceChangeMs) {
+        Slot(int i, boolean b, int q, long s, long listed) {
             itemId = i;
             buy = b;
             qty = q;
             spent = s;
             listedMs = listed;
-            lastProgressMs = progress;
-            price = offerPrice;
-            lastPriceChangeMs = priceChangeMs;
         }
     }
 
     static final class Account {
         final Map<Integer, Deque<Lot>> positions = new LinkedHashMap<>();
         final Map<Integer, Slot> slots = new HashMap<>();
-        final Map<Integer, List<long[]>> limitBuys = new LinkedHashMap<>();
         long heldRevision = 0L;
         boolean loaded = false;
     }

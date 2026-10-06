@@ -29,7 +29,6 @@ class HeldCostTrackerOfferReuseTest
         empty(tracker, ACCOUNT, 0);
         offer(tracker, ACCOUNT, 0, GrandExchangeOfferState.BOUGHT, 100, 100, 5500);
         assertArrayEquals(new long[]{200, 5500}, tracker.held(ACCOUNT).get(ITEM));
-        assertEquals(200, tracker.boughtInWindow(ACCOUNT, ITEM));
     }
 
     @Test
@@ -42,7 +41,6 @@ class HeldCostTrackerOfferReuseTest
         offer(tracker, ACCOUNT, 0, GrandExchangeOfferState.BOUGHT, 10, 10, 100);
         offer(tracker, ACCOUNT, 0, GrandExchangeOfferState.BOUGHT, 10, 10, 100);
         assertArrayEquals(new long[]{10, 100}, tracker.held(ACCOUNT).get(ITEM));
-        assertEquals(10, tracker.boughtInWindow(ACCOUNT, ITEM));
     }
 
     @Test
@@ -57,8 +55,6 @@ class HeldCostTrackerOfferReuseTest
         assertArrayEquals(new long[]{10, 100}, tracker.held(ACCOUNT).get(ITEM));
         assertEquals(revision, tracker.heldRevision(ACCOUNT));
         assertEquals(0, tracker.listedMs(ACCOUNT, 0, ITEM));
-        assertEquals(0, tracker.lastProgressMs(ACCOUNT, 0, ITEM));
-        assertEquals(0, tracker.lastPriceChangeMs(ACCOUNT, 0, ITEM));
     }
 
     @Test
@@ -71,7 +67,6 @@ class HeldCostTrackerOfferReuseTest
         offer(tracker, ACCOUNT, 0, GrandExchangeOfferState.BUYING, 100, 0, 110);
         offer(tracker, ACCOUNT, 0, GrandExchangeOfferState.CANCELLED_BUY, 100, 20, 110);
         assertArrayEquals(new long[]{40, 105}, tracker.held(ACCOUNT).get(ITEM));
-        assertEquals(40, tracker.boughtInWindow(ACCOUNT, ITEM));
     }
 
     @Test
