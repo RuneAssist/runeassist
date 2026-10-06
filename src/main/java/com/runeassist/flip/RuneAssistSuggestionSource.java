@@ -46,6 +46,10 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.BiConsumer;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Objects;
 
 @Slf4j
 @Singleton
@@ -82,7 +86,6 @@ public class RuneAssistSuggestionSource
 
     public void getSuggestionAsync(Consumer<Suggestion> consumer, boolean includeGraph)
     {
-        final long requestedAt = System.nanoTime();
         final net.runelite.api.Player localPlayer = client.getLocalPlayer();
         final String displayName = localPlayer != null ? localPlayer.getName() : null;
         final long[][] offersBySlot = readOffers(displayName);
@@ -132,9 +135,6 @@ public class RuneAssistSuggestionSource
         try {
         suggestionExecutor.execute(() ->
         {
-            final long workStartedAt = System.nanoTime();
-            long composeStartedAt = 0L;
-            long composeFinishedAt = 0L;
             Suggestion suggestion = null;
             try
             {
@@ -163,7 +163,6 @@ public class RuneAssistSuggestionSource
             }
             try
             {
-                composeStartedAt = System.nanoTime();
                 suggestion = market.composeSuggestion(composeReq);
             }
             catch (Exception e)
@@ -171,7 +170,6 @@ public class RuneAssistSuggestionSource
                 log.warn("composeSuggestion failed; soft-fail to WAIT", e);
                 suggestion = null;
             }
-            finally { composeFinishedAt = System.nanoTime(); }
 
             ensurePickSource(suggestion);
             if (suggestion != null && suggestion.getItemId() > 0)
@@ -221,13 +219,7 @@ public class RuneAssistSuggestionSource
                 result.setTimeIssued(Instant.now());
             }
             final Suggestion delivered = result;
-            final long composeMs = composeStartedAt == 0L ? 0L : (composeFinishedAt - composeStartedAt) / 1_000_000L;
-            clientThread.invokeLater(() -> {
-                log.debug("suggestion timing queueMs={} composeMs={} deliveryMs={}",
-                    (workStartedAt - requestedAt) / 1_000_000L, composeMs,
-                    (System.nanoTime() - requestedAt) / 1_000_000L);
-                consumer.accept(delivered);
-            });
+            clientThread.invokeLater(() -> consumer.accept(delivered));
         });
         } catch (RejectedExecutionException busy) {
             Suggestion wait = WaitSuggestions.waitFallback(WaitSuggestions.WAIT_ARES_DOWN, offersBySlot, maxSlots);
@@ -240,7 +232,7 @@ public class RuneAssistSuggestionSource
     {
         Long account = osrsLoginManager.getAccountHash();
         long now = System.currentTimeMillis();
-        if (java.util.Objects.equals(account, lastPortfolioAccount) && now - lastPortfolioRequestAt < 15_000L) return;
+        if (Objects.equals(account, lastPortfolioAccount) && now - lastPortfolioRequestAt < 15_000L) return;
         if (!portfolioRequestInProgress.compareAndSet(false, true)) return;
         try {
             final Instant snapshotAt = Instant.now();
@@ -250,11 +242,10 @@ public class RuneAssistSuggestionSource
             lastPortfolioAccount = account;
             lastPortfolioRequestAt = now;
             executor.execute(() -> {
-                long started = System.nanoTime();
                 try {
                     List<Suggestion.PortfolioItem> items = portfolioItems(held, offers);
                     clientThread.invokeLater(() -> {
-                        if (!java.util.Objects.equals(account, osrsLoginManager.getAccountHash())
+                        if (!Objects.equals(account, osrsLoginManager.getAccountHash())
                                 || !osrsLoginManager.isValidLoginState()) return;
                         if (!samePortfolioSnapshot(held, heldCostTracker.held(displayName), offers, readOffers(displayName))) return;
                         consumer.accept(items, snapshotAt);
@@ -263,19 +254,17 @@ public class RuneAssistSuggestionSource
                     log.debug("optional portfolio enrichment failed", e);
                 } finally {
                     portfolioRequestInProgress.set(false);
-                    log.debug("suggestion portfolio enrichment elapsedMs={}", (System.nanoTime() - started) / 1_000_000L);
                 }
             });
         } catch (RuntimeException e) {
             portfolioRequestInProgress.set(false);
-            log.debug("optional portfolio snapshot/enqueue failed", e);
         }
     }
 
     static boolean samePortfolioSnapshot(Map<Integer, long[]> held, Map<Integer, long[]> current,
                                           long[][] offers, long[][] currentOffers) {
-        if (!held.keySet().equals(current.keySet()) || !java.util.Arrays.deepEquals(offers, currentOffers)) return false;
-        for (Integer id : held.keySet()) if (!java.util.Arrays.equals(held.get(id), current.get(id))) return false;
+        if (!held.keySet().equals(current.keySet()) || !Arrays.deepEquals(offers, currentOffers)) return false;
+        for (Integer id : held.keySet()) if (!Arrays.equals(held.get(id), current.get(id))) return false;
         return true;
     }
 
@@ -363,7 +352,7 @@ public class RuneAssistSuggestionSource
         if (merged.isEmpty()) return out;
         Map<Integer, Map<String, Object>> quotes;
         try { quotes = market.quotes(merged.keySet()); }
-        catch (Exception ex) { quotes = java.util.Collections.emptyMap(); }
+        catch (Exception ex) { quotes = Collections.emptyMap(); }
         for (Map.Entry<Integer, long[]> e : merged.entrySet())
         {
             int id = e.getKey();
@@ -567,7 +556,7 @@ public class RuneAssistSuggestionSource
 
     private static Map<String, Integer> stringifyKeys(Map<Integer, Integer> in)
     {
-        Map<String, Integer> out = new java.util.LinkedHashMap<>();
+        Map<String, Integer> out = new LinkedHashMap<>();
         if (in == null) return out;
         for (Map.Entry<Integer, Integer> e : in.entrySet())
         {
@@ -579,7 +568,7 @@ public class RuneAssistSuggestionSource
 
     private static Map<String, Long> stringifyLongKeys(Map<Integer, Long> in)
     {
-        Map<String, Long> out = new java.util.LinkedHashMap<>();
+        Map<String, Long> out = new LinkedHashMap<>();
         if (in == null) return out;
         for (Map.Entry<Integer, Long> e : in.entrySet())
         {

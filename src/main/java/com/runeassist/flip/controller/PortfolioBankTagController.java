@@ -130,7 +130,6 @@ public class PortfolioBankTagController {
     private void registerTag(TagManager tagManager) {
         if (registered.compareAndSet(false, true)) {
             tagManager.registerTag(TAG_NAME, itemId -> bankedPortfolioItemIds.contains(canonicalize(itemId)));
-            log.debug("registered dynamic Bank Tags tag '{}'", TAG_NAME);
         }
     }
 
@@ -145,7 +144,6 @@ public class PortfolioBankTagController {
         }
         if (tagManager != null) {
             tagManager.unregisterTag(TAG_NAME);
-            log.debug("unregistered dynamic Bank Tags tag '{}'", TAG_NAME);
         }
     }
 

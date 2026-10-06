@@ -54,11 +54,9 @@ public class GrandExchangeOfferEventHandler {
             return;
         }
         if (osrsLoginManager.isUnsupportedWorldType()) {
-            log.debug("ignoring GE offer update on unsupported world type(s): {}", client.getWorldType());
             return;
         }
 
-        log.debug("tick {} GE offer updated: state: {}, slot: {}, item: {}, qty: {}, lastLoginTick: {}", client.getTickCount(), offer.getState(), slot, offer.getItemId(), offer.getQuantitySold(), osrsLoginManager.getLastLoginTick());
 
         SavedOffer o = SavedOffer.fromGrandExchangeOffer(offer);
 
@@ -73,7 +71,6 @@ public class GrandExchangeOfferEventHandler {
 
         if(Objects.equals(o, prev)) {
             if (firstObservation) flipHistorySyncService.reportOfferEvent(slot, o, prev);
-            log.debug("skipping duplicate offer event {}", o);
             return;
         }
 
@@ -99,7 +96,6 @@ public class GrandExchangeOfferEventHandler {
         if(t != null) {
             transactionsToProcess.add(t);
             processTransactions();
-            log.debug("inferred transaction {}", t);
         }
         flipHistorySyncService.reportOfferEvent(slot, o, prev);
         updateUncollected(accountHash, slot, o, prev, consistent);

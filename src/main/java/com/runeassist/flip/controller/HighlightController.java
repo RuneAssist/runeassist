@@ -76,20 +76,16 @@ public class HighlightController {
             return;
         }
         if (!config.suggestionHighlights()) {
-            log.debug("highlight redraw: suggestionHighlights config is OFF");
             return;
         }
         if (pausedManager.isPaused()) {
-            log.debug("highlight redraw: skipped, suggestions paused");
             return;
         }
         if (offerManager.isOfferJustPlaced()) {
-            log.debug("highlight redraw: skipped, offer just placed");
             return;
         }
         Suggestion suggestion = suggestionManager.getSuggestion();
         if (suggestion == null) {
-            log.debug("highlight redraw: skipped, suggestion is null");
             return;
         }
         AccountStatus accountStatus = accountStatusManager.getAccountStatus();
@@ -97,10 +93,6 @@ public class HighlightController {
         boolean isCollectNeeded = accountStatus != null
                 && accountStatus.isCollectNeeded(suggestion, grandExchange.isSetupOfferOpen());
         boolean goToBank = sellFromBank && !isCollectNeeded;
-        log.debug("highlight redraw: type={} item={} geOpen={} homeScreen={} slotOpen={} bankOpen={} goToBank={} accountStatusNull={}",
-                suggestion.getType(), suggestion.getItemId(), grandExchange.isOpen(),
-                grandExchange.isHomeScreenOpen(), grandExchange.isSlotOpen(), BankWidgets.isBankOpen(client), goToBank,
-                accountStatus == null);
         if (goToBank && grandExchange.isOpen() && highlightGrandExchangeCloseButton(suggestion)) {
             return;
         }
@@ -118,8 +110,7 @@ public class HighlightController {
             return;
         }
         if (grandExchange.isHomeScreenOpen()) {
-            boolean drew = drawHomeScreenHighLights(suggestion);
-            log.debug("highlight redraw: drawHomeScreenHighLights returned {}", drew);
+            drawHomeScreenHighLights(suggestion);
         } else if (grandExchange.isSlotOpen()) {
             drawOfferScreenHighlights(suggestion);
         } else {
@@ -239,8 +230,6 @@ public class HighlightController {
         }
         if (suggestion.isSellSuggestion() && accountStatus.hasSufficientInventoryForSellSuggestion(suggestion)) {
             Widget itemWidget = BankWidgets.geInventoryItem(client, suggestion.getItemId());
-            log.debug("highlight sell branch: itemWidgetNull={} itemWidgetHidden={}",
-                    itemWidget == null, itemWidget != null && itemWidget.isHidden());
             if (itemWidget != null && !itemWidget.isHidden()) {
                 add(itemWidget, blueHighlight, new Rectangle(0, 0, 34, 32));
             }

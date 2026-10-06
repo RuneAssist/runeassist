@@ -316,7 +316,6 @@ public class StatsPanelV2 extends JPanel {
         SessionData sd = sessionManager.getCachedSessionData();
         Stats stats = flipManager.getRealizedIntervalStats();
         paginator.setTotalPages(Math.max(1, (flipManager.getIntervalStats().flipsMade + 49) / 50));
-        long s = System.nanoTime();
         if (flipsMaybeChanged) {
             flipsPanel.removeAll();
             String displayName = osrsLoginManager.getPlayerDisplayName();
@@ -352,7 +351,6 @@ public class StatsPanelV2 extends JPanel {
             totalProfitVal.setText(UIUtilities.formatProfit(stats.profit));
             totalProfitVal.setForeground(UIUtilities.getProfitColor(stats.profit, config));
             totalProfitVal.setToolTipText("Open profit graph on the dashboard. Realized profit from closed sells.");
-            log.debug("populating flips took {}ms", (System.nanoTime() - s) / 1000_000);
         }
 
         PortfolioState portfolio = portfolioStateRS.get();

@@ -183,7 +183,6 @@ public class ConfigPanel extends JPanel {
             configInstance.setGridColor(extractColor("gridColor"));
 
             configManager.setConfig(configInstance);
-            log.debug("Applied and saved graph settings");
         } catch (Exception e) {
             log.error("Error applying settings", e);
             JOptionPane.showMessageDialog(this, "Error applying settings: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);

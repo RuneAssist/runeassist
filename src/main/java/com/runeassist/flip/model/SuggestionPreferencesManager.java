@@ -182,7 +182,6 @@ public class SuggestionPreferencesManager {
                 }
             });
         };
-        log.debug("blocking {}, unblocking {}", toBlock, toUnblock);
         update.accept(cachedPreferences);
         executorService.submit(() -> updateProfile(selectedProfile, update));
     }
@@ -195,7 +194,6 @@ public class SuggestionPreferencesManager {
         };
         update.accept(cachedPreferences);
         executorService.submit(() -> updateProfile(selectedProfile, update));
-        log.debug("blocked item {}", itemId);
     }
 
     public synchronized List<Integer> blockedItems() {

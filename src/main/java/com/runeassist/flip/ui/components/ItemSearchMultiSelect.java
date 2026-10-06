@@ -138,7 +138,6 @@ public class ItemSearchMultiSelect extends JPanel {
         currentSearchResults = searchFunc.apply(searchText, selectedItemsGetter.get());
 
         SwingUtilities.invokeLater(() -> {
-            log.debug("there are {} search results", currentSearchResults.size());
 
             virtualScrollPanel.setItems(currentSearchResults);
 
@@ -159,7 +158,6 @@ public class ItemSearchMultiSelect extends JPanel {
         displayField.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                log.debug("clicked");
                 if (displayField.getText().equals(placeholderText)) {
                     displayField.setText("");
                 }
@@ -170,7 +168,6 @@ public class ItemSearchMultiSelect extends JPanel {
         displayField.addFocusListener(new FocusListener() {
             @Override
             public void focusGained(FocusEvent e) {
-                log.debug("focus gained {}",e.getCause());
                 if (displayField.getText().equals(placeholderText)) {
                     displayField.setText("");
                 }
@@ -178,7 +175,6 @@ public class ItemSearchMultiSelect extends JPanel {
 
             @Override
             public void focusLost(FocusEvent e) {
-                log.debug("focus lost to {} setting text to {}", e.getOppositeComponent(), placeholderText);
                 displayField.setText(placeholderText);
                 displayField.setForeground(Color.GRAY);
                 dropdownWindow.setVisible(false);
@@ -202,7 +198,6 @@ public class ItemSearchMultiSelect extends JPanel {
         dropdownWindow.addHierarchyListener(new HierarchyListener() {
             @Override
             public void hierarchyChanged(HierarchyEvent e) {
-                log.debug("hierarchy changed {} {} {}", dropdownWindow.isVisible(), dropdownWindow.isShowing(), e);
                 if(!displayField.hasFocus()) {
                     dropdownWindow.setVisible(false);
                 }

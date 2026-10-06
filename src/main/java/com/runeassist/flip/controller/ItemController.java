@@ -57,7 +57,6 @@ public class ItemController {
                         cachedItems = items;
                         cachedItems.forEach(i -> cachedItemNames.put(i.itemId, i.name));
                         initScheduled.set(false);
-                        log.debug("initialised {} items", items.size());
                         return true;
                     }
                     return false;

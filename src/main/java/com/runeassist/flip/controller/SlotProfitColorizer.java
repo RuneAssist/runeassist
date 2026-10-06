@@ -41,7 +41,6 @@ public class SlotProfitColorizer {
             long accountHash = client.getAccountHash();
             return offerManager.loadOffer(accountHash, slotIndex);
         } catch (Exception e) {
-            log.debug("Error loading offer for slot {}", slotIndex, e);
             return null;
         }
     }
@@ -226,7 +225,6 @@ public class SlotProfitColorizer {
         try {
             return profitCalculator.calculateSlotProfit(slotIndex);
         } catch (Exception e) {
-            log.debug("Error calculating profit for slot {}", slotIndex, e);
             return null;
         }
     }

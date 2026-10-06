@@ -109,7 +109,6 @@ public class AccountHttp {
             }
             return raw.isEmpty() ? new JsonObject() : gson.fromJson(raw, JsonObject.class);
         } catch (Exception e) {
-            log.debug("account http {} failed: {}", request.url().encodedPath(), e.getMessage());
             return null;
         }
     }

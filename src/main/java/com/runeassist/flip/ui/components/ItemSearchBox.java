@@ -129,7 +129,6 @@ public class ItemSearchBox extends JComboBox<ItemIdName> {
     private void onSelectedItem() {
         if(getSelectedItem() instanceof ItemIdName) {
             ItemIdName selected = (ItemIdName) getSelectedItem();
-            log.debug("Item selected: {} (ID: {})", selected.name, selected.itemId);
             editorField.setText(selected.name);
             editorField.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
             onItemSelected.accept(selected.itemId);

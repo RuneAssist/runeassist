@@ -146,7 +146,6 @@ public class PriceGraphPanel extends JPanel {
         isShowingSuggestionPriceData = false;
         showSuggestionButton.setVisible(suggestionPriceData != null || suggestionManager.isGraphDataReadingInProgress());
         currentItemId = itemId;
-        log.debug("Loading price graph for item: {}", itemId);
         contentCardLayout.show(contentPanel, Cards.LOADING_CARD.name());
         final PriceLine priceLine = offerPriceLine;
         apiRequestHandler.asyncGetRuneAssistGraph(itemId,

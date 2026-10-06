@@ -98,7 +98,6 @@ public class AresMarketClient
         lastFromAres = true;
         lastAresUnreachable = false;
         lastComposeUnreachable = false;
-        log.debug("Ares /v1/suggestion composed {} {}", suggestion.getType(), suggestion.getName());
         return suggestion;
     }
 

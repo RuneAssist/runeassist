@@ -51,7 +51,6 @@ public final class HubPluginConflict
                 if (isHubPlugin(p))
                 {
                     boolean enabled = pluginManager.isPluginEnabled(p);
-                    log.debug("hub conflict candidate class={} enabled={}", p.getClass().getName(), enabled);
                     if (enabled)
                     {
                         return true;

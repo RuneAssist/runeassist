@@ -13,6 +13,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.stream.Stream;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 
 @Slf4j
 public class Persistance {
@@ -77,12 +81,12 @@ public class Persistance {
 
 
     public static List<com.runeassist.flip.model.Transaction> loadUnackedTransactions(String displayName) {
-        java.util.List<com.runeassist.flip.model.Transaction> transactions = new java.util.ArrayList<>();
+        List<com.runeassist.flip.model.Transaction> transactions = new ArrayList<>();
         Filepath file = file(String.format(UNACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
         if (!file.exists()) {
             return transactions;
         }
-        java.util.Set<java.util.UUID> added = new java.util.HashSet<>();
+        Set<UUID> added = new HashSet<>();
         try (BufferedReader reader = file.openBufferedReader()) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -101,11 +105,10 @@ public class Persistance {
         } catch (java.io.IOException e) {
             log.warn("error loading unacked transactions {}", file, e);
         }
-        log.debug("loaded {} unacked transactions for {}", transactions.size(), displayName);
         return transactions;
     }
 
-    public static void storeUnackedTransactions(java.util.List<com.runeassist.flip.model.Transaction> transactions, String displayName) {
+    public static void storeUnackedTransactions(List<com.runeassist.flip.model.Transaction> transactions, String displayName) {
         Filepath file = file(String.format(UNACKED_TRANSACTIONS_FILE_TEMPLATE, hashDisplayName(displayName)));
         try (BufferedWriter w = file.openBufferedWriter()) {
             if (transactions != null && gson != null) {

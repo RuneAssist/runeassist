@@ -52,7 +52,6 @@ public class GrandExchangeCollectHandler {
     private void handleModifyOffer(String menuOption, Widget widget) {
         if (menuOption.equals("Modify offer")) {
             int slot = widget.getId() - 30474247;
-            log.debug("modify offer clicked (tick {}) on slot {}", client.getTickCount(), slot);
             Suggestion suggestion = suggestionManager.getSuggestion();
             if (suggestion != null && suggestion.isModifySuggestion()) {
                 accountStatusManager.beginOwnedModify(suggestion, slot);

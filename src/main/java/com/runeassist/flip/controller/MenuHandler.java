@@ -47,7 +47,6 @@ public class MenuHandler {
                                 int itemId = offers[i].getItemId();
                                 PriceLine priceLine = buildPriceLine(offers[i]);
                                 flipsDialogController.showPriceGraphTab(itemId, false, priceLine);
-                                log.debug("matched widget to slot {}, item {}", i, offers[i].getItemId());
                             }
                         }
                     });
@@ -148,7 +147,6 @@ public class MenuHandler {
             return;
         }
         if (event.getOption().equals("Confirm") && grandExchange.isSlotOpen()) {
-            log.debug("Adding deprioritized menu entry for offer");
             client.getMenu().createMenuEntry(-1).setOption("Nothing");
             event.getMenuEntry().setDeprioritized(true);
         }
