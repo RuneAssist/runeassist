@@ -193,7 +193,7 @@ public class ComposeSuggestionMapperTest
     }
 
     @Test
-    public void requestSerializesOffersAndHeld()
+    public void requestSerializesSchemaTwoWithoutClientState()
     {
         ComposeSuggestionRequest req = new ComposeSuggestionRequest();
         req.setCapital(5_000_000L);
@@ -206,29 +206,22 @@ public class ComposeSuggestionMapperTest
         offer.setSold(0);
         offer.setTotal(1);
         offer.setFilling(true);
-        offer.setLastPriceChangeMs(123456L);
         req.getOffers().add(offer);
         req.getModifyDismissedMs().put("4151", 654321L);
-        ComposeSuggestionRequest.HeldSnapshot held = new ComposeSuggestionRequest.HeldSnapshot();
-        held.setItemId(561);
-        held.setQty(100);
-        held.setAvgBuy(180);
-        req.getHeld().add(held);
 
         String json = gson.toJson(req);
         assertTrue(json.contains("\"capital\":5000000"));
         assertTrue(json.contains("\"itemId\":4151"));
-        assertTrue(json.contains("\"avgBuy\":180"));
-        assertTrue(json.contains("\"lastPriceChangeMs\":123456"));
+        assertTrue(json.contains("\"schema\":2"));
+        for (String serverOwned : new String[]{"held", "usedBuyLimit", "remainingBuyLimit", "listedMs", "lastProgressMs", "lastPriceChangeMs"}) {
+            assertFalse(json.contains("\"" + serverOwned + "\""), serverOwned + " is the server's to decide");
+        }
         assertTrue(json.contains("\"modifyDismissedMs\":{\"4151\":654321}"));
         ComposeSuggestionRequest roundTrip = gson.fromJson(json, ComposeSuggestionRequest.class);
         assertEquals(5_000_000L, roundTrip.getCapital());
         assertEquals(1, roundTrip.getOffers().size());
         assertEquals(4151, roundTrip.getOffers().get(0).getItemId());
         assertTrue(roundTrip.getOffers().get(0).isBuy());
-        assertEquals(123456L, roundTrip.getOffers().get(0).getLastPriceChangeMs());
-        assertEquals(1, roundTrip.getHeld().size());
-        assertEquals(180L, roundTrip.getHeld().get(0).getAvgBuy());
         assertFalse(roundTrip.isF2pOnly());
     }
 }

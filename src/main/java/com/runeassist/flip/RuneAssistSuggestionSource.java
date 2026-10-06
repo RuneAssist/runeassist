@@ -88,7 +88,7 @@ public class RuneAssistSuggestionSource
     {
         final net.runelite.api.Player localPlayer = client.getLocalPlayer();
         final String displayName = localPlayer != null ? localPlayer.getName() : null;
-        final long[][] offersBySlot = readOffers(displayName);
+        final long[][] offersBySlot = readOffers();
         final Map<Integer, SavedOffer> savedOffers = readSavedOffers(client.getAccountHash(), offersBySlot);
         final Map<Integer, long[]> held = heldCostTracker.held(displayName);
         final ItemContainer currentInventory = client.getItemContainer(InventoryID.INVENTORY);
@@ -116,7 +116,7 @@ public class RuneAssistSuggestionSource
         final Set<Integer> blocked = new HashSet<>(preferences.blockedItems());
         final Set<Integer> protectAbort = new HashSet<>(accountStatusManager.getProtectAbortItemIds());
         final String deviceId = clientDeviceId();
-        final String linkedAccount = config.contributeTrainingData() ? linkedOsrsAccountId(displayName) : null;
+        final String linkedAccount = linkedOsrsAccountId(displayName);
         final long minProfit = preferences.getMinPredictedProfit() != null
             ? preferences.getMinPredictedProfit()
             : SuggestionPreferencesManager.DEFAULT_MIN_PREDICTED_PROFIT;
@@ -138,27 +138,19 @@ public class RuneAssistSuggestionSource
             Suggestion suggestion = null;
             try
             {
-            Map<Integer, Integer> usedLimit = usedBuyLimit(displayName, offersBySlot);
-            Map<Integer, Integer> remainingHint = new HashMap<>();
-            for (Map.Entry<Integer, Integer> e : usedLimit.entrySet())
-            {
-                int ge = market.cachedGeLimit(e.getKey());
-                if (ge > 0) remainingHint.put(e.getKey(), Math.max(0, ge - e.getValue()));
-            }
-
             ComposeSuggestionRequest composeReq = buildComposeRequest(
                 coins, timeframe, risk, f2pOnly, maxSlots, remainingSlots, minProfit,
-                remainingHint, usedLimit, blocked, skipped, skipOffers, modifyDismissedMs, protectAbort,
-                offersBySlot, savedOffers, held, ownedModifySnap, includeGraph,
+                blocked, skipped, skipOffers, modifyDismissedMs, protectAbort,
+                offersBySlot, savedOffers, ownedModifySnap, includeGraph,
                 deviceId);
             composeReq.setSellOnlyMode(sellOnlyMode);
             composeReq.setInventorySnapshotKnown(availability.isInventorySnapshotKnown());
             composeReq.setAvailableInventory(availability.getAvailableInventory());
             composeReq.setBankSnapshotKnown(availability.isBankSnapshotKnown());
             composeReq.setAvailableBank(availability.getAvailableBank());
+            composeReq.setContributeTrainingData(config.contributeTrainingData());
             if (linkedAccount != null && !linkedAccount.isEmpty())
             {
-                composeReq.setContributeTrainingData(true);
                 composeReq.setOsrsAccountId(linkedAccount);
             }
             try
@@ -209,8 +201,6 @@ public class RuneAssistSuggestionSource
                 }
                 suggestion.setTimeIssued(Instant.now());
                 ensurePickSource(suggestion);
-                try { stampLimitFields(displayName, suggestion, offersBySlot); }
-                catch (Exception e) { log.warn("limit stamp failed", e); }
                 result = suggestion;
             } catch (Exception e) {
                 log.warn("failed to finalize suggestion; sending Wait", e);
@@ -238,7 +228,7 @@ public class RuneAssistSuggestionSource
             final Instant snapshotAt = Instant.now();
             String displayName = osrsLoginManager.getPlayerDisplayName();
             final Map<Integer, long[]> held = heldCostTracker.held(displayName);
-            final long[][] offers = readOffers(displayName);
+            final long[][] offers = readOffers();
             lastPortfolioAccount = account;
             lastPortfolioRequestAt = now;
             executor.execute(() -> {
@@ -247,7 +237,7 @@ public class RuneAssistSuggestionSource
                     clientThread.invokeLater(() -> {
                         if (!Objects.equals(account, osrsLoginManager.getAccountHash())
                                 || !osrsLoginManager.isValidLoginState()) return;
-                        if (!samePortfolioSnapshot(held, heldCostTracker.held(displayName), offers, readOffers(displayName))) return;
+                        if (!samePortfolioSnapshot(held, heldCostTracker.held(displayName), offers, readOffers())) return;
                         consumer.accept(items, snapshotAt);
                     });
                 } catch (Exception e) {
@@ -292,57 +282,6 @@ public class RuneAssistSuggestionSource
         suggestion.setPickSource(market.lastFromCompose()
             ? "ares-compose"
             : (market.lastFromAres() ? "ares" : "none"));
-    }
-
-    private void stampLimitFields(String displayName, Suggestion suggestion, long[][] offers)
-    {
-        if (suggestion == null) return;
-        int itemId = suggestion.getItemId();
-        if (itemId <= 0)
-        {
-            suggestion.setGeLimit(0);
-            suggestion.setRemainingLimit(-1);
-            suggestion.setLimitKnown(false);
-            return;
-        }
-        int ge = suggestion.getGeLimit();
-        if (ge <= 0)
-        {
-            try { ge = market.cachedGeLimit(itemId); }
-            catch (Exception e) { ge = 0; }
-        }
-        int remaining = heldCostTracker.remainingLimitOrUnknown(displayName, itemId, ge);
-        int pending = pendingBuyRemainder(itemId, offers);
-        if (remaining >= 0)
-        {
-            remaining = Math.max(0, remaining - pending);
-        }
-        else if (ge > 0 && pending >= ge)
-        {
-            remaining = 0;
-        }
-        if (suggestion.isLimitKnown() && suggestion.getRemainingLimit() >= 0) {
-            remaining = remaining < 0 ? suggestion.getRemainingLimit()
-                    : Math.min(remaining, suggestion.getRemainingLimit());
-        }
-        boolean known = ge > 0 && remaining >= 0;
-        suggestion.setGeLimit(ge);
-        suggestion.setRemainingLimit(known ? remaining : -1);
-        suggestion.setLimitKnown(known);
-    }
-
-    private static int pendingBuyRemainder(int itemId, long[][] offers)
-    {
-        int pending = 0;
-        if (offers == null) return 0;
-        for (long[] o : offers)
-        {
-            if (o == null || o.length < 6) continue;
-            if (o[1] != 1L) continue;
-            if ((int) o[0] != itemId) continue;
-            pending += (int) Math.max(0L, o[4] - o[3]);
-        }
-        return pending;
     }
 
     private List<Suggestion.PortfolioItem> portfolioItems(Map<Integer, long[]> held, long[][] offers)
@@ -414,20 +353,6 @@ public class RuneAssistSuggestionSource
         return merged;
     }
 
-    private Map<Integer, Integer> usedBuyLimit(String displayName, long[][] offers)
-    {
-        Map<Integer, Integer> used = new HashMap<>(heldCostTracker.boughtInWindowAll(displayName));
-        if (offers != null) for (long[] o : offers)
-        {
-            if (o == null || o.length < 6) continue;
-            if (o[1] != 1L) continue;
-            int id = (int) o[0];
-            int left = (int) Math.max(0L, o[4] - o[3]);
-            if (left > 0) used.merge(id, left, Integer::sum);
-        }
-        return used;
-    }
-
     private static final class OwnedModifySnapshot
     {
         int slot = -1;
@@ -480,11 +405,9 @@ public class RuneAssistSuggestionSource
     private static ComposeSuggestionRequest buildComposeRequest(
             long coins, int timeframe, RiskLevel risk, boolean f2pOnly,
             int maxSlots, int remainingSlots, long minProfit,
-            Map<Integer, Integer> remainingHint, Map<Integer, Integer> usedLimit,
             Set<Integer> blocked, Set<Integer> skipped, Set<Integer> skipOffers,
             Map<Integer, Long> modifyDismissedMs,
             Set<Integer> protectAbort, long[][] offersBySlot, Map<Integer, SavedOffer> savedOffers,
-            Map<Integer, long[]> held,
             OwnedModifySnapshot ownedModifySnap, boolean includeGraph,
             String clientDeviceId)
     {
@@ -499,15 +422,12 @@ public class RuneAssistSuggestionSource
         req.setMinPredictedProfit(minProfit);
         req.setIncludeGraph(includeGraph);
         req.setClientDeviceId(clientDeviceId != null ? clientDeviceId : "");
-        req.setRemainingBuyLimit(stringifyKeys(remainingHint));
-        req.setUsedBuyLimit(stringifyKeys(usedLimit));
         if (blocked != null) req.setBlockedIds(new ArrayList<>(blocked));
         if (skipped != null) req.setSkippedIds(new ArrayList<>(skipped));
         if (skipOffers != null) req.setSkipOfferItemIds(new ArrayList<>(skipOffers));
         req.setModifyDismissedMs(stringifyLongKeys(modifyDismissedMs));
         if (protectAbort != null) req.setProtectAbortItemIds(new ArrayList<>(protectAbort));
         req.setOffers(toOfferSnapshots(offersBySlot, savedOffers));
-        req.setHeld(toHeldSnapshots(held));
         if (ownedModifySnap != null && ownedModifySnap.itemId > 0)
         {
             ComposeSuggestionRequest.OwnedModifySnapshot om =
@@ -554,18 +474,6 @@ public class RuneAssistSuggestionSource
             FlipHistorySyncService.osrsConfigKey(displayName));
     }
 
-    private static Map<String, Integer> stringifyKeys(Map<Integer, Integer> in)
-    {
-        Map<String, Integer> out = new LinkedHashMap<>();
-        if (in == null) return out;
-        for (Map.Entry<Integer, Integer> e : in.entrySet())
-        {
-            if (e.getKey() == null || e.getValue() == null) continue;
-            out.put(String.valueOf(e.getKey()), e.getValue());
-        }
-        return out;
-    }
-
     private static Map<String, Long> stringifyLongKeys(Map<Integer, Long> in)
     {
         Map<String, Long> out = new LinkedHashMap<>();
@@ -609,9 +517,6 @@ public class RuneAssistSuggestionSource
             snap.setSold((int) Math.max(0L, o[3]));
             snap.setTotal((int) Math.max(0L, o[4]));
             snap.setFilling(o[5] == 1L);
-            if (o.length > 6) snap.setLastProgressMs(o[6]);
-            if (o.length > 7) snap.setListedMs(o[7]);
-            if (o.length > 8) snap.setLastPriceChangeMs(o[8]);
             SavedOffer saved = savedOffers != null ? savedOffers.get(slot) : null;
             boolean sameOffer = saved != null && saved.getItemId() == itemId
                     && saved.getPrice() == o[2] && saved.getTotalQuantity() == (int) o[4];
@@ -622,23 +527,6 @@ public class RuneAssistSuggestionSource
                 snap.setOrigin("runeassist");
             }
             out.add(snap);
-        }
-        return out;
-    }
-
-    private static List<ComposeSuggestionRequest.HeldSnapshot> toHeldSnapshots(Map<Integer, long[]> held)
-    {
-        List<ComposeSuggestionRequest.HeldSnapshot> out = new ArrayList<>();
-        if (held == null) return out;
-        for (Map.Entry<Integer, long[]> e : held.entrySet())
-        {
-            if (e.getKey() == null || e.getValue() == null || e.getValue().length < 1) continue;
-            if (e.getValue()[0] <= 0L) continue;
-            ComposeSuggestionRequest.HeldSnapshot h = new ComposeSuggestionRequest.HeldSnapshot();
-            h.setItemId(e.getKey());
-            h.setQty(e.getValue()[0]);
-            h.setAvgBuy(e.getValue().length > 1 ? e.getValue()[1] : 0L);
-            out.add(h);
         }
         return out;
     }
@@ -660,7 +548,7 @@ public class RuneAssistSuggestionSource
                 && offers[open].getItemId() == itemId;
     }
 
-    private long[][] readOffers(String displayName)
+    private long[][] readOffers()
     {
         long[][] out = new long[8][];
         GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
@@ -674,11 +562,8 @@ public class RuneAssistSuggestionSource
             boolean buy = st == GrandExchangeOfferState.BUYING || st == GrandExchangeOfferState.BOUGHT
                 || st == GrandExchangeOfferState.CANCELLED_BUY;
             boolean filling = st == GrandExchangeOfferState.BUYING || st == GrandExchangeOfferState.SELLING;
-            long lastProgress = heldCostTracker.lastProgressMs(displayName, i, o.getItemId());
-            long listed = heldCostTracker.listedMs(displayName, i, o.getItemId());
-            long lastPriceChange = heldCostTracker.lastPriceChangeMs(displayName, i, o.getItemId());
             out[i] = new long[]{ o.getItemId(), buy ? 1 : 0, o.getPrice(), o.getQuantitySold(),
-                o.getTotalQuantity(), filling ? 1 : 0, lastProgress, listed, lastPriceChange };
+                o.getTotalQuantity(), filling ? 1 : 0 };
         }
         return out;
     }
