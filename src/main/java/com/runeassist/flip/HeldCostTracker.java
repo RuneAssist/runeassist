@@ -22,7 +22,6 @@ public class HeldCostTracker
 {
     private static final String GROUP = "runeassistflip";
     private static final String KEY_PREFIX = "heldcost_";
-    private static final long LIMIT_WINDOW_MS = 4L * 60 * 60 * 1000;
 
     @Inject private ConfigManager configManager;
     @Inject private Gson gson;
@@ -62,23 +61,12 @@ public class HeldCostTracker
         long dSpent = spent - baseSpent;
         long now = System.currentTimeMillis();
         long listed = sameInstance && prev.listedMs > 0L ? prev.listedMs : now;
-        long lastProgress = dQty > 0 ? now
-            : (sameInstance && prev.lastProgressMs > 0L ? prev.lastProgressMs : now);
-        boolean priceChanged = sameInstance && prev.price > 0L && prev.price != price;
-        long lastPriceChange = priceChanged ? now
-            : (sameInstance && prev.lastPriceChangeMs > 0L ? prev.lastPriceChangeMs : listed);
-        acc.slots.put(slot, new HeldCostLots.Slot(
-            itemId, buy, qtySold, spent, listed, lastProgress, price, lastPriceChange));
+        acc.slots.put(slot, new HeldCostLots.Slot(itemId, buy, qtySold, spent, listed));
 
         if (dQty > 0)
         {
             long unit = dSpent > 0 ? Math.max(1, dSpent / dQty) : price;
-            if (buy)
-            {
-                HeldCostLots.addLot(acc, itemId, dQty, unit);
-                acc.limitBuys.computeIfAbsent(itemId, k -> new ArrayList<>())
-                    .add(new long[]{ dQty, System.currentTimeMillis() });
-            }
+            if (buy) HeldCostLots.addLot(acc, itemId, dQty, unit);
             else HeldCostLots.consumeSell(acc, itemId, dQty);
             acc.heldRevision++;
         }
@@ -180,15 +168,6 @@ public class HeldCostTracker
         return HeldCostLots.summarize(acc);
     }
 
-    public synchronized long lastProgressMs(String displayName, int slot, int itemId)
-    {
-        if (itemId <= 0) return 0L;
-        HeldCostLots.Account acc = account(displayName);
-        ensureLoaded(displayName, acc);
-        HeldCostLots.Slot s = acc.slots.get(slot);
-        return s == null || s.itemId != itemId ? 0L : s.lastProgressMs;
-    }
-
     public synchronized long listedMs(String displayName, int slot, int itemId)
     {
         if (itemId <= 0) return 0L;
@@ -196,58 +175,6 @@ public class HeldCostTracker
         ensureLoaded(displayName, acc);
         HeldCostLots.Slot s = acc.slots.get(slot);
         return s == null || s.itemId != itemId ? 0L : s.listedMs;
-    }
-
-    public synchronized long lastPriceChangeMs(String displayName, int slot, int itemId)
-    {
-        if (itemId <= 0) return 0L;
-        HeldCostLots.Account acc = account(displayName);
-        ensureLoaded(displayName, acc);
-        HeldCostLots.Slot s = acc.slots.get(slot);
-        return s == null || s.itemId != itemId ? 0L : s.lastPriceChangeMs;
-    }
-
-    public synchronized int boughtInWindow(String displayName, int itemId)
-    {
-        HeldCostLots.Account acc = account(displayName);
-        ensureLoaded(displayName, acc);
-        pruneLimitBuys(acc);
-        List<long[]> list = acc.limitBuys.get(itemId);
-        if (list == null) return 0;
-        int sum = 0;
-        for (long[] a : list) sum += (int) a[0];
-        return sum;
-    }
-
-    public synchronized Map<Integer, Integer> boughtInWindowAll(String displayName)
-    {
-        HeldCostLots.Account acc = account(displayName);
-        ensureLoaded(displayName, acc);
-        pruneLimitBuys(acc);
-        Map<Integer, Integer> out = new HashMap<>();
-        for (Map.Entry<Integer, List<long[]>> e : acc.limitBuys.entrySet())
-        {
-            int sum = 0;
-            for (long[] a : e.getValue()) sum += (int) a[0];
-            if (sum > 0) out.put(e.getKey(), sum);
-        }
-        return out;
-    }
-
-    public synchronized int remainingLimitOrUnknown(String displayName, int itemId, int geLimit)
-    {
-        if (geLimit <= 0) return -1;
-        if (!hasLimitTrackerData(displayName, itemId)) return geLimit;
-        return Math.max(0, geLimit - boughtInWindow(displayName, itemId));
-    }
-
-    public synchronized boolean hasLimitTrackerData(String displayName, int itemId)
-    {
-        HeldCostLots.Account acc = account(displayName);
-        ensureLoaded(displayName, acc);
-        pruneLimitBuys(acc);
-        List<long[]> list = acc.limitBuys.get(itemId);
-        return list != null && !list.isEmpty();
     }
 
     @SuppressWarnings("unchecked")
@@ -279,24 +206,8 @@ public class HeldCostTracker
                 List<Object> a = (List<Object>) e.getValue();
                 acc.slots.put(Integer.parseInt(e.getKey()), new HeldCostLots.Slot(((Number) a.get(0)).intValue(),
                     Boolean.TRUE.equals(a.get(1)), ((Number) a.get(2)).intValue(), ((Number) a.get(3)).longValue(),
-                    a.size() > 4 ? ((Number) a.get(4)).longValue() : 0L,
-                    a.size() > 5 ? ((Number) a.get(5)).longValue() : 0L,
-                    a.size() > 6 ? ((Number) a.get(6)).longValue() : 0L,
-                    a.size() > 7 ? ((Number) a.get(7)).longValue()
-                        : (a.size() > 4 ? ((Number) a.get(4)).longValue() : 0L)));
+                    a.size() > 4 ? ((Number) a.get(4)).longValue() : 0L));
             }
-            Map<String, Object> lim = (Map<String, Object>) saved.get("limitBuys");
-            if (lim != null) for (Map.Entry<String, Object> e : lim.entrySet())
-            {
-                List<long[]> list = new ArrayList<>();
-                for (Object o : (List<Object>) e.getValue())
-                {
-                    List<Object> a = (List<Object>) o;
-                    list.add(new long[]{ ((Number) a.get(0)).longValue(), ((Number) a.get(1)).longValue() });
-                }
-                if (!list.isEmpty()) acc.limitBuys.put(Integer.parseInt(e.getKey()), list);
-            }
-            pruneLimitBuys(acc);
         }
         catch (Exception e) { log.warn("held-cost load failed: {}", e.getMessage()); }
     }
@@ -318,18 +229,9 @@ public class HeldCostTracker
             for (Map.Entry<Integer, HeldCostLots.Slot> e : acc.slots.entrySet())
             {
                 HeldCostLots.Slot s = e.getValue();
-                sl.put(String.valueOf(e.getKey()), new Object[]{
-                    s.itemId, s.buy, s.qty, s.spent, s.listedMs, s.lastProgressMs,
-                    s.price, s.lastPriceChangeMs });
+                sl.put(String.valueOf(e.getKey()), new Object[]{ s.itemId, s.buy, s.qty, s.spent, s.listedMs });
             }
             out.put("slots", sl);
-            pruneLimitBuys(acc);
-            Map<String, Object> lim = new LinkedHashMap<>();
-            for (Map.Entry<Integer, List<long[]>> e : acc.limitBuys.entrySet())
-            {
-                if (!e.getValue().isEmpty()) lim.put(String.valueOf(e.getKey()), e.getValue());
-            }
-            out.put("limitBuys", lim);
             configManager.setConfiguration(GROUP, configKey(displayName), gson.toJson(out));
         }
         catch (Exception e) { log.warn("held-cost save failed", e); }
@@ -340,13 +242,4 @@ public class HeldCostTracker
         return KEY_PREFIX + Persistance.hashDisplayName(displayName == null ? "" : displayName);
     }
 
-    private void pruneLimitBuys(HeldCostLots.Account acc)
-    {
-        long cutoff = System.currentTimeMillis() - LIMIT_WINDOW_MS;
-        acc.limitBuys.entrySet().removeIf(e ->
-        {
-            e.getValue().removeIf(a -> a[1] < cutoff);
-            return e.getValue().isEmpty();
-        });
-    }
 }
