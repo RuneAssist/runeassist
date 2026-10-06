@@ -147,10 +147,6 @@ public class Suggestion {
         return type == SuggestionType.MODIFY_BUY || type == SuggestionType.MODIFY_SELL;
     }
 
-    public boolean isDecantSuggestion() {
-        return type == SuggestionType.DECANT;
-    }
-
     public String offerType() {
         if (isBuySuggestion()) {
             return "buy";
@@ -198,9 +194,6 @@ public class Suggestion {
                 break;
             case WAIT:
                 string += "Wait";
-                break;
-            case DECANT:
-                string += message != null && !message.isEmpty() ? message : "Decant " + name;
                 break;
             default:
                 string += "Unknown suggestion type";

@@ -376,11 +376,6 @@ public class SuggestionPanel extends JPanel {
                 }
                 setItemIcon(suggestion.getItemId());
                 break;
-            case DECANT:
-                setHeadline("Decant", suggestion.getName());
-                qtyPriceLabel.setText("Decant now");
-                setItemIcon(suggestion.getItemId());
-                break;
             default:
                 suggestionManager.setSuggestionNeeded(true);
                 showFetchingWait();
@@ -393,8 +388,7 @@ public class SuggestionPanel extends JPanel {
             case SELL: action = shouldSellFromBank(suggestion) ? "Sell from bank" : "Sell"; break;
             case MODIFY_BUY: action = "Update buy"; break;
             case MODIFY_SELL: action = "Update sell"; break;
-            case ABORT: action = "Abort offer"; break;
-            default: action = "Decant";
+            default: action = "Abort offer";
         }
         headlineLabel.setVisible(false);
         cardHeader.setVisible(false);
@@ -562,7 +556,7 @@ public class SuggestionPanel extends JPanel {
     public void displaySuggestion() {
         Suggestion suggestion = suggestionManager.getSuggestion();
         setServerMessage("");
-        if (!grandExchange.isOpen() && (suggestion == null || !suggestion.isDecantSuggestion())) {
+        if (!grandExchange.isOpen()) {
             suggestAway();
             highlightController.removeAll();
             return;
@@ -643,9 +637,7 @@ public class SuggestionPanel extends JPanel {
             return;
         }
 
-        Suggestion current = suggestionManager.getSuggestion();
-        if (suggestionController.getTradingContext().isAway()
-                && (current == null || !current.isDecantSuggestion())) {
+        if (suggestionController.getTradingContext().isAway()) {
             hideLoading();
             suggestAway();
             return;

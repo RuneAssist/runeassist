@@ -32,7 +32,6 @@ public class HighlightController {
     private static final Rectangle CLOSE_BUTTON_HIGHLIGHT_BOUNDS = new Rectangle(2, 2, 19, 19);
     private static final String GE_CLERK_NAME = "Grand Exchange Clerk";
     private static final String BANKER_NAME = "Banker";
-    private static final String BOB_BARTER_NAME = "Bob Barter";
 
     private final RuneAssistConfig config;
     private final SuggestionManager suggestionManager;
@@ -93,10 +92,6 @@ public class HighlightController {
             log.debug("highlight redraw: skipped, suggestion is null");
             return;
         }
-        if (suggestion.isDecantSuggestion()) {
-            highlightDecant(suggestion);
-            return;
-        }
         AccountStatus accountStatus = accountStatusManager.getAccountStatus();
         boolean sellFromBank = accountStatus != null && accountStatus.shouldSellFromBank(suggestion);
         boolean isCollectNeeded = accountStatus != null
@@ -132,21 +127,6 @@ public class HighlightController {
         }
     }
 
-    private void highlightDecant(Suggestion suggestion) {
-        if (grandExchange.isOpen()) {
-            highlightGrandExchangeCloseButton(suggestion);
-            return;
-        }
-        if (BankWidgets.isBankOpen(client)) {
-            highlightBankCloseButton(suggestion);
-            return;
-        }
-        NPC bob = findClosestNpcByName(BOB_BARTER_NAME);
-        if (bob == null) {
-            return;
-        }
-        addNpcHighlight(bob, glowBlue(suggestion.isBuyDumpSuggestion()));
-    }
 
     private void highlightNpcAtGrandExchange(Suggestion suggestion, AccountStatus accountStatus, boolean goToBank) {
         if (accountStatus == null) {

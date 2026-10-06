@@ -214,18 +214,6 @@ class SuggestionTradingContextTest {
         assertNull(suggestions.getSuggestion());
     }
 
-    @Test void localDecantInstructionSurvivesLeavingGeButNotSwitchingAccounts() {
-        Suggestion decant = suggestion(SuggestionType.DECANT);
-        suggestions.setSuggestion(decant);
-        geOpen = false;
-        assertFalse(controller.syncTradingContext());
-        assertSame(decant, suggestions.getSuggestion());
-        assertFalse(suggestions.isSuggestionNeeded());
-        account = 2L;
-        controller.syncTradingContext();
-        assertNull(suggestions.getSuggestion());
-    }
-
     @Test void modifySellMayCancelAndCollectButCannotRelistMissingStock() {
         Suggestion modify = suggestion(SuggestionType.MODIFY_SELL);
         physicalStock = false;

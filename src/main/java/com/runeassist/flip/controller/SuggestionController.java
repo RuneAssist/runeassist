@@ -295,15 +295,10 @@ public class SuggestionController {
 
     boolean syncTradingContext() {
         boolean valid = osrsLoginManager.isValidLoginState();
-        Suggestion current = suggestionManager.getSuggestion();
-        boolean preserveDecantGuidance = valid && !pausedManager.isPaused()
-                && tradingContext.sameAccount(osrsLoginManager.getAccountHash())
-                && !grandExchange.isOpen() && current != null && current.isDecantSuggestion();
         boolean changed = tradingContext.update(osrsLoginManager.getAccountHash(), valid,
                 valid && grandExchange.isOpen(), valid && pausedManager.isPaused());
         if (changed) {
             clearContextSuggestion();
-            if (preserveDecantGuidance) suggestionManager.setSuggestion(current);
             suggestionManager.setSuggestionNeeded(tradingContext.canRequest());
             if (suggestionPanel != null) suggestionPanel.refresh();
         }
