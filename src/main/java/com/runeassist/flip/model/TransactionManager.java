@@ -16,10 +16,6 @@ public class TransactionManager {
     private final FlipManager flipManager;
     private final FlipHistorySyncService flipHistorySyncService;
 
-    public void syncUnAckedTransactions(String displayName) {
-        flipHistorySyncService.flushNow();
-    }
-
     public long addTransaction(Transaction transaction, String displayName) {
         if (osrsLoginManager.isUnsupportedWorldType()) {
             log.debug("ignoring transaction for {} on unsupported world type(s)", displayName);

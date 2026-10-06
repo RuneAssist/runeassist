@@ -4,7 +4,6 @@ import com.runeassist.flip.util.ProfitCalculator;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
-import java.nio.ByteBuffer;
 import java.util.*;
 
 @Slf4j
@@ -60,14 +59,6 @@ public class FlipV2 {
             return 0;
         }
         return (receivedPostTax  + taxPaid) / closedQuantity;
-    }
-
-                private static UUID decodeUuid(byte[] raw) {
-        if (raw == null || raw.length != 16) {
-            return null;
-        }
-        ByteBuffer b = ByteBuffer.wrap(raw);
-        return new UUID(b.getLong(), b.getLong());
     }
 
     public boolean isClosed() {

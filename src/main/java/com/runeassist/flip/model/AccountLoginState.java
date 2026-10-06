@@ -18,10 +18,6 @@ public class AccountLoginState {
         return -1;
     }
 
-    public Set<Integer> accountIds() {
-        return accountIdToDisplayName.keySet();
-    }
-
     public Integer getAccountId(String displayName) {
         if(displayName == null) {
             return null;

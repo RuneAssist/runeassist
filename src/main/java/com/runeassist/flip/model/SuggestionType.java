@@ -30,17 +30,4 @@ public enum SuggestionType {
         return apiValue();
     }
 
-    public static SuggestionType fromProtoInt(int protoInt) {
-        for (SuggestionType value : values()) {
-            if (value.protoInt == protoInt) {
-                return value;
-            }
-        }
-        return null;
-    }
-
-    public static Set<SuggestionType> abortAndModifyTypes() {
-        return new HashSet<>(Set.of(ABORT, MODIFY_BUY, MODIFY_SELL));
-    }
-
 }

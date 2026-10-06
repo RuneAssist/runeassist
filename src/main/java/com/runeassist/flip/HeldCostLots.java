@@ -74,28 +74,6 @@ final class HeldCostLots {
         }
     }
 
-    static long[] consumeUpTo(Account acc, int itemId, int qty) {
-        Deque<Lot> lots = acc.positions.get(itemId);
-        int remaining = qty;
-        long cost = 0;
-        long taken = 0;
-        while (remaining > 0 && lots != null && !lots.isEmpty()) {
-            Lot lot = lots.peekFirst();
-            int take = Math.min(remaining, lot.qty);
-            cost += (long) take * lot.unit;
-            taken += take;
-            lot.qty -= take;
-            remaining -= take;
-            if (lot.qty == 0) {
-                lots.pollFirst();
-            }
-        }
-        if (lots != null && lots.isEmpty()) {
-            acc.positions.remove(itemId);
-        }
-        return new long[]{taken, cost};
-    }
-
     static int heldQty(Account acc, int itemId) {
         Deque<Lot> lots = acc.positions.get(itemId);
         if (lots == null) {
