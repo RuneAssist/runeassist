@@ -30,11 +30,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Check Plugin Hub rules
         run: python3 scripts/hub_rules.py
       - name: Check the version is written the same everywhere
         run: scripts/version-check.sh
       - name: Check the source fits the Hub review token limit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: scripts/token-budget.sh
 
   build:
