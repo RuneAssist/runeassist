@@ -131,10 +131,6 @@ public class PaginatedTablePanel<T> extends JPanel {
         setRenderer(moneyRenderer(format, centerStrings), columns);
     }
 
-    public void profitColumns(NumberFormat format, RuneAssistConfig config, int... columns) {
-        setRenderer(profitRenderer(format, config), columns);
-    }
-
     public void gpColumns(NumberFormat format, boolean signed, int... columns) {
         setRenderer(gpRenderer(format, signed, null), columns);
     }
@@ -145,14 +141,6 @@ public class PaginatedTablePanel<T> extends JPanel {
 
     public void percentRoiColumns(RuneAssistConfig config, int... columns) {
         setRenderer(percentRoiRenderer(config), columns);
-    }
-
-    public void setTopControlsVisible(boolean visible) {
-        topPanel.setVisible(visible);
-    }
-
-    public void enableBuiltInSorting() {
-        table.setRowSorter(new TableRowSorter<>(tableModel));
     }
 
     public void installHeaderSort(Supplier<String> currentColumn,
@@ -230,26 +218,6 @@ public class PaginatedTablePanel<T> extends JPanel {
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
-    public JLabel setSpinnerText(String text) {
-        JLabel label = new JLabel(text);
-        label.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        label.setFont(label.getFont().deriveFont(14f));
-        JPanel loadingPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
-        loadingPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        loadingPanel.setOpaque(false);
-        loadingPanel.add(label);
-        loadingPanel.add(spinner);
-        spinnerOverlay.removeAll();
-        spinnerOverlay.add(loadingPanel);
-        spinnerOverlay.revalidate();
-        spinnerOverlay.repaint();
-        return label;
-    }
-
-    public void addOverlay(Component component, Integer layer) {
-        layeredPane.add(component, layer);
-    }
-
     public void setRows(List<T> newRows) {
         Runnable updateRows = () -> {
             rows = new ArrayList<>(newRows);
@@ -313,27 +281,6 @@ public class PaginatedTablePanel<T> extends JPanel {
                     setHorizontalAlignment(RIGHT);
                 } else if (centerStrings && value instanceof String) {
                     setHorizontalAlignment(CENTER);
-                }
-                return c;
-            }
-        };
-    }
-
-    private static DefaultTableCellRenderer profitRenderer(NumberFormat format, RuneAssistConfig config) {
-        return new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value,
-                                                           boolean isSelected, boolean hasFocus, int row, int column) {
-                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                if (value instanceof Long) {
-                    long amount = (Long) value;
-                    setText(format.format(amount));
-                    setHorizontalAlignment(RIGHT);
-                    if (!isSelected) {
-                        setForeground(amount > 0 ? config.profitAmountColor()
-                                : amount < 0 ? config.lossAmountColor()
-                                : ColorScheme.LIGHT_GRAY_COLOR);
-                    }
                 }
                 return c;
             }

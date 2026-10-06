@@ -1,6 +1,5 @@
 package com.runeassist.flip.ui.components;
 
-import com.runeassist.flip.controller.ItemController;
 import com.runeassist.flip.model.ItemIdName;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
@@ -32,22 +31,6 @@ public class ItemSearchMultiSelect extends JPanel {
     private final Consumer<Set<Integer>> onItemSelectionChanged;
     private final Supplier<Set<Integer>> selectedItemsGetter;
     private List<ItemIdName> currentSearchResults = new ArrayList<>();
-
-    public static ItemSearchMultiSelect itemsFilter(Component parent,
-                                                    ItemController itemController,
-                                                    Supplier<Set<Integer>> selectedItemsGetter,
-                                                    Consumer<Set<Integer>> onItemSelectionChanged) {
-        ItemSearchMultiSelect field = new ItemSearchMultiSelect(
-                selectedItemsGetter,
-                itemController::allItemIds,
-                itemController::search,
-                onItemSelectionChanged,
-                "Items filter...",
-                SwingUtilities.getWindowAncestor(parent));
-        field.setMinimumSize(new Dimension(300, 0));
-        field.setToolTipText("Search by item name");
-        return field;
-    }
 
     public ItemSearchMultiSelect(
             Supplier<Set<Integer>> selectedItemsGetter,

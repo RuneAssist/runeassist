@@ -4,7 +4,6 @@ import net.runelite.client.ui.ColorScheme;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
-import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.border.Border;
 import java.awt.Color;
@@ -89,13 +88,4 @@ public final class RuneAssistColors {
         button.setBorder(BorderFactory.createEmptyBorder(4, 12, 4, 12));
     }
 
-    public static void styleChip(JComponent button, boolean selected, Color selectedColor) {
-        Color accent = selectedColor != null ? selectedColor : ACCENT;
-        button.setOpaque(true);
-        button.setBackground(CARD);
-        button.setForeground(selected ? accent : CHIP_TEXT_UNSELECTED);
-        button.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 2, 0, selected ? accent : HAIRLINE),
-                BorderFactory.createEmptyBorder(4, 6, 3, 6)));
-    }
 }
