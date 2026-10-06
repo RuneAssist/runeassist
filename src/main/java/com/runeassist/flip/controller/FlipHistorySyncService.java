@@ -269,14 +269,6 @@ public class FlipHistorySyncService {
         return "https://runeassist.com/app/";
     }
 
-    public String websiteAccountsUrl() {
-        return websiteUrl() + "#/accounts";
-    }
-
-    public String websitePairUrl() {
-        return websiteUrl() + "#/pair";
-    }
-
     public String websiteLoginWithCodeUrl(String code) {
         if (code == null || code.isEmpty()) {
             return websiteUrl() + "#/login";
@@ -471,19 +463,6 @@ public class FlipHistorySyncService {
             ensureOsrsAccount(name);
             flushDisplay(name);
         }
-    }
-
-    public void refreshAccount(String displayName) {
-        if (displayName == null || displayName.isEmpty()) {
-            return;
-        }
-        async("refresh", () -> {
-            String osrsAccountId = ensureOsrsAccount(displayName);
-            if (osrsAccountId == null) {
-                return;
-            }
-            refreshDelta(displayName, osrsAccountId);
-        });
     }
 
     public boolean clearPortfolio(String displayName) {
@@ -1099,10 +1078,6 @@ public class FlipHistorySyncService {
 
     private String osrsKey(String displayName) {
         return osrsConfigKey(displayName);
-    }
-
-    private String flipsCursorKey(String displayName) {
-        return "cloudFlipsCursor." + Persistance.hashDisplayName(displayName);
     }
 
     private void async(String label, Work work) {

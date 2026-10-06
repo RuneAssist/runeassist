@@ -138,13 +138,6 @@ public class AccountStatus {
         return getOffers().findEmptySlot(isWorldMember || isAccountMember);
     }
 
-    private Map<Integer, Long> computeInventory() {
-        Map<Integer, Long> itemAmounts = inventory.getItemAmounts();
-        uncollected.forEach((key, value) -> itemAmounts.merge(key, value, Long::sum));
-        itemAmounts.entrySet().removeIf(entry -> entry.getValue() == 0);
-        return itemAmounts;
-    }
-
     public synchronized boolean moreGpNeeded() {
         return emptySlotExists() && getTotalGp() < Constants.MIN_GP_NEEDED_TO_FLIP;
     }
@@ -163,15 +156,6 @@ public class AccountStatus {
 
     public synchronized long currentCashStack() {
         return offers.getGpOnMarket() + inventory.getTotalGp();
-    }
-
-    private Set<SuggestionType> resolveRequestedSuggestionTypes(boolean geOpen) {
-        Set<SuggestionType> requestedSuggestionTypes = SuggestionType.abortAndModifyTypes();
-        requestedSuggestionTypes.add(SuggestionType.SELL);
-        if (geOpen && !sellOnlyMode) {
-            requestedSuggestionTypes.add(SuggestionType.BUY);
-        }
-        return requestedSuggestionTypes;
     }
 
     private int resolveReservedSlots() {

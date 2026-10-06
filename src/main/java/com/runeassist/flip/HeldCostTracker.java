@@ -85,21 +85,6 @@ public class HeldCostTracker
         save(displayName, acc);
     }
 
-    public synchronized void applyDecant(String displayName, int fromItemId, int fromQty, int toItemId, int toQty)
-    {
-        if (fromQty <= 0 || toQty <= 0 || fromItemId <= 0 || toItemId <= 0) return;
-        HeldCostLots.Account acc = account(displayName);
-        ensureLoaded(displayName, acc);
-        long[] consumed = HeldCostLots.consumeUpTo(acc, fromItemId, fromQty);
-        long qtyConsumed = consumed[0], costConsumed = consumed[1];
-        if (qtyConsumed <= 0) return;
-        long producedQty = Math.max(1, (toQty * qtyConsumed) / fromQty);
-        long unit = Math.max(1, costConsumed / producedQty);
-        HeldCostLots.addLot(acc, toItemId, (int) producedQty, unit);
-        acc.heldRevision++;
-        save(displayName, acc);
-    }
-
     public synchronized void addManualLot(String displayName, int itemId, int qty, long unitCost)
     {
         if (itemId <= 0 || qty <= 0 || unitCost < 0) return;

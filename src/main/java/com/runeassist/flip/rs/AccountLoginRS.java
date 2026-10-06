@@ -16,18 +16,6 @@ public class AccountLoginRS extends ReactiveStateImpl<AccountLoginState> {
         registerListener((s) -> log.debug("AccountLoginRS to {}", s));
     }
 
-    public void removeAccount(Integer accountId) {
-        update((s) -> {
-            AccountLoginState updated = s.copy();
-            String displayName = updated.accountIdToDisplayName.get(accountId);
-            updated.accountIdToDisplayName.remove(accountId);
-            if(displayName != null){
-                updated.displayNameToAccountId.remove(displayName);
-            }
-            return updated;
-        });
-    }
-
     public void addAccountIfMissing(Integer accountId, String displayName) {
         update((s) -> {
             if (accountId == null || displayName == null || s.accountIdToDisplayName.containsKey(accountId)) {

@@ -14,7 +14,4 @@ public class DateUtil {
         return formatter.format(instant);
     }
 
-    public static String formatEpochOrNa(int epochSeconds) {
-        return epochSeconds == 0 ? "N/A" : formatEpoch(epochSeconds);
-    }
 }

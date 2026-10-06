@@ -209,13 +209,4 @@ public class Suggestion {
         return string;
     }
 
-        private static int clampToInt(long value) {
-        if (value > Integer.MAX_VALUE) {
-            return Integer.MAX_VALUE;
-        }
-        if (value < Integer.MIN_VALUE) {
-            return Integer.MIN_VALUE;
-        }
-        return (int) value;
-    }
 }

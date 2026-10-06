@@ -263,21 +263,6 @@ public class FlipManager {
 
     public static final int AGED_OPEN_SECONDS = 4 * 60 * 60;
 
-    public synchronized int countOpenInInterval() {
-        int count = 0;
-        WeekAggregate openWeek = getOrInitWeek(0);
-        List<FlipV2> open = intervalAccount == null
-                ? openWeek.flipsAfter(-1, false)
-                : openWeek.flipsAfterForAccount(-1, intervalAccount);
-        for (FlipV2 f : open) {
-            if (f != null && !f.isClosed() && isTrackedFlip(f)
-                    && (intervalStartTime <= 0 || f.getOpenedTime() >= intervalStartTime)) {
-                count++;
-            }
-        }
-        return count;
-    }
-
     public synchronized int countOpenOlderThan(int olderThanSeconds) {
         if (olderThanSeconds <= 0) {
             return 0;
@@ -424,21 +409,6 @@ public class FlipManager {
         return wf;
     }
 
-    public synchronized void deleteAccount(int accountId) {
-        for (WeekAggregate week : weeks) {
-            week.deleteAccountFlips(accountId);
-        }
-        if (intervalAccount != null && intervalAccount == accountId) {
-            intervalAccount = null;
-            recalculateIntervalStats();
-        } else if (intervalAccount == null) {
-            recalculateIntervalStats();
-        }
-        lastOpenFlipByItemId.remove(accountId);
-        missedFlipsByAccount.remove(accountId);
-        SwingUtilities.invokeLater(flipsChangedCallback);
-    }
-
     class WeekAggregate {
 
         int pos;
@@ -493,14 +463,6 @@ public class FlipManager {
                 combinedFlips.sort(Comparator.comparing(FlipV2::getClosedTime).thenComparing(FlipV2::getId));
             }
             return combinedFlips;
-        }
-        public void deleteAccountFlips(int accountId) {
-            accountIdToFlips.computeIfAbsent(accountId, (k) -> new ArrayList<>()).forEach((FlipV2 f) -> {
-                    allStats.subtractFlip(f);
-                }
-            );
-            accountIdToFlips.remove(accountId);
-            accountIdToStats.remove(accountId);
         }
 
         @Override
