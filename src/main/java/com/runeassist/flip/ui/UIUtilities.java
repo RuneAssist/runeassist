@@ -15,12 +15,6 @@ import java.util.Locale;
 import java.util.function.Supplier;
 
 public class UIUtilities {
-    public static final String redditIcon = "/reddit-icon.png";
-    public static final String discordIcon = "/discord.png";
-    public static final String githubIcon = "/github.png";
-    public static final String logoutIcon = "/logout.png";
-    public static final String internetIcon = "/internet.png";
-
     public static final float BUTTON_HOVER_LUMINANCE = 0.65f;
     public static final Color OUTDATED_COLOR = new Color(250, 74, 75);
     public static final Color TOMATO = new Color(255,99,71);

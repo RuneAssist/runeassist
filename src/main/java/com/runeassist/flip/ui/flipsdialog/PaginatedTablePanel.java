@@ -97,16 +97,8 @@ public class PaginatedTablePanel<T> extends JPanel {
         add(layeredPane, BorderLayout.CENTER);
     }
 
-    public JPanel leftControls() {
-        return leftControls;
-    }
-
     public JPanel rightControls() {
         return rightControls;
-    }
-
-    public JTable table() {
-        return table;
     }
 
     public void setRenderer(TableCellRenderer renderer, int... columns) {
