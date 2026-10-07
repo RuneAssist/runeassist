@@ -157,6 +157,11 @@ public class Suggestion {
         return null;
     }
 
+    public boolean matchesOffer(String confirmedOfferType, int confirmedItemId) {
+        String side = offerType();
+        return side != null && side.equals(confirmedOfferType) && itemId == confirmedItemId;
+    }
+
     public boolean isRecentUnActionedDumpAlert() {
         return isDumpAlert && actionedTick == -1;
     }
