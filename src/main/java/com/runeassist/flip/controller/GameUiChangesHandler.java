@@ -193,7 +193,7 @@ public class GameUiChangesHandler {
             suggestionManager.setLastOfferSubmittedTick(client.getTickCount());
             suggestionManager.setSuggestionNeeded(true);
             Suggestion suggestion = suggestionManager.getSuggestion();
-            if(suggestion != null) {
+            if (suggestion != null && suggestion.matchesOffer(grandExchange.getOfferType(), grandExchange.getCurrentItemId())) {
                 suggestion.actionedTick = client.getTickCount();
                 suggestionManager.recordOfferSubmission(suggestion, client.getTickCount());
                 flipHistorySyncService.reportSuggestionOutcome(suggestion, "acted");
