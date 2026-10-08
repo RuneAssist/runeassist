@@ -120,7 +120,7 @@ public class ProfitCalculator {
             if (card == null || card.getUnitBuyPrice() <= 0 || !itemName.equals(card.getItemName())) {
                 continue;
             }
-            return calculateProfitPerItem(offer.getItemId(), offer.getPrice(), card.getUnitBuyPrice()) * offer.getTotalQuantity();
+            return calculateProfitPerItem(offer.getItemId(), offer.getPrice(), card.getUnitBuyPrice()) * Math.max(0, offer.getTotalQuantity() - offer.getQuantitySold());
         }
         return 0;
     }
