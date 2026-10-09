@@ -300,20 +300,42 @@ public class RuneAssistSuggestionSource
             int qty = hv[0] > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) hv[0];
             long avgBuy = hv[1];
             Map<String, Object> q = quotes.get(id);
-            long sell = q != null && q.get("sell_at") instanceof Number
-                ? ((Number) q.get("sell_at")).longValue() : avgBuy;
-            long tax = q != null && q.get("tax_at_sell") instanceof Number
-                ? ((Number) q.get("tax_at_sell")).longValue()
-                : ProfitCalculator.getTaxAmount(id, sell);
-            long postTax = Math.max(0L, sell - tax);
+            long mark = quoteNumber(q, "latest_high");
+            if (mark <= 0L) mark = quoteNumber(q, "sell_at");
+            if (mark <= 0L) mark = avgBuy;
             Suggestion.PortfolioItem item = new Suggestion.PortfolioItem();
             item.itemId = id;
             item.personalAmount = qty;
             item.personalBuySpend = avgBuy * qty;
-            item.personalSellValue = postTax * qty;
+            item.personalSellValue = heldSellValue(id, qty, mark, offers);
             out.add(item);
         }
         return out;
+    }
+
+    private static long quoteNumber(Map<String, Object> q, String key)
+    {
+        return q != null && q.get(key) instanceof Number ? ((Number) q.get(key)).longValue() : 0L;
+    }
+
+    static long heldSellValue(int id, long qty, long mark, long[][] offers)
+    {
+        long listed = 0L;
+        long value = 0L;
+        if (offers != null) for (long[] o : offers)
+        {
+            if (o == null || o.length < 5 || o[1] != 0L || o[0] != id || o[2] <= 0L) continue;
+            long unsold = Math.min(Math.max(0L, o[4] - o[3]), qty - listed);
+            if (unsold <= 0L) continue;
+            listed += unsold;
+            value += unsold * postTaxUnit(id, o[2]);
+        }
+        return value + (qty - listed) * postTaxUnit(id, mark);
+    }
+
+    private static long postTaxUnit(int id, long price)
+    {
+        return Math.max(0L, price - ProfitCalculator.getTaxAmount(id, price));
     }
 
     private static Map<Integer, long[]> mergeHeldWithOfferFills(Map<Integer, long[]> held, long[][] offers)
