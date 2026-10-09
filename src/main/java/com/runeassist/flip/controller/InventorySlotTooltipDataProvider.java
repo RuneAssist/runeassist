@@ -19,7 +19,6 @@ import java.util.List;
 public class InventorySlotTooltipDataProvider {
 
     private final ItemManager itemManager;
-    private final SuggestionManager suggestionManager;
     private final ItemController itemController;
     private final PortfolioStateRS portfolioStateRS;
 
@@ -34,13 +33,11 @@ public class InventorySlotTooltipDataProvider {
         }
 
         String itemName = itemManager.getItemComposition(itemData.getItemId()).getName();
-        Suggestion suggestion = suggestionManager.getSuggestion();
-        Suggestion.PortfolioItem portfolioItem = findPortfolioItem(suggestion, itemData.getItemId());
-        List<String> lines = buildTooltipLines(itemData, portfolioItem, source);
+        List<String> lines = buildTooltipLines(itemData, source);
         return new InventorySlotTooltipData(itemData.getItemId(), quantity, itemName, lines);
     }
 
-    private List<String> buildTooltipLines(PortfolioItemCardData itemData, Suggestion.PortfolioItem portfolioItem, TooltipHoverSource source) {
+    List<String> buildTooltipLines(PortfolioItemCardData itemData, TooltipHoverSource source) {
         boolean inPortfolio = itemData.isInPortfolio();
 
         List<String> lines = new ArrayList<>(5);
@@ -54,37 +51,25 @@ public class InventorySlotTooltipDataProvider {
             lines.add("Total value: " + (totalValue == null ? "Unknown" : UIUtilities.formatProfit(totalValue)));
         } else {
             lines.add("Time held: " + UIUtilities.formatDurationMinutes(itemData.getHeldMinutes()));
-            lines.add("Avg buy price: " + (portfolioItem == null || portfolioItem.getAmount() <= 0
+            lines.add("Avg buy price: " + (itemData.getUnitBuyPrice() <= 0
                     ? "Unknown"
-                    : UIUtilities.formatProfit(portfolioItem.getUnitBuyPrice())));
+                    : UIUtilities.formatProfit(itemData.getUnitBuyPrice())));
             Long totalValue = calculateValue(itemData);
             lines.add("Total value: " + (totalValue == null ? "Unknown" : UIUtilities.formatProfit(totalValue)));
             Long unrealizedProfit = itemData.getUnrealizedUnitProfit() == null ? null : itemData.inventoryTooltipUnrealizedProfit();
             lines.add("Unrealized Profit: " + (unrealizedProfit == null ? "Unknown" : UIUtilities.formatProfit(unrealizedProfit)));
-            String unrealizedRoi = calculateUnrealizedRoi(itemData, portfolioItem);
+            String unrealizedRoi = calculateUnrealizedRoi(itemData);
             lines.add("Unrealized ROI: " + (unrealizedRoi == null ? "Unknown" : unrealizedRoi));
         }
         return lines;
     }
 
-    private String calculateUnrealizedRoi(PortfolioItemCardData itemData, Suggestion.PortfolioItem portfolioItem) {
-        if (portfolioItem == null || portfolioItem.getAmount() <= 0 || portfolioItem.getUnitBuyPrice() <= 0 || itemData.getUnrealizedUnitProfit() == null) {
+    private String calculateUnrealizedRoi(PortfolioItemCardData itemData) {
+        if (itemData.getUnitBuyPrice() <= 0 || itemData.getUnrealizedUnitProfit() == null) {
             return null;
         }
-        double roi = (double) itemData.getUnrealizedUnitProfit() / (double) portfolioItem.getUnitBuyPrice();
+        double roi = (double) itemData.getUnrealizedUnitProfit() / (double) itemData.getUnitBuyPrice();
         return String.format("%.2f%%", roi * 100.0d);
-    }
-
-    private Suggestion.PortfolioItem findPortfolioItem(Suggestion suggestion, int itemId) {
-        if (suggestion == null || suggestion.getPortfolioItems() == null || suggestion.getPortfolioItems().isEmpty()) {
-            return null;
-        }
-        for (Suggestion.PortfolioItem portfolioItem : suggestion.getPortfolioItems()) {
-            if (portfolioItem != null && portfolioItem.getItemId() == itemId) {
-                return portfolioItem;
-            }
-        }
-        return null;
     }
 
     private Long calculateValue(PortfolioItemCardData itemData) {
