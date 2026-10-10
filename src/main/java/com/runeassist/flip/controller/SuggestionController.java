@@ -102,8 +102,8 @@ public class SuggestionController {
 
     void onGameTick() {
         if (!syncTradingContext()) return;
-        if (accountStatusManager.releaseStaleOwnedModify(
-                client.getGrandExchangeOffers(), grandExchange.isSlotOpen())) {
+        if (accountStatusManager.isOwnedModifyActive() && accountStatusManager.releaseStaleOwnedModify(
+                client.getGrandExchangeOffers(), grandExchange.isEditorOpen())) {
             markGhostModifyActioned();
             suggestionManager.setSuggestionNeeded(true);
             if (suggestionPanel != null) {
@@ -149,16 +149,23 @@ public class SuggestionController {
         if (p != null && p.actionedTick != -1 && p.actionedTick <= client.getTickCount()) {
             return false;
         }
+        if (accountStatusManager.isOwnedModifyRelisting()) {
+            return true;
+        }
         return isEditorOnModify(p);
     }
 
     private boolean isEditorOnModify(Suggestion p) {
-        if (!grandExchange.isSlotOpen()) {
+        AccountStatusManager.OwnedModify owned = accountStatusManager.getOwnedModify();
+        boolean modifyCard = p != null && p.isModifySuggestion();
+        if ((owned == null || owned.itemId <= 0) && !modifyCard) {
+            return false;
+        }
+        if (!grandExchange.isEditorOpen()) {
             return false;
         }
         int open = grandExchange.getOpenSlot();
         int currentItem = grandExchange.getCurrentItemId();
-        AccountStatusManager.OwnedModify owned = accountStatusManager.getOwnedModify();
         if (owned != null && owned.itemId > 0 && slotMatchesModify(open, currentItem, owned.itemId, owned.slot)) {
             return true;
         }
@@ -167,13 +174,13 @@ public class SuggestionController {
     }
 
     private boolean slotMatchesModify(int open, int currentItem, int itemId, int boxId) {
-        if (open < 0 || itemId <= 0) {
+        if (itemId <= 0) {
             return false;
         }
         if (ModifyStep.editorMatches(open, currentItem, itemId, boxId)) {
             return true;
         }
-        return liveOfferItemId(open) == itemId;
+        return open >= 0 && liveOfferItemId(open) == itemId;
     }
 
     private int liveOfferItemId(int slot) {

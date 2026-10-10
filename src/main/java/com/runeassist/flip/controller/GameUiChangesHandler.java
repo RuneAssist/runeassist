@@ -166,6 +166,7 @@ public class GameUiChangesHandler {
                     && slotIsForModify(open, suggestion)) {
                 accountStatusManager.beginOwnedModify(suggestion, open);
             } else if (accountStatusManager.isOwnedModifyActive()
+                    && !(open < 0 && accountStatusManager.isOwnedModifyRelisting())
                     && (open < 0 || !slotIsForModify(open, suggestion))) {
                 accountStatusManager.clearOwnedModify();
                 suggestionManager.setSuggestionNeeded(true);

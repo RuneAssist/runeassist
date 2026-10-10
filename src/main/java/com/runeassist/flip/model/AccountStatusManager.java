@@ -188,6 +188,10 @@ public class AccountStatusManager {
     }
 
     public synchronized void beginOwnedModify(Suggestion s, int slotHint) {
+        beginOwnedModify(s, slotHint, tick());
+    }
+
+    synchronized void beginOwnedModify(Suggestion s, int slotHint, int nowTick) {
         if (s == null || !s.isModifySuggestion() || s.getItemId() <= 0) {
             return;
         }
@@ -195,9 +199,11 @@ public class AccountStatusManager {
             if (slotHint >= 0) {
                 ownedModify.slot = slotHint;
             }
+            ownedModify.startedTick = nowTick;
             return;
         }
         OwnedModify owned = new OwnedModify();
+        owned.startedTick = nowTick;
         owned.slot = slotHint >= 0 ? slotHint : s.getBoxId();
         owned.itemId = s.getItemId();
         owned.buy = s.getType() == SuggestionType.MODIFY_BUY;
@@ -253,10 +259,14 @@ public class AccountStatusManager {
     }
 
     public synchronized boolean releaseStaleOwnedModify(GrandExchangeOffer[] offers, boolean editorOpen) {
+        return releaseStaleOwnedModify(offers, editorOpen, tick());
+    }
+
+    synchronized boolean releaseStaleOwnedModify(GrandExchangeOffer[] offers, boolean editorOpen, int nowTick) {
         if (ownedModify == null || ownedModify.itemId <= 0) {
             return false;
         }
-        if (!editorOpen) {
+        if (!editorOpen && !ModifyStep.inRelistGrace(nowTick, ownedModify.startedTick)) {
             log.info("releasing stale owned modify item {} slot {} (editor closed)",
                     ownedModify.itemId, ownedModify.slot);
             recordModifyDismissed(ownedModify.itemId);
@@ -282,10 +292,14 @@ public class AccountStatusManager {
     }
 
     public synchronized boolean releaseOwnedModifyIfSlotEmpty(int slot, boolean editorOpen) {
+        return releaseOwnedModifyIfSlotEmpty(slot, editorOpen, tick());
+    }
+
+    synchronized boolean releaseOwnedModifyIfSlotEmpty(int slot, boolean editorOpen, int nowTick) {
         if (ownedModify == null || ownedModify.itemId <= 0) {
             return false;
         }
-        if (editorOpen || ownedModify.slot != slot) {
+        if (editorOpen || ownedModify.slot != slot || ModifyStep.inRelistGrace(nowTick, ownedModify.startedTick)) {
             return false;
         }
         log.info("releasing owned modify item {} — slot {} empty, editor closed",
@@ -300,6 +314,22 @@ public class AccountStatusManager {
 
     public synchronized boolean isOwnedModifyActive() {
         return ownedModify != null && ownedModify.itemId > 0;
+    }
+
+    public synchronized boolean isOwnedModifyRelisting() {
+        return isOwnedModifyRelisting(tick());
+    }
+
+    synchronized boolean isOwnedModifyRelisting(int nowTick) {
+        return isOwnedModifyActive() && ModifyStep.inRelistGrace(nowTick, ownedModify.startedTick);
+    }
+
+    private int tick() {
+        try {
+            return client.getTickCount();
+        } catch (RuntimeException e) {
+            return -1;
+        }
     }
 
     public synchronized OwnedModify getOwnedModify() {
@@ -360,5 +390,6 @@ public class AccountStatusManager {
         public int quantity;
         public String name = "";
         public long offerPrice;
+        public int startedTick = -1;
     }
 }

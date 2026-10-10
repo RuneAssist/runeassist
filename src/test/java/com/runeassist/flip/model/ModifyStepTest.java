@@ -53,4 +53,13 @@ public class ModifyStepTest {
         assertFalse(ModifyStep.isGhost(false, DARK_CRAB, false, false));
         assertFalse(ModifyStep.isGhost(true, 0, false, false));
     }
+
+    @Test
+    public void relistGraceCoversTheCancelCollectAndReopenTicks() {
+        assertFalse(ModifyStep.inRelistGrace(100, -1));
+        assertTrue(ModifyStep.inRelistGrace(100, 100));
+        assertTrue(ModifyStep.inRelistGrace(100 + ModifyStep.RELIST_GRACE_TICKS, 100));
+        assertFalse(ModifyStep.inRelistGrace(101 + ModifyStep.RELIST_GRACE_TICKS, 100));
+        assertFalse(ModifyStep.inRelistGrace(99, 100));
+    }
 }

@@ -109,7 +109,7 @@ public class GrandExchangeOfferEventHandler {
             }
         }
 
-        boolean editorOpen = grandExchange.isSlotOpen();
+        boolean editorOpen = grandExchange.isEditorOpen();
         if (o.getState() == GrandExchangeOfferState.EMPTY) {
             accountStatusManager.releaseOwnedModifyIfSlotEmpty(slot, editorOpen);
         }
