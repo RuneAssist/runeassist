@@ -35,6 +35,10 @@ public class GrandExchange {
         return getOpenSlot() != -1;
     }
 
+    public boolean isEditorOpen() {
+        return isSlotOpen() || isSetupOfferOpen();
+    }
+
     String getOfferType() {
         return client.getVarbitValue(GE_OFFER_CREATION_TYPE) == 1 ? "sell" : "buy";
     }
