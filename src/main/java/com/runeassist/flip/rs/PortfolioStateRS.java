@@ -217,14 +217,14 @@ public class PortfolioStateRS extends ReactiveStateImpl<PortfolioState> {
         return coins == null ? 0L : Math.max(0L, coins);
     }
 
-    private long totalLockedBuyCash(StatusOfferList offers) {
+    static long totalLockedBuyCash(StatusOfferList offers) {
         if (offers == null) {
             return 0L;
         }
         long total = 0L;
         for (Offer offer : offers) {
-            if (offer != null && offer.getStatus() == OfferStatus.BUY) {
-                total += offer.cashStackGpValue();
+            if (offer != null && offer.getStatus() == OfferStatus.BUY && offer.isActive()) {
+                total += (long) Math.max(0, offer.getAmountTotal() - offer.getAmountTraded()) * offer.getPrice();
             }
         }
         return total;
