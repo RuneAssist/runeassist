@@ -19,7 +19,6 @@ public final class RuneAssistColors {
     public static final Color SHELL = ColorScheme.DARK_GRAY_COLOR;
     public static final Color TEXT = ColorScheme.LIGHT_GRAY_COLOR;
     public static final Color MUTED = new Color(0x8E8E8E);
-    public static final Color CHIP_TEXT_UNSELECTED = new Color(150, 150, 150);
     public static final Color HAIRLINE = new Color(0x3A3A3A);
     public static final Color RISK_LOW = ColorScheme.GRAND_EXCHANGE_PRICE;
     public static final Color RISK_HIGH = new Color(0xE05252);
