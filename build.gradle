@@ -33,6 +33,7 @@ tasks.register('runClient', JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'com.runeassist.flip.dev.RuneAssistDevClient'
     jvmArgs '-ea'
+    systemProperty 'runeassist.allowCopilot', System.getProperty('runeassist.allowCopilot', 'false')
     args '--developer-mode'
 }
 
