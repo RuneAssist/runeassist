@@ -105,6 +105,7 @@ public class RuneAssistSuggestionSource
         final boolean accountMember = osrsLoginManager.isAccountMember();
         final boolean f2pOnly = preferences.isF2pOnlyMode() || !membersWorld;
         final boolean sellOnlyMode = isSellOnlyMode();
+        final boolean holdsEnabled = preferences.isBuyAndHold();
         final int timeframe = Math.max(1, preferences.getTimeframe());
         final RiskLevel risk = preferences.getRiskLevel() != null
             ? preferences.getRiskLevel() : RiskLevel.MEDIUM;
@@ -144,6 +145,7 @@ public class RuneAssistSuggestionSource
                 offersBySlot, savedOffers, ownedModifySnap, includeGraph,
                 deviceId);
             composeReq.setSellOnlyMode(sellOnlyMode);
+            composeReq.setHoldsEnabled(holdsEnabled);
             composeReq.setInventorySnapshotKnown(availability.isInventorySnapshotKnown());
             composeReq.setAvailableInventory(availability.getAvailableInventory());
             composeReq.setBankSnapshotKnown(availability.isBankSnapshotKnown());

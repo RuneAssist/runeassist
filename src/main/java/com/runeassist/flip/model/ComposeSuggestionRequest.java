@@ -19,6 +19,7 @@ public class ComposeSuggestionRequest
     private boolean membersItemsAllowed = true;
     private boolean f2pOnly = false;
     private boolean sellOnlyMode;
+    private boolean holdsEnabled = true;
     private int maxSlots = 8;
     private int remainingSlots = 8;
     private long minPredictedProfit;

@@ -25,6 +25,13 @@ public class ComposeSuggestionMapperTest
         }
     }
 
+    @Test public void sendsTheHoldsSettingSoHoldsOffSellsAtOnce() {
+        ComposeSuggestionRequest request = new ComposeSuggestionRequest();
+        assertTrue(gson.toJsonTree(request).getAsJsonObject().get("holdsEnabled").getAsBoolean());
+        request.setHoldsEnabled(false);
+        assertFalse(gson.toJsonTree(request).getAsJsonObject().get("holdsEnabled").getAsBoolean());
+    }
+
     @Test public void preservesForecastBasisAndOriginalExitWithoutInventingLegacyFields() {
         String json = "{\"ok\":true,\"suggestion\":{\"type\":\"buy\",\"expectedProfit\":21000,"
                 + "\"profitEstimateBasis\":\"heuristic_net\",\"potentialProfitGp\":24000,"
