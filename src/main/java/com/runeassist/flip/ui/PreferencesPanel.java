@@ -168,7 +168,7 @@ public class PreferencesPanel extends JPanel {
         preferencesContent.add(blocklistDropdownPanel);
 
         buyAndHoldToggleButton = new PreferencesToggleButton("Disable holds", "Enable holds");
-        String holdsHelp = "On: stock below its buy price is held for a better price. Off: it is sold straight away, at a loss if need be.";
+        String holdsHelp = "On: stock below its buy price is held for a better price. Off: it is listed at break-even, then at the market price after a few hours.";
         PrefsUi.addRow(preferencesContent, "Enable holds", buyAndHoldToggleButton, 3).setToolTipText(holdsHelp);
         buyAndHoldToggleButton.addItemListener(i -> {
             preferencesManager.setBuyAndHold(buyAndHoldToggleButton.isSelected());
