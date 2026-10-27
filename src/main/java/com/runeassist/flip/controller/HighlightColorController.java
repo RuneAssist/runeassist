@@ -21,28 +21,16 @@ public class HighlightColorController {
     private static final int DUMP_ALPHA_MAX = 127;
     private static final double DUMP_ALPHA_FREQUENCY_HZ = 2.0;
 
-    public Color getRedColor() {
-        return getRedColor(false);
-    }
-
     public Color getRedColor(boolean isDumpAlert) {
         double phase = calculatePhase();
         int alpha = calculateAlpha(isDumpAlert);
         return interpolateColor(RED_START, RED_END, phase, alpha);
     }
 
-    public Color getBlueColor() {
-        return getBlueColor(false);
-    }
-
     public Color getBlueColor(boolean isDumpAlert) {
         double phase = calculatePhase();
         int alpha = calculateAlpha(isDumpAlert);
         return interpolateColor(BLUE_START, BLUE_END, phase, alpha);
-    }
-
-    public Color getAmberColor() {
-        return getAmberColor(false);
     }
 
     public Color getAmberColor(boolean isDumpAlert) {

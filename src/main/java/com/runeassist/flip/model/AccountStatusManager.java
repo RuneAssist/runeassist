@@ -183,10 +183,6 @@ public class AccountStatusManager {
         skipOfferUntil.put(itemId, System.currentTimeMillis() + SKIP_TTL_MS);
     }
 
-    public synchronized void beginOwnedModify(Suggestion s) {
-        beginOwnedModify(s, -1);
-    }
-
     public synchronized void beginOwnedModify(Suggestion s, int slotHint) {
         beginOwnedModify(s, slotHint, tick());
     }

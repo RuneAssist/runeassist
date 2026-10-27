@@ -87,14 +87,6 @@ public class PortfolioStateRS extends ReactiveStateImpl<PortfolioState> {
                                      List<Suggestion.PortfolioItem> portfolioItems,
                                      StatusOfferList offers,
                                      Map<Integer, Long> uncollected,
-                                     Instant portfolioItemsTime) {
-        updatePortfolioState(suggestionBank, portfolioItems, offers, uncollected, portfolioItemsTime, () -> true);
-    }
-
-    public void updatePortfolioState(Map<Integer, Integer> suggestionBank,
-                                     List<Suggestion.PortfolioItem> portfolioItems,
-                                     StatusOfferList offers,
-                                     Map<Integer, Long> uncollected,
                                      Instant portfolioItemsTime,
                                      BooleanSupplier stillCurrent) {
         clientThread.invokeLater(() -> {
@@ -121,22 +113,6 @@ public class PortfolioStateRS extends ReactiveStateImpl<PortfolioState> {
         });
     }
 
-
-    public void updatePortfolioState(Map<Integer, Integer> suggestionBank,
-                                     List<Suggestion.PortfolioItem> portfolioItems,
-                                     Instant portfolioItemsTime) {
-        clientThread.invokeLater(() -> {
-            AccountStatus s = accountStatusManager.getAccountStatus();
-            updatePortfolioState(
-                    suggestionBank,
-                    portfolioItems,
-                    s == null ? null : s.getOffers(),
-                    s == null ? null : s.getUncollected(),
-                    portfolioItemsTime
-            );
-            return true;
-        });
-    }
 
     private int safeQty(Map<Integer, Integer> map, int itemId) {
         if (map == null) {

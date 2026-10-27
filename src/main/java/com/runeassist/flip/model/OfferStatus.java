@@ -11,19 +11,6 @@ public enum OfferStatus {
     @SerializedName("empty")
     EMPTY;
 
-    public int protoInt() {
-        switch (this) {
-            case BUY:
-                return 1;
-            case SELL:
-                return 2;
-            case EMPTY:
-                return 3;
-            default:
-                return 0;
-        }
-    }
-
     static OfferStatus fromRunelite(GrandExchangeOfferState state) {
         OfferStatus status;
         switch (state) {

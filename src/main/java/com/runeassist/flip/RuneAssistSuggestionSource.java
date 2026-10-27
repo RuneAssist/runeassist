@@ -79,11 +79,6 @@ public class RuneAssistSuggestionSource
         return preferences.isSellOnlyMode();
     }
 
-    public void getSuggestionAsync(Consumer<Suggestion> consumer)
-    {
-        getSuggestionAsync(consumer, true);
-    }
-
     public void getSuggestionAsync(Consumer<Suggestion> consumer, boolean includeGraph)
     {
         final net.runelite.api.Player localPlayer = client.getLocalPlayer();
