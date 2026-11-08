@@ -76,12 +76,12 @@ public class SuggestionPreferencesManager {
     }
 
     public synchronized boolean isBuyAndHold() {
-        return osrsAccountPreferences.get().isBuyAndHold();
+        return osrsAccountPreferences.get().isHoldsEnabled();
     }
 
     public synchronized void setBuyAndHold(boolean buyAndHold) {
         AccountSuggestionPreferences preferences = osrsAccountPreferences.get();
-        preferences.setBuyAndHold(buyAndHold);
+        preferences.setHoldsEnabled(buyAndHold);
         osrsAccountPreferences.updateAndPersist(preferences);
     }
 
